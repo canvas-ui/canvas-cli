@@ -7,11 +7,11 @@
 
 CANVAS_CONFIG="$HOME/.canvas/config/jsonapi-client.json";
 if [ ! -f $CANVAS_CONFIG ]; then
-    echo "ERROR | Canvas JSON API config file not found at $HOME/.canvas/config/jsonapi.json" >&2
-    return 1
+    echo "ERROR | Canvas JSON API config file not found at $CANVAS_CONFIG" >&2
+	# exit 1
 fi;
 
-if test ! -z $DEBUG; then
+if ! test -z "$DEBUG"; then
     echo "DEBUG | Enabling Canvas integration for $SHELL"
     echo "DEBUG | Canvas JSON API config file: $CANVAS_CONFIG"
 fi
@@ -103,7 +103,6 @@ canvas_http_get() {
     echo "$payload"
 }
 
-
 canvas_http_post() {
 
     # Remove leading slash from the URL, if present
@@ -137,7 +136,6 @@ canvas_http_post() {
 
     echo "$payload"
 }
-
 
 canvas_http_put() {
     # Remove leading slash from the URL, if present
