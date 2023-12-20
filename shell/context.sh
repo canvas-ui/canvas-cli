@@ -76,6 +76,14 @@ function context() {
 
         canvas_http_get "/context/url" | jq '.url' | sed 's/"//g'
         ;;
+    bitmaps)
+        if ! canvas_api_reachable; then
+            echo "Error: Canvas API endpoint not reachable on $CANVAS_HOST:$CANVAS_PORT"
+            return 1
+        fi
+
+        canvas_http_get "/bitmaps" | jq '.' | sed 's/"//g'
+        ;;
     add)
         # Parse path argument
         if [[ $# -ne 1 ]]; then
