@@ -108,14 +108,14 @@ function context() {
 
         # Parse optional document type argument
         if [[ $# -eq 0 ]]; then
-            canvas_http_get "/documents"
+            canvas_http_get "/documents" | jq .
         else
             case "$1" in
             notes)
-                canvas_http_get "/documents/notes"
+                canvas_http_get "/documents/notes" | jq .
                 ;;
             tabs)
-                canvas_http_get "/documents/tabs"
+                canvas_http_get "/documents/tabs" | jq .
                 ;;
             *)
                 echo "Error: unknown document type '$1'"
