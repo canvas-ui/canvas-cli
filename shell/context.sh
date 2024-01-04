@@ -82,7 +82,7 @@ function context() {
             return 1
         fi
 
-        canvas_http_get "/bitmaps" | jq '.' | sed 's/"//g'
+        canvas_http_get "/context/bitmaps" | jq '.' | sed 's/"//g'
         ;;
     add)
         # Parse path argument
