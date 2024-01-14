@@ -108,18 +108,27 @@ function context() {
 
         # Parse optional document type argument
         if [[ $# -eq 0 ]]; then
-            canvas_http_get "/documents" | jq .
+            canvas_http_get "/context/documents" | jq .
         else
             case "$1" in
             notes)
-                canvas_http_get "/documents/notes" | jq .
+                canvas_http_get "/context/documents/notes" | jq .
                 ;;
             tabs)
-                canvas_http_get "/documents/tabs" | jq .
+                canvas_http_get "/context/documents/tabs" | jq .
                 ;;
+            todo)
+                canvas_http_get "/context/documents/todo" | jq .
+                ;;
+            files)
+                canvas_http_get "/context/documents/files" | jq .
+                ;;
+
             *)
-                echo "Error: unknown document type '$1'"
-                echo "Usage: context list [document type]"
+                echo "Error: untested document type '$1'"
+                echo "Usage: context list [notes|tabs|todo|files]"
+                # Temporary
+                canvas_http_get "/context/documents/$1" | jq .
                 return 1
                 ;;
             esac
