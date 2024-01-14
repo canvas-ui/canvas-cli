@@ -82,9 +82,9 @@ function context() {
             return 1
         fi
 
-        canvas_http_get "/bitmaps" | jq '.' | sed 's/"//g'
+        canvas_http_get "/context/bitmaps" | jq '.' | sed 's/"//g'
         ;;
-    add)
+    insert)
         # Parse path argument
         if [[ $# -ne 1 ]]; then
             echo "Error: invalid arguments for 'add' command"
