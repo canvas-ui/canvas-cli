@@ -5,6 +5,7 @@
 # Runtime config            #
 #############################
 
+# TODO: Add support for portable use / .env based paths
 CANVAS_CONFIG="$HOME/.canvas/config/jsonapi-client.json";
 if [ ! -f $CANVAS_CONFIG ]; then
     echo "ERROR | Canvas JSON API config file not found at $CANVAS_CONFIG" >&2
@@ -58,7 +59,7 @@ while IFS="=" read -r key value; do
     config["$key"]="$value"
 done < <(jq -r 'to_entries | .[] | .key + "=" + .value' "$CANVAS_CONFIG")
 
-# Update variables with values from config file
+# Update variables with config file values
 CANVAS_PROTO="${config[protocol]:-$CANVAS_PROTO}"
 CANVAS_HOST="${config[host]:-$CANVAS_HOST}"
 CANVAS_PORT="${config[port]:-$CANVAS_PORT}"
@@ -66,11 +67,30 @@ CANVAS_API_KEY="${config[key]:-$CANVAS_API_KEY}"
 CANVAS_URL="$CANVAS_PROTO://$CANVAS_HOST:$CANVAS_PORT"
 
 
-# Define helper functions
+#############################
+# Utility functions         #
+#############################
+
+parsePayload() {    
+    local payload="$1"
+    if (echo "$payload" | jq -e . >/dev/null 2>&1); then
+        echo "$payload"
+    else
+        echo "Error: failed to parse API response payload"
+        echo "Raw response: $payload"
+        return 1
+    fi
+}
+
 canvas_api_reachable() {
 	nc -zvw2 $CANVAS_HOST $CANVAS_PORT &>/dev/null
     return $?
 }
+
+
+#############################
+# curl wrappers             #
+#############################
 
 canvas_http_get() {
     # Remove leading slash from the URL, if present
@@ -82,17 +102,13 @@ canvas_http_get() {
         -H "API-KEY: $CANVAS_API_KEY" \
         "$CANVAS_URL/$url")
 
-    # Extract the http_code from the end of the result string
-    local http_code=${result: -3}
-
-    # Extract the payload from the beginning of the result string
-    local payload=${result:0:-3}
-
-    if [[ $? -ne 0 ]]; then
+    if [ $? -ne 0 ]; then
         echo "Error: failed to send HTTP GET request"
         return 1
     fi
 
+    # Extract the http_code from the end of the result string
+    local http_code=${result: -3}
     if [[ $http_code -ne 200 ]]; then
         echo "Error: HTTP GET request failed with status code $http_code"
         echo "Request URL: $CANVAS_URL/$url"
@@ -100,11 +116,12 @@ canvas_http_get() {
         return 1
     fi
 
-    echo "$payload"
+    # Extract the payload from the beginning of the result string
+    local payload=${result:0:-3}
+    parsePayload "$payload"
 }
 
 canvas_http_post() {
-
     # Remove leading slash from the URL, if present
     local url="${1#/}"
     local data="$2"
@@ -115,18 +132,14 @@ canvas_http_post() {
         -H "API-KEY: $CANVAS_API_KEY" \
         -d "$data" \
         "$CANVAS_URL/$url")
-
-    # Extract the http_code from the end of the result string
-    local http_code=${result: -3}
-
-    # Extract the payload from the beginning of the result string
-    local payload=${result:0:-3}
-
-    if [[ $? -ne 0 ]]; then
+    
+    if [ $? -ne 0 ]; then
         echo "Error: failed to send HTTP POST request"
         return 1
     fi
 
+    # Extract the http_code from the end of the result string
+    local http_code=${result: -3}
     if [[ $http_code -ne 200 ]]; then
         echo "Error: HTTP POST request failed with status code $http_code"
         echo "Request URL: $CANVAS_URL/$url"
@@ -134,7 +147,9 @@ canvas_http_post() {
         return 1
     fi
 
-    echo "$payload"
+    # Extract the payload from the beginning of the result string
+    local payload=${result:0:-3}
+    parsePayload "$payload"
 }
 
 canvas_http_put() {
@@ -149,17 +164,13 @@ canvas_http_put() {
         -d "$data" \
         "$CANVAS_URL/$url")
 
-    # Extract the http_code from the end of the result string
-    local http_code=${result: -3}
-
-    # Extract the payload from the beginning of the result string
-    local payload=${result:0:-3}
-
-    if [[ $? -ne 0 ]]; then
+    if [ $? -ne 0 ]; then
         echo "Error: failed to send HTTP PUT request"
         return 1
     fi
 
+    # Extract the http_code from the end of the result string
+    local http_code=${result: -3}
     if [[ $http_code -ne 200 ]]; then
         echo "Error: HTTP PUT request failed with status code $http_code"
         echo "Request URL: $CANVAS_URL/$url"
@@ -167,7 +178,9 @@ canvas_http_put() {
         return 1
     fi
 
-    echo "$payload"
+    # Extract the payload from the beginning of the result string
+    local payload=${result:0:-3}
+    parsePayload "$payload"
 }
 
 canvas_http_patch() {
@@ -182,17 +195,13 @@ canvas_http_patch() {
         -d "$data" \
         "$CANVAS_URL/$url")
 
-    # Extract the http_code from the end of the result string
-    local http_code=${result: -3}
-
-    # Extract the payload from the beginning of the result string
-    local payload=${result:0:-3}
-
     if [[ $? -ne 0 ]]; then
         echo "Error: failed to send HTTP PATCH request"
         return 1
     fi
 
+    # Extract the http_code from the end of the result string
+    local http_code=${result: -3}
     if [[ $http_code -ne 200 ]]; then
         echo "Error: HTTP PATCH request failed with status code $http_code"
         echo "Request URL: $CANVAS_URL/$url"
@@ -200,5 +209,38 @@ canvas_http_patch() {
         return 1
     fi
 
-    echo "$payload"
+    # Extract the payload from the beginning of the result string
+    local payload=${result:0:-3}
+    parsePayload "$payload"
+}
+
+canvas_http_delete() {
+    # Remove leading slash from the URL, if present
+    local url="${1#/}"
+    local data="$2"
+    local result=$(curl -s \
+        -X DELETE \
+        -w "%{http_code}" \
+        -H "Content-Type: application/json" \
+        -H "API-KEY: $CANVAS_API_KEY" \
+        -d "$data" \
+        "$CANVAS_URL/$url")
+
+    if [ $? -ne 0 ]; then
+        echo "Error: failed to send HTTP DELETE request"
+        return 1
+    fi
+
+    # Extract the http_code from the end of the result string
+    local http_code=${result: -3}
+    if [[ $http_code -ne 200 ]]; then
+        echo "Error: HTTP DELETE request failed with status code $http_code"
+        echo "Request URL: $CANVAS_URL/$url"
+        echo "Raw result: $result"
+        return 1
+    fi
+
+    # Extract the payload from the beginning of the result string
+    local payload=${result:0:-3}
+    parsePayload "$payload"
 }
