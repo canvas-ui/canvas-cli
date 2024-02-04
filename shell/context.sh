@@ -110,8 +110,7 @@ function context() {
 
         canvas_http_get "/context/bitmaps" | jq '.payload'
         ;;
-
-    add)
+    insert)
         # Parse path argument
         if [[ $# -ne 1 ]]; then
             echo "Error: invalid arguments for 'add' command"
@@ -135,9 +134,30 @@ function context() {
 
         # Parse optional document type argument
         if [[ $# -eq 0 ]]; then
-            canvas_http_get "/documents" | jq '.payload'
+            canvas_http_get "/context/documents" | jq .
         else
-            canvas_http_get "/documents/$1" | jq '.payload'
+            case "$1" in
+            notes)
+                canvas_http_get "/context/documents/notes" | jq .
+                ;;
+            tabs)
+                canvas_http_get "/context/documents/tabs" | jq .
+                ;;
+            todo)
+                canvas_http_get "/context/documents/todo" | jq .
+                ;;
+            files)
+                canvas_http_get "/context/documents/files" | jq .
+                ;;
+
+            *)
+                echo "Error: untested document type '$1'"
+                echo "Usage: context list [notes|tabs|todo|files]"
+                # Temporary
+                canvas_http_get "/context/documents/$1" | jq .
+                return 1
+                ;;
+            esac
         fi
         ;;
 
