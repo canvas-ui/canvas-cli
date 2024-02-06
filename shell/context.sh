@@ -22,7 +22,9 @@ function usage() {
     echo "  paths            Get all available context paths"
     echo "  url              Get the current context URL"
     echo "  bitmaps          Get the context bitmaps"
-    echo "  list             List all documents for the given context"    
+    echo "  list             List all documents for the given context"
+    echo "  list <abstr>     List all documents for the given context of a given abstraction"
+    echo ""
 }
 
 # Main context function
@@ -63,7 +65,7 @@ function context() {
             return 1
         fi
 
-        echo "$res" | jq -r '.status + " | " + .message + ": " + .payload'        
+        echo "$res" | jq -r '.status + " | " + .message + ": " + .payload'
         ;;
 
     tree)
@@ -101,7 +103,7 @@ function context() {
 
         canvas_http_get "/context/url" | jq '.payload'
         ;;
-        
+
     bitmaps)
         if ! canvas_api_reachable; then
             echo "Error: Canvas API endpoint not reachable on $CANVAS_HOST:$CANVAS_PORT"
