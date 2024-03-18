@@ -6,15 +6,10 @@
 #############################
 
 # TODO: Add support for portable use / .env based paths
-CANVAS_CONFIG="$HOME/.canvas/config/jsonapi-client.json";
-if [ ! -f $CANVAS_CONFIG ]; then
-    echo "ERROR | Canvas JSON API config file not found at $CANVAS_CONFIG" >&2
-	# exit 1
-fi;
+CANVAS_CONFIG="$HOME/.canvas/config/transports.rest.json";
 
 if ! test -z "$DEBUG"; then
     echo "DEBUG | Enabling Canvas integration for $SHELL"
-    echo "DEBUG | Canvas JSON API config file: $CANVAS_CONFIG"
 fi
 
 
@@ -43,35 +38,40 @@ fi
 #############################
 
 # Define global variable defaults
-CANVAS_PROTO="${CANVAS_PROTO:-http}"
-CANVAS_HOST="${CANVAS_HOST:-127.0.0.1}"
-CANVAS_PORT="${CANVAS_PORT:-3000}"
-CANVAS_API_KEY="${CANVAS_API_KEY:-canvas-json-api}"
+CANVAS_PROTO="http"
+CANVAS_HOST="127.0.0.1"
+CANVAS_PORT="3000"
+CANVAS_URL_BASE=""
+CANVAS_API_KEY="canvas-rest-api"
 
-# Read the JSON file into a Bash associative array
-# TODO: Rework using ini file format
-declare -A config
-while IFS="=" read -r key value; do
-    # Trim whitespace from key and value
-    key="$(echo "$key" | tr -d '[:space:]')"
-    value="$(echo "$value" | tr -d '[:space:]')"
-    # Add key-value pair to associative array
-    config["$key"]="$value"
-done < <(jq -r 'to_entries | .[] | .key + "=" + .value' "$CANVAS_CONFIG")
+if [ ! -f "$CANVAS_CONFIG" ]; then   
+    echo "WARNING | Canvas JSON API config file not found at $CANVAS_CONFIG, using script defaults" >&2
+else
+    declare -A config
+    while IFS="=" read -r key value; do
+        # Trim whitespace from key and value
+        key="$(echo "$key" | tr -d '[:space:]')"
+        value="$(echo "$value" | tr -d '[:space:]')"
+        # Add key-value pair to associative array
+        config["$key"]="$value"
+    done < <(cat "$CANVAS_CONFIG" | jq -r 'to_entries | .[] | if .value | type == "object" then .key + "=\(.value | to_entries | .[] | .value)" else .key + "=" + .value end')
 
-# Update variables with config file values
-CANVAS_PROTO="${config[protocol]:-$CANVAS_PROTO}"
-CANVAS_HOST="${config[host]:-$CANVAS_HOST}"
-CANVAS_PORT="${config[port]:-$CANVAS_PORT}"
-CANVAS_API_KEY="${config[key]:-$CANVAS_API_KEY}"
-CANVAS_URL="$CANVAS_PROTO://$CANVAS_HOST:$CANVAS_PORT"
+    # Update variables with config file values
+    CANVAS_PROTO="${config[protocol]:-$CANVAS_PROTO}"
+    CANVAS_HOST="${config[host]:-$CANVAS_HOST}"
+    CANVAS_PORT="${config[port]:-$CANVAS_PORT}"
+    CANVAS_URL_BASE="${config[baseUrl]:-$CANVAS_URL_BASE}"
+    CANVAS_API_KEY="${config[auth.token]:-$CANVAS_API_KEY}"
+fi
 
+# Construct the canvas server endpoint URL
+CANVAS_URL="$CANVAS_PROTO://$CANVAS_HOST:$CANVAS_PORT/$CANVAS_URL_BASE"
 
 #############################
 # Utility functions         #
 #############################
 
-parsePayload() {    
+parsePayload() {
     local payload="$1"
     if (echo "$payload" | jq -e . >/dev/null 2>&1); then
         echo "$payload"
@@ -93,46 +93,53 @@ canvas_api_reachable() {
 #############################
 
 canvas_http_get() {
-    # Remove leading slash from the URL, if present
     local url="${1#/}"
-    local result=$(curl -s \
-        -X GET \
-        -w "%{http_code}" \
+    local response_body
+    local http_status
+
+    # Execute curl command, capture the output (response body) and the status code
+    response_body=$(curl -sk -X GET \
         -H "Content-Type: application/json" \
-        -H "API-KEY: $CANVAS_API_KEY" \
+        -H "Authorization: Bearer $CANVAS_API_KEY" \
+        -w "%{http_code}" \
+        -o - \
         "$CANVAS_URL/$url")
+    http_status=$(echo "$response_body" | tail -n1)
+    response_body=$(echo "$response_body" | head -n -1)
 
     if [ $? -ne 0 ]; then
         echo "Error: failed to send HTTP GET request"
         return 1
     fi
 
-    # Extract the http_code from the end of the result string
-    local http_code=${result: -3}
-    if [[ $http_code -ne 200 ]]; then
-        echo "Error: HTTP GET request failed with status code $http_code"
+    # Display the HTTP status and response body
+    echo "HTTP Status Code: $http_status"
+    echo "Response Body: $response_body"
+
+    # Check for non-200 HTTP status code
+    if [[ $http_status -ne 200 ]]; then
+        echo "Error: HTTP GET request failed with status code $http_status"
         echo "Request URL: $CANVAS_URL/$url"
-        echo "Raw result: $result"
+        echo "Raw result: $response_body"
         return 1
     fi
 
-    # Extract the payload from the beginning of the result string
-    local payload=${result:0:-3}
-    parsePayload "$payload"
+    # Parse the payload if needed
+    parsePayload "$response_body"
 }
 
 canvas_http_post() {
     # Remove leading slash from the URL, if present
     local url="${1#/}"
     local data="$2"
-    local result=$(curl -s \
+    local result=$(curl -sk \
         -X POST \
         -w "%{http_code}" \
         -H "Content-Type: application/json" \
-        -H "API-KEY: $CANVAS_API_KEY" \
+        -H "Authorization: Bearer $CANVAS_API_KEY" \
         -d "$data" \
         "$CANVAS_URL/$url")
-    
+
     if [ $? -ne 0 ]; then
         echo "Error: failed to send HTTP POST request"
         return 1
@@ -156,11 +163,11 @@ canvas_http_put() {
     # Remove leading slash from the URL, if present
     local url="${1#/}"
     local data="$2"
-    local result=$(curl -s \
+    local result=$(curl -sk \
         -X PUT \
         -w "%{http_code}" \
         -H "Content-Type: application/json" \
-        -H "API-KEY: $CANVAS_API_KEY" \
+        -H "Authorization: Bearer $CANVAS_API_KEY" \
         -d "$data" \
         "$CANVAS_URL/$url")
 
@@ -187,11 +194,11 @@ canvas_http_patch() {
     # Remove leading slash from the URL, if present
     local url="${1#/}"
     local data="$2"
-    local result=$(curl -s \
+    local result=$(curl -sk \
         -X PATCH \
         -w "%{http_code}" \
         -H "Content-Type: application/json" \
-        -H "API-KEY: $CANVAS_API_KEY" \
+        -H "Authorization: Bearer $CANVAS_API_KEY" \
         -d "$data" \
         "$CANVAS_URL/$url")
 
@@ -218,11 +225,11 @@ canvas_http_delete() {
     # Remove leading slash from the URL, if present
     local url="${1#/}"
     local data="$2"
-    local result=$(curl -s \
+    local result=$(curl -sk \
         -X DELETE \
         -w "%{http_code}" \
         -H "Content-Type: application/json" \
-        -H "API-KEY: $CANVAS_API_KEY" \
+        -H "Authorization: Bearer $CANVAS_API_KEY" \
         -d "$data" \
         "$CANVAS_URL/$url")
 
