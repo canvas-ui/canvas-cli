@@ -5,8 +5,18 @@
 # Runtime config            #
 #############################
 
-# TODO: Add support for portable use / .env based paths
-CANVAS_CONFIG="$HOME/.canvas/config/transports.rest.json";
+# Get the directory of the current script
+SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
+
+if [ -f "$SCRIPT_DIR/../config/transports.rest.json" ]; then
+    # Use script config location
+    CANVAS_CONFIG="$SCRIPT_DIR/../config/transports.rest.json";
+else
+    # Fallback to default location in user home directory
+    CANVAS_CONFIG="$HOME/.canvas/config/transports.rest.json";
+    # Lets auto-create an empty config file if it does not exist
+    if [ ! -f "$CANVAS_CONFIG" ]; then echo "{}" > "$CANVAS_CONFIG"; fi;
+fi;
 
 if ! test -z "$DEBUG"; then
     echo "DEBUG | Enabling Canvas integration for $SHELL"
@@ -40,11 +50,11 @@ fi
 # Define global variable defaults
 CANVAS_PROTO="http"
 CANVAS_HOST="127.0.0.1"
-CANVAS_PORT="3000"
-CANVAS_URL_BASE=""
+CANVAS_PORT="8001"
+CANVAS_URL_BASE="/rest/v1"
 CANVAS_API_KEY="canvas-rest-api"
 
-if [ ! -f "$CANVAS_CONFIG" ]; then   
+if [ ! -f "$CANVAS_CONFIG" ]; then
     echo "WARNING | Canvas JSON API config file not found at $CANVAS_CONFIG, using script defaults" >&2
 else
     declare -A config
@@ -65,7 +75,7 @@ else
 fi
 
 # Construct the canvas server endpoint URL
-CANVAS_URL="$CANVAS_PROTO://$CANVAS_HOST:$CANVAS_PORT/$CANVAS_URL_BASE"
+CANVAS_URL="$CANVAS_PROTO://$CANVAS_HOST:$CANVAS_PORT$CANVAS_URL_BASE"
 
 #############################
 # Utility functions         #
@@ -83,8 +93,22 @@ parsePayload() {
 }
 
 canvas_api_reachable() {
-	nc -zvw2 $CANVAS_HOST $CANVAS_PORT &>/dev/null
-    return $?
+    # Canvas server running on localhost
+    if [ "$CANVAS_HOST" == "localhost" ] || [ "$CANVAS_HOST" == "127.0.0.1" ]; then
+        nc -zvw2 $CANVAS_HOST $CANVAS_PORT &>/dev/null
+        return $?
+    fi
+
+    # Canvas server running remotely, we should probably cache the response here / use nc for subsequent runs
+	curl --connect-timeout 5 --max-time 10 --silent --head http
+    response=$(curl --write-out '%{http_code}' --silent --output /dev/null $CANVAS_URL)
+    if [ "$response" -eq 200 ]; then
+        # Create a cache file so that subsequent runs would only check for the remote port via nc(faster)
+        return 0;
+    else
+        # Remove cache file to trigger a full curl-based check
+        return 1;
+    fi;
 }
 
 

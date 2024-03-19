@@ -11,10 +11,24 @@ $ git clone git@github.com:idncsk/canvas-ui-shell.git /path/to/canvas-shell
 # Add canvas to your bashrc
 $ echo ". /path/to/canvas-shell/context.sh" >> ~/.bashrc
 # Edit your client config
-$ nano ~/.canvas/config/jsonapi-client.json 
+$ mkdir -p ~/.canvas/config
+# For remote instances
+$ nano ~/.canvas/config/transports.rest.json
 {
-    "port": "8002"
+    "protocol": "https",
+    "host": "canvas.domain.tld",
+    "port": "443",
+    "baseUrl": "rest/v1",
+    "auth": {
+        "token": "canvas-rest-api"
+    }
 }
+# If you create an empty file, the following defaults will be used:
+# port 8001
+# host 127.0.0.1
+# protocol http
+# baseUrl /rest/v1
+# auth.token canvas-rest-api
 ```
 
 Currently, we only support a very limited API used mainly for development/testing purposes
@@ -29,3 +43,8 @@ Currently, we only support a very limited API used mainly for development/testin
   - tabs: data/abstraction/tab
   - notes: data/abstraction/note
   - todo: data/abstraction/todo
+
+## TODO
+
+- Context pinning
+- (implies) Context management (you may want to have different terminals using different contexts)
