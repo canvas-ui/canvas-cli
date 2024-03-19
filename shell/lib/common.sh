@@ -118,27 +118,24 @@ canvas_api_reachable() {
 
 canvas_http_get() {
     local url="${1#/}"
-    local response_body
+    local response
     local http_status
+    local response_body
 
     # Execute curl command, capture the output (response body) and the status code
-    response_body=$(curl -sk -X GET \
+    response=$(curl -sk -X GET \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer $CANVAS_API_KEY" \
-        -w "%{http_code}" \
+        -w "\n%{http_code}" \
         -o - \
         "$CANVAS_URL/$url")
-    http_status=$(echo "$response_body" | tail -n1)
-    response_body=$(echo "$response_body" | head -n -1)
+    http_status=$(echo "$response" | tail -n1)
+    response_body=$(echo "$response" | head -n -1)
 
     if [ $? -ne 0 ]; then
         echo "Error: failed to send HTTP GET request"
         return 1
     fi
-
-    # Display the HTTP status and response body
-    echo "HTTP Status Code: $http_status"
-    echo "Response Body: $response_body"
 
     # Check for non-200 HTTP status code
     if [[ $http_status -ne 200 ]]; then
