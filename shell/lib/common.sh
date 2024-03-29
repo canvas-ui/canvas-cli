@@ -95,18 +95,18 @@ parsePayload() {
 canvas_api_reachable() {
     # Canvas server running on localhost
     if [ "$CANVAS_HOST" == "localhost" ] || [ "$CANVAS_HOST" == "127.0.0.1" ]; then
-        nc -zvw2 $CANVAS_HOST $CANVAS_PORT &>/dev/null
+        nc -zvw1 $CANVAS_HOST $CANVAS_PORT &>/dev/null
         return $?
     fi
 
     # Canvas server running remotely, we should probably cache the response here / use nc for subsequent runs
-	curl --connect-timeout 5 --max-time 10 --silent --head http
+	curl --connect-timeout 1 --max-time 1 --silent --head http
     response=$(curl --write-out '%{http_code}' --silent --output /dev/null $CANVAS_URL)
     if [ "$response" -eq 200 ]; then
-        # Create a cache file so that subsequent runs would only check for the remote port via nc(faster)
+        # TODO: Create a cache file so that subsequent runs would only check for the remote port via nc(faster)
         return 0;
     else
-        # Remove cache file to trigger a full curl-based check
+        # TODO: Remove cache file to trigger a full curl-based check
         return 1;
     fi;
 }
