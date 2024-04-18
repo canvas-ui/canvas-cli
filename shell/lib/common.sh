@@ -77,6 +77,9 @@ fi
 # Construct the canvas server endpoint URL
 CANVAS_URL="$CANVAS_PROTO://$CANVAS_HOST:$CANVAS_PORT$CANVAS_URL_BASE"
 
+echo $CANVAS_URL
+echo $CANVAS_API_KEY
+
 #############################
 # Utility functions         #
 #############################
@@ -94,21 +97,21 @@ parsePayload() {
 
 canvas_api_reachable() {
     # Canvas server running on localhost
-    if [ "$CANVAS_HOST" == "localhost" ] || [ "$CANVAS_HOST" == "127.0.0.1" ]; then
+#    if [ "$CANVAS_HOST" == "localhost" ] || [ "$CANVAS_HOST" == "127.0.0.1" ]; then
         nc -zvw1 $CANVAS_HOST $CANVAS_PORT &>/dev/null
         return $?
-    fi
+#    fi
 
     # Canvas server running remotely, we should probably cache the response here / use nc for subsequent runs
-	curl --connect-timeout 1 --max-time 1 --silent --head http
-    response=$(curl --write-out '%{http_code}' --silent --output /dev/null $CANVAS_URL)
-    if [ "$response" -eq 200 ]; then
-        # TODO: Create a cache file so that subsequent runs would only check for the remote port via nc(faster)
-        return 0;
-    else
-        # TODO: Remove cache file to trigger a full curl-based check
-        return 1;
-    fi;
+#	curl -k --connect-timeout 1 --max-time 1 --silent --head http
+#    response=$(curl -k --write-out '%{http_code}' --silent --output /dev/null $CANVAS_URL)
+#    if [ "$response" -eq 200 ]; then
+#        # TODO: Create a cache file so that subsequent runs would only check for the remote port via nc(faster)
+#        return 0;
+#    else
+#        # TODO: Remove cache file to trigger a full curl-based check
+#        return 1;
+#    fi;
 }
 
 
