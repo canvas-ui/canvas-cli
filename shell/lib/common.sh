@@ -77,9 +77,6 @@ fi
 # Construct the canvas server endpoint URL
 CANVAS_URL="$CANVAS_PROTO://$CANVAS_HOST:$CANVAS_PORT$CANVAS_URL_BASE"
 
-echo $CANVAS_URL
-echo $CANVAS_API_KEY
-
 #############################
 # Utility functions         #
 #############################
@@ -97,11 +94,12 @@ parsePayload() {
 
 canvas_api_reachable() {
     # Canvas server running on localhost
-#    if [ "$CANVAS_HOST" == "localhost" ] || [ "$CANVAS_HOST" == "127.0.0.1" ]; then
+    if [ "$CANVAS_HOST" == "localhost" ] || [ "$CANVAS_HOST" == "127.0.0.1" ]; then
         nc -zvw1 $CANVAS_HOST $CANVAS_PORT &>/dev/null
         return $?
-#    fi
+    fi
 
+	return 0
     # Canvas server running remotely, we should probably cache the response here / use nc for subsequent runs
 #	curl -k --connect-timeout 1 --max-time 1 --silent --head http
 #    response=$(curl -k --write-out '%{http_code}' --silent --output /dev/null $CANVAS_URL)
