@@ -93,10 +93,6 @@ CANVAS_API_KEY="${config[auth.token]:-$CANVAS_API_KEY}"
 # Construct the canvas server endpoint URL
 CANVAS_URL="$CANVAS_PROTO://$CANVAS_HOST:$CANVAS_PORT$CANVAS_URL_BASE"
 
-# Set the default prompt
-CANVAS_PROMPT="[disconnected]"
-
-
 #############################
 # Utility functions         #
 #############################
@@ -110,16 +106,6 @@ parsePayload() {
         echo "Raw response: $payload"
         return 1
     fi
-}
-
-canvas_connect() {
-    if canvas_api_reachable; then
-        echo "INFO | Successfully connected to Canvas API at \"$CANVAS_URL\""
-        return 0
-    fi
-
-    echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable, status: $(cat $CANVAS_CONNECTION_STATUS)" >&2
-    return 1
 }
 
 canvas_api_reachable() {
@@ -138,6 +124,9 @@ canvas_api_reachable() {
     #fi
 }
 
+canvas_connected() {
+    [ -f "$CANVAS_CONNECTION_STATUS" ] && [ "$(cat "$CANVAS_CONNECTION_STATUS")" == "200" ]
+}
 
 #############################
 # curl wrappers             #

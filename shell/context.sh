@@ -7,7 +7,6 @@ SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
 # Source common.sh from the same directory
 source "${SCRIPT_DIR}/lib/common.sh"
 
-
 #########################################
 # Canvas REST API bash wrapper          #
 #########################################
@@ -24,6 +23,9 @@ function usage() {
     echo "  bitmaps          Get the context bitmaps"
     echo "  list             List all documents for the given context"
     echo "  list <abstr>     List all documents for the given context of a given abstraction"
+    echo "Temporary commands:"
+    echo "  canvas_connect   Connect to the Canvas API"
+    echo "  canvas_disconnect Disconnect from the Canvas API"
     echo ""
 }
 
@@ -39,28 +41,22 @@ function context() {
         return 1
     fi
 
-    # Check if Canvas API is reachable
-    if [ ! -f "$CANVAS_CONNECTION_STATUS" ] || [ "$(read -r <"$CANVAS_CONNECTION_STATUS")" != "200" ]; then
-        echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
-        echo "Reconnect using canvas_connect (for now)" >&2
-        return 1
-    fi
-
     # Parse command and arguments
     local command="$1"
     shift
 
     case "$command" in
     set)
+        if ! canvas_connected; then
+            echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
+            echo "Reconnect using canvas_connect (for now)" >&2        
+            return 1
+        fi
+
         # Parse URL argument
         if [[ $# -ne 1 ]]; then
             echo "Error: invalid arguments for 'set' command"
             echo "Usage: context set <url>"
-            return 1
-        fi
-
-        if ! canvas_api_reachable; then
-            echo "Error: Canvas API endpoint not reachable on $CANVAS_HOST:$CANVAS_PORT"
             return 1
         fi
 
@@ -76,8 +72,9 @@ function context() {
         ;;
 
     tree)
-        if ! canvas_api_reachable; then
-            echo "Error: Canvas API endpoint not reachable on $CANVAS_HOST:$CANVAS_PORT"
+        if ! canvas_connected; then
+            echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
+            echo "Reconnect using canvas_connect (for now)" >&2        
             return 1
         fi
 
@@ -85,8 +82,9 @@ function context() {
         ;;
 
     path)
-        if ! canvas_api_reachable; then
-            echo "Error: Canvas API endpoint not reachable on $CANVAS_HOST:$CANVAS_PORT"
+        if ! canvas_connected; then
+            echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
+            echo "Reconnect using canvas_connect (for now)" >&2        
             return 1
         fi
 
@@ -94,8 +92,9 @@ function context() {
         ;;
 
     paths)
-        if ! canvas_api_reachable; then
-            echo "Error: Canvas API endpoint not reachable on $CANVAS_HOST:$CANVAS_PORT"
+        if ! canvas_connected; then
+            echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
+            echo "Reconnect using canvas_connect (for now)" >&2        
             return 1
         fi
 
@@ -103,8 +102,9 @@ function context() {
         ;;
 
     url)
-        if ! canvas_api_reachable; then
-            echo "Error: Canvas API endpoint not reachable on $CANVAS_HOST:$CANVAS_PORT"
+        if ! canvas_connected; then
+            echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
+            echo "Reconnect using canvas_connect (for now)" >&2        
             return 1
         fi
 
@@ -112,14 +112,21 @@ function context() {
         ;;
 
     bitmaps)
-        if ! canvas_api_reachable; then
-            echo "Error: Canvas API endpoint not reachable on $CANVAS_HOST:$CANVAS_PORT"
+        if ! canvas_connected; then
+            echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
+            echo "Reconnect using canvas_connect (for now)" >&2        
             return 1
         fi
 
         canvas_http_get "/context/bitmaps" | jq '.payload'
         ;;
     insert)
+        if ! canvas_connected; then
+            echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
+            echo "Reconnect using canvas_connect (for now)" >&2        
+            return 1
+        fi
+
         # Parse path argument
         if [[ $# -ne 1 ]]; then
             echo "Error: invalid arguments for 'add' command"
@@ -127,17 +134,13 @@ function context() {
             return 1
         fi
 
-        if ! canvas_api_reachable; then
-            echo "Error: Canvas API endpoint not reachable on $CANVAS_HOST:$CANVAS_PORT"
-            return 1
-        fi
-
         # TODO: send API request to add file or folder to context
         ;;
 
     list)
-        if ! canvas_api_reachable; then
-            echo "Error: Canvas API endpoint not reachable on $CANVAS_HOST:$CANVAS_PORT"
+        if ! canvas_connected; then
+            echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
+            echo "Reconnect using canvas_connect (for now)" >&2        
             return 1
         fi
 
@@ -178,13 +181,37 @@ function context() {
     esac
 }
 
-# Add context URL to prompt
-# TODO: Move to a separate script or a common function (fe updatePrompt())
 
-# Fail fast if no connection file is present
-if [ ! -f "$CANVAS_USER_VAR/canvas-ui-shell.connected" ]; then
-    export PS1="$CANVAS_PROMPT $PS1";
-else 
-    export PS1="[\$(context path)] $PS1";
-fi;
+#############################################
+# Canvas functions (TODO: Move to canvas.sh #
+#############################################
 
+ORIGINAL_PROMPT="$PS1"
+
+canvas_connect() {
+    if canvas_api_reachable; then
+        echo "INFO | Successfully connected to Canvas API at \"$CANVAS_URL\""
+        canvas_update_prompt
+        return 0
+    fi
+
+    echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable, status: $(cat $CANVAS_CONNECTION_STATUS)" >&2
+    return 1
+}
+
+canvas_update_prompt() {
+    if canvas_connected; then
+        export PS1="[\$(context path)] $ORIGINAL_PROMPT";
+    else
+        export PS1="[disconneted] $ORIGINAL_PROMPT";
+    fi;
+}
+
+canvas_disconnect() {
+    echo "INFO | Disconnected from Canvas API"
+    rm -f "$CANVAS_CONNECTION_STATUS"
+    canvas_update_prompt
+}
+
+# Check if Canvas API is reachable, fail fast if no connection file is present
+canvas_update_prompt
