@@ -7,6 +7,50 @@ SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
 # Source common.sh from the same directory
 source "${SCRIPT_DIR}/lib/common.sh"
 
+
+#############################################
+# Canvas functions (TODO: Move to canvas.sh #
+#############################################
+
+ORIGINAL_PROMPT="$PS1"
+
+canvas_connect() {
+    if canvas_api_reachable; then
+        echo "INFO | Successfully connected to Canvas API at \"$CANVAS_URL\""
+        canvas_update_prompt
+        return 0
+    fi
+
+    echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable, status: $(cat $CANVAS_CONNECTION_STATUS)" >&2
+    return 1
+}
+
+canvas_update_prompt() {
+    # This check is file-based only so nooo worries
+    if canvas_connected; then
+        export PS1="[\$(context path)] $ORIGINAL_PROMPT";
+    else
+        export PS1="[disconneted] $ORIGINAL_PROMPT";
+    fi;
+}
+
+canvas_disconnect() {
+    echo "INFO | Disconnected from Canvas API"
+    rm -f "$CANVAS_CONNECTION_STATUS"
+    canvas_update_prompt
+}
+
+# Helper script for the below wrapper
+canvas_check_connection() {
+    if ! canvas_connected; then
+        echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
+        echo "Reconnect using canvas_connect (for now)" >&2
+        canvas_update_prompt
+        return 1
+    fi
+}
+
+
 #########################################
 # Canvas REST API bash wrapper          #
 #########################################
@@ -47,11 +91,8 @@ function context() {
 
     case "$command" in
     set)
-        if ! canvas_connected; then
-            echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
-            echo "Reconnect using canvas_connect (for now)" >&2        
-            return 1
-        fi
+        # Check if connected
+        if ! canvas_check_connection; then canvas_update_prompt; return 1; fi;
 
         # Parse URL argument
         if [[ $# -ne 1 ]]; then
@@ -62,6 +103,14 @@ function context() {
 
         local url="$1"
         res=$(canvas_http_post "/context/url" "{\"url\": \"$url\"}")
+
+        # Update prompt on disconnect
+        if [ $? -eq 1 ]; then
+            echo "Error: failed to set context URL";
+            canvas_update_prompt;
+            return 1;
+        fi;
+
         if echo "$res" | jq .status | grep -q "error"; then
             echo "Error: failed to set context URL"
             echo "Response: $res"
@@ -72,60 +121,37 @@ function context() {
         ;;
 
     tree)
-        if ! canvas_connected; then
-            echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
-            echo "Reconnect using canvas_connect (for now)" >&2        
-            return 1
-        fi
-
+        # Check if connected
+        if ! canvas_check_connection; then canvas_update_prompt; return 1; fi;
         canvas_http_get "/context/tree" | jq .payload | jq .
         ;;
 
     path)
-        if ! canvas_connected; then
-            echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
-            echo "Reconnect using canvas_connect (for now)" >&2        
-            return 1
-        fi
-
-        canvas_http_get "/context/path" | jq '.payload' | sed 's/"//g'
+        # Check if connected
+        if ! canvas_check_connection; then canvas_update_prompt; return 1; fi;
+        canvas_http_get "/context/path" | jq '.payload' | sed 's/"//g';
         ;;
 
     paths)
-        if ! canvas_connected; then
-            echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
-            echo "Reconnect using canvas_connect (for now)" >&2        
-            return 1
-        fi
-
+        # Check if connected
+        if ! canvas_check_connection; then canvas_update_prompt; return 1; fi;
         canvas_http_get "/context/paths" | jq '.payload'
         ;;
 
     url)
-        if ! canvas_connected; then
-            echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
-            echo "Reconnect using canvas_connect (for now)" >&2        
-            return 1
-        fi
-
+        # Check if connected
+        if ! canvas_check_connection; then canvas_update_prompt; return 1; fi;
         canvas_http_get "/context/url" | jq '.payload'
         ;;
 
     bitmaps)
-        if ! canvas_connected; then
-            echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
-            echo "Reconnect using canvas_connect (for now)" >&2        
-            return 1
-        fi
-
+        # Check if connected
+        if ! canvas_check_connection; then canvas_update_prompt; return 1; fi;
         canvas_http_get "/context/bitmaps" | jq '.payload'
         ;;
     insert)
-        if ! canvas_connected; then
-            echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
-            echo "Reconnect using canvas_connect (for now)" >&2        
-            return 1
-        fi
+        # Check if connected
+        if ! canvas_check_connection; then canvas_update_prompt; return 1; fi;
 
         # Parse path argument
         if [[ $# -ne 1 ]]; then
@@ -134,15 +160,14 @@ function context() {
             return 1
         fi
 
+        # Update prompt on disconnect
+        if [ $? -eq 1 ]; then canvas_update_prompt; return 1; fi;
         # TODO: send API request to add file or folder to context
         ;;
 
     list)
-        if ! canvas_connected; then
-            echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
-            echo "Reconnect using canvas_connect (for now)" >&2        
-            return 1
-        fi
+        # Check if connected
+        if ! canvas_check_connection; then canvas_update_prompt; return 1; fi;
 
         # Parse optional document type argument
         if [[ $# -eq 0 ]]; then
@@ -167,7 +192,6 @@ function context() {
                 echo "Usage: context list [notes|tabs|todo|files]"
                 # Temporary
                 canvas_http_get "/context/documents/$1" | jq .
-                return 1
                 ;;
             esac
         fi
@@ -181,37 +205,5 @@ function context() {
     esac
 }
 
-
-#############################################
-# Canvas functions (TODO: Move to canvas.sh #
-#############################################
-
-ORIGINAL_PROMPT="$PS1"
-
-canvas_connect() {
-    if canvas_api_reachable; then
-        echo "INFO | Successfully connected to Canvas API at \"$CANVAS_URL\""
-        canvas_update_prompt
-        return 0
-    fi
-
-    echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable, status: $(cat $CANVAS_CONNECTION_STATUS)" >&2
-    return 1
-}
-
-canvas_update_prompt() {
-    if canvas_connected; then
-        export PS1="[\$(context path)] $ORIGINAL_PROMPT";
-    else
-        export PS1="[disconneted] $ORIGINAL_PROMPT";
-    fi;
-}
-
-canvas_disconnect() {
-    echo "INFO | Disconnected from Canvas API"
-    rm -f "$CANVAS_CONNECTION_STATUS"
-    canvas_update_prompt
-}
-
-# Check if Canvas API is reachable, fail fast if no connection file is present
+# Update users prompt for some canvas bling-bling
 canvas_update_prompt

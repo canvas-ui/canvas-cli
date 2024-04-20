@@ -108,6 +108,25 @@ parsePayload() {
     fi
 }
 
+parseStatusCode() {
+    local request_type="$1"
+    local status_code="$2"
+
+    if [[ "$status_code" -eq 200 ]]; then
+        return 0
+    else
+        # If status code starts with 5, lets mark the connection as down
+        if [[ "$status_code" =~ ^5 ]]; then
+            echo "$status_code" > "$CANVAS_CONNECTION_STATUS"
+        fi
+
+        echo "ERROR | HTTP $request_type request failed with status code $status_code" >&2
+        echo "Request URL: $CANVAS_URL/$url" >&2
+        echo "Raw result: $result" >&2
+        return $status_code
+    fi
+}
+
 canvas_api_reachable() {
     # Use curl to fetch HTTP headers (ping/healthcheck endpoint)
     local status=$(curl -skI --connect-timeout 1 -o /dev/null -w '%{http_code}' "$CANVAS_URL/ping")
@@ -135,7 +154,7 @@ canvas_connected() {
 canvas_http_get() {
     local url="${1#/}"
     local response
-    local http_status
+    local http_code
     local response_body
 
     # Execute curl command, capture the output (response body) and the status code
@@ -145,7 +164,8 @@ canvas_http_get() {
         -w "\n%{http_code}" \
         -o - \
         "$CANVAS_URL/$url")
-    http_status=$(echo "$response" | tail -n1)
+
+    http_code=$(echo "$response" | tail -n1)
     response_body=$(echo "$response" | head -n -1)
 
     if [ $? -ne 0 ]; then
@@ -154,10 +174,7 @@ canvas_http_get() {
     fi
 
     # Check for non-200 HTTP status code
-    if [[ $http_status -ne 200 ]]; then
-        echo "ERROR | HTTP GET request failed with status code $http_status" >&2
-        echo "Request URL: $CANVAS_URL/$url"
-        echo "Raw result: $response_body"
+    if ! parseStatusCode "GET" "$http_code"; then
         return 1
     fi
 
@@ -184,12 +201,9 @@ canvas_http_post() {
 
     # Extract the http_code from the end of the result string
     local http_code=${result: -3}
-    if [[ $http_code -ne 200 ]]; then
-        echo "ERROR | HTTP POST request failed with status code $http_code" >&2
-        echo "Request URL: $CANVAS_URL/$url"
-        echo "Raw result: $result"
-        return 1
-    fi
+
+    # Check for non-200 HTTP status code
+    if ! parseStatusCode "POST" "$http_code"; then return 1; fi;
 
     # Extract the payload from the beginning of the result string
     local payload=${result:0:-3}
@@ -215,12 +229,9 @@ canvas_http_put() {
 
     # Extract the http_code from the end of the result string
     local http_code=${result: -3}
-    if [[ $http_code -ne 200 ]]; then
-        echo "ERROR | HTTP PUT request failed with status code $http_code" >&2
-        echo "Request URL: $CANVAS_URL/$url"
-        echo "Raw result: $result"
-        return 1
-    fi
+
+    # Check for non-200 HTTP status code
+    if ! parseStatusCode "PUT" "$http_code"; then return 1; fi;
 
     # Extract the payload from the beginning of the result string
     local payload=${result:0:-3}
@@ -246,12 +257,9 @@ canvas_http_patch() {
 
     # Extract the http_code from the end of the result string
     local http_code=${result: -3}
-    if [[ $http_code -ne 200 ]]; then
-        echo "ERROR | HTTP PATCH request failed with status code $http_code"
-        echo "Request URL: $CANVAS_URL/$url"
-        echo "Raw result: $result"
-        return 1
-    fi
+
+    # Check for non-200 HTTP status code
+    if ! parseStatusCode "PATCH" "$http_code"; then return 1; fi;
 
     # Extract the payload from the beginning of the result string
     local payload=${result:0:-3}
@@ -277,12 +285,9 @@ canvas_http_delete() {
 
     # Extract the http_code from the end of the result string
     local http_code=${result: -3}
-    if [[ $http_code -ne 200 ]]; then
-        echo "ERROR | HTTP DELETE request failed with status code $http_code" >&2
-        echo "Request URL: $CANVAS_URL/$url"
-        echo "Raw result: $result"
-        return 1
-    fi
+
+    # Check for non-200 HTTP status code
+    if ! parseStatusCode "DELETE" "$http_code"; then return 1; fi;
 
     # Extract the payload from the beginning of the result string
     local payload=${result:0:-3}
