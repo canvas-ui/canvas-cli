@@ -28,6 +28,7 @@ mkdir -p "$CANVAS_USER_LOG"
 # Set REST API transport config file
 # TODO: Support parsing transports.json, transports.<os>.json
 CANVAS_CONFIG_REST="$CANVAS_USER_CONFIG/transports.rest.json"
+CANVAS_CONNECTION_STATUS="$CANVAS_USER_VAR/canvas-ui-shell.connection"
 
 # Ensure the REST API transport config file exists
 if [ ! -f "$CANVAS_CONFIG_REST" ]; then
@@ -114,22 +115,21 @@ parsePayload() {
 canvas_connect() {
     if canvas_api_reachable; then
         echo "INFO | Successfully connected to Canvas API at \"$CANVAS_URL\""
-        touch "$CANVAS_USER_VAR/canvas-ui-shell.connected"        
         return 0
     fi
 
-    echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
-    rm -f "$CANVAS_USER_VAR/canvas-ui-shell.connected" &>/dev/null
+    echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable, status: $(cat $CANVAS_CONNECTION_STATUS)" >&2
     return 1
 }
 
 canvas_api_reachable() {
-    # Use curl to fetch HTTP headers and grep to check for a 200 status code
-    local status=$(curl -skI --connect-timeout 1 -o /dev/null -w '%{http_code}' "$CANVAS_URL")
+    # Use curl to fetch HTTP headers (ping/healthcheck endpoint)
+    local status=$(curl -skI --connect-timeout 1 -o /dev/null -w '%{http_code}' "$CANVAS_URL/ping")
     if [[ "$status" -eq 200 ]]; then
+        echo "$status" > "$CANVAS_CONNECTION_STATUS"
         return 0
     else
-        rm -f "$CANVAS_USER_VAR/canvas-ui-shell.connected" &>/dev/null
+        echo "$status" > "$CANVAS_CONNECTION_STATUS"
         return 1
     fi
     #if [ "$CANVAS_HOST" == "localhost" ] || [ "$CANVAS_HOST" == "127.0.0.1" ]; then

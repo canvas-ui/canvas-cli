@@ -40,9 +40,9 @@ function context() {
     fi
 
     # Check if Canvas API is reachable
-    if [ ! -f $CANVAS_USER_VAR/canvas-ui-shell.connected ]; then
+    if [ ! -f "$CANVAS_CONNECTION_STATUS" ] || [ "$(read -r <"$CANVAS_CONNECTION_STATUS")" != "200" ]; then
         echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
-        echo "You need to manually connect to the Canvas API (for now just call the function directly - canvas_connect)" >&2
+        echo "Reconnect using canvas_connect (for now)" >&2
         return 1
     fi
 
