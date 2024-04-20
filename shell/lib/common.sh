@@ -8,16 +8,34 @@
 # Get the directory of the current script
 SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
 
-if [ -f "$SCRIPT_DIR/../config/transports.rest.json" ]; then
-    # Use script config location
-    CANVAS_CONFIG="$SCRIPT_DIR/../config/transports.rest.json";
-else
-    # Fallback to default location in user home directory
-    CANVAS_CONFIG="$HOME/.canvas/config/transports.rest.json";
-    # Lets auto-create an empty config file if it does not exist
-    if [ ! -f "$CANVAS_CONFIG" ]; then echo "{}" > "$CANVAS_CONFIG"; fi;
-fi;
+# Set Canvas home directory
+# TODO: Add support for portable mode
+# TODO: Add support for env var override
+# TODO: Add support for canvas .env file
+CANVAS_USER_HOME="$HOME/.canvas"
+CANVAS_USER_CONFIG="$CANVAS_USER_HOME/config"
+CANVAS_USER_DATA="$CANVAS_USER_HOME/data"
+CANVAS_USER_VAR="$CANVAS_USER_HOME/var"
+CANVAS_USER_LOG="$CANVAS_USER_VAR/log"
 
+# Ensure canvas directories exist
+mkdir -p "$CANVAS_USER_HOME"
+mkdir -p "$CANVAS_USER_CONFIG"
+mkdir -p "$CANVAS_USER_DATA"
+mkdir -p "$CANVAS_USER_VAR"
+mkdir -p "$CANVAS_USER_LOG"
+
+# Set REST API transport config file
+# TODO: Support parsing transports.json, transports.<os>.json
+CANVAS_CONFIG_REST="$CANVAS_USER_CONFIG/transports.rest.json"
+
+# Ensure the REST API transport config file exists
+if [ ! -f "$CANVAS_CONFIG_REST" ]; then
+    echo "INFO | Canvas REST API transport configuration file not found, creating an empty one"
+    echo "{}" > "$CANVAS_CONFIG_REST"
+fi
+
+# TODO: Properly toggle and implement debug mode
 if ! test -z "$DEBUG"; then
     echo "DEBUG | Enabling Canvas integration for $SHELL"
 fi
@@ -43,39 +61,40 @@ if ! command -v curl >/dev/null 2>&1; then
 fi
 
 
-#############################
-# Global variables          #
-#############################
+#####################################
+# Setup Canvas REST API variables   #
+#####################################
 
-# Define global variable defaults
+# REST API Defaults
 CANVAS_PROTO="http"
 CANVAS_HOST="127.0.0.1"
 CANVAS_PORT="8001"
 CANVAS_URL_BASE="/rest/v1"
 CANVAS_API_KEY="canvas-rest-api"
 
-if [ ! -f "$CANVAS_CONFIG" ]; then
-    echo "WARNING | Canvas JSON API config file not found at $CANVAS_CONFIG, using script defaults" >&2
-else
-    declare -A config
-    while IFS="=" read -r key value; do
-        # Trim whitespace from key and value
-        key="$(echo "$key" | tr -d '[:space:]')"
-        value="$(echo "$value" | tr -d '[:space:]')"
-        # Add key-value pair to associative array
-        config["$key"]="$value"
-    done < <(cat "$CANVAS_CONFIG" | jq -r 'to_entries | .[] | if .value | type == "object" then .key + "=\(.value | to_entries | .[] | .value)" else .key + "=" + .value end')
+# A very ugly JSON config file parser
+declare -A config
+while IFS="=" read -r key value; do
+    # Trim whitespace from key and value
+    key="$(echo "$key" | tr -d '[:space:]')"
+    value="$(echo "$value" | tr -d '[:space:]')"
+    # Add key-value pair to associative array
+    config["$key"]="$value"
+done < <(cat "$CANVAS_CONFIG_REST" | jq -r 'to_entries | .[] | if .value | type == "object" then .key + "=\(.value | to_entries | .[] | .value)" else .key + "=" + .value end')
 
-    # Update variables with config file values
-    CANVAS_PROTO="${config[protocol]:-$CANVAS_PROTO}"
-    CANVAS_HOST="${config[host]:-$CANVAS_HOST}"
-    CANVAS_PORT="${config[port]:-$CANVAS_PORT}"
-    CANVAS_URL_BASE="${config[baseUrl]:-$CANVAS_URL_BASE}"
-    CANVAS_API_KEY="${config[auth.token]:-$CANVAS_API_KEY}"
-fi
+# Update variables with config file values
+CANVAS_PROTO="${config[protocol]:-$CANVAS_PROTO}"
+CANVAS_HOST="${config[host]:-$CANVAS_HOST}"
+CANVAS_PORT="${config[port]:-$CANVAS_PORT}"
+CANVAS_URL_BASE="${config[baseUrl]:-$CANVAS_URL_BASE}"
+CANVAS_API_KEY="${config[auth.token]:-$CANVAS_API_KEY}"
 
 # Construct the canvas server endpoint URL
 CANVAS_URL="$CANVAS_PROTO://$CANVAS_HOST:$CANVAS_PORT$CANVAS_URL_BASE"
+
+# Set the default prompt
+CANVAS_PROMPT="[disconnected]"
+
 
 #############################
 # Utility functions         #
@@ -86,30 +105,37 @@ parsePayload() {
     if (echo "$payload" | jq -e . >/dev/null 2>&1); then
         echo "$payload"
     else
-        echo "Error: failed to parse API response payload"
+        echo "ERROR | Failed to parse API response payload" >&2
         echo "Raw response: $payload"
         return 1
     fi
 }
 
-canvas_api_reachable() {
-    # Canvas server running on localhost
-    if [ "$CANVAS_HOST" == "localhost" ] || [ "$CANVAS_HOST" == "127.0.0.1" ]; then
-        nc -zvw1 $CANVAS_HOST $CANVAS_PORT &>/dev/null
-        return $?
+canvas_connect() {
+    if canvas_api_reachable; then
+        echo "INFO | Successfully connected to Canvas API at \"$CANVAS_URL\""
+        touch "$CANVAS_USER_VAR/canvas-ui-shell.connected"        
+        return 0
     fi
 
-	return 0
-    # Canvas server running remotely, we should probably cache the response here / use nc for subsequent runs
-#	curl -k --connect-timeout 1 --max-time 1 --silent --head http
-#    response=$(curl -k --write-out '%{http_code}' --silent --output /dev/null $CANVAS_URL)
-#    if [ "$response" -eq 200 ]; then
-#        # TODO: Create a cache file so that subsequent runs would only check for the remote port via nc(faster)
-#        return 0;
-#    else
-#        # TODO: Remove cache file to trigger a full curl-based check
-#        return 1;
-#    fi;
+    echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
+    rm -f "$CANVAS_USER_VAR/canvas-ui-shell.connected" &>/dev/null
+    return 1
+}
+
+canvas_api_reachable() {
+    # Use curl to fetch HTTP headers and grep to check for a 200 status code
+    local status=$(curl -skI --connect-timeout 1 -o /dev/null -w '%{http_code}' "$CANVAS_URL")
+    if [[ "$status" -eq 200 ]]; then
+        return 0
+    else
+        rm -f "$CANVAS_USER_VAR/canvas-ui-shell.connected" &>/dev/null
+        return 1
+    fi
+    #if [ "$CANVAS_HOST" == "localhost" ] || [ "$CANVAS_HOST" == "127.0.0.1" ]; then
+        #nc -zvw1 $CANVAS_HOST $CANVAS_PORT &>/dev/null
+        #return $?
+    #fi
 }
 
 
@@ -134,13 +160,13 @@ canvas_http_get() {
     response_body=$(echo "$response" | head -n -1)
 
     if [ $? -ne 0 ]; then
-        echo "Error: failed to send HTTP GET request"
+        echo "ERROR | Failed to send HTTP GET request" >&2
         return 1
     fi
 
     # Check for non-200 HTTP status code
     if [[ $http_status -ne 200 ]]; then
-        echo "Error: HTTP GET request failed with status code $http_status"
+        echo "ERROR | HTTP GET request failed with status code $http_status" >&2
         echo "Request URL: $CANVAS_URL/$url"
         echo "Raw result: $response_body"
         return 1
@@ -163,14 +189,14 @@ canvas_http_post() {
         "$CANVAS_URL/$url")
 
     if [ $? -ne 0 ]; then
-        echo "Error: failed to send HTTP POST request"
+        echo "ERROR | failed to send HTTP POST request" >&2
         return 1
     fi
 
     # Extract the http_code from the end of the result string
     local http_code=${result: -3}
     if [[ $http_code -ne 200 ]]; then
-        echo "Error: HTTP POST request failed with status code $http_code"
+        echo "ERROR | HTTP POST request failed with status code $http_code" >&2
         echo "Request URL: $CANVAS_URL/$url"
         echo "Raw result: $result"
         return 1
@@ -194,14 +220,14 @@ canvas_http_put() {
         "$CANVAS_URL/$url")
 
     if [ $? -ne 0 ]; then
-        echo "Error: failed to send HTTP PUT request"
+        echo "ERROR | Failed to send HTTP PUT request" >&2
         return 1
     fi
 
     # Extract the http_code from the end of the result string
     local http_code=${result: -3}
     if [[ $http_code -ne 200 ]]; then
-        echo "Error: HTTP PUT request failed with status code $http_code"
+        echo "ERROR | HTTP PUT request failed with status code $http_code" >&2
         echo "Request URL: $CANVAS_URL/$url"
         echo "Raw result: $result"
         return 1
@@ -225,14 +251,14 @@ canvas_http_patch() {
         "$CANVAS_URL/$url")
 
     if [[ $? -ne 0 ]]; then
-        echo "Error: failed to send HTTP PATCH request"
+        echo "ERROR | Failed to send HTTP PATCH request" >&2
         return 1
     fi
 
     # Extract the http_code from the end of the result string
     local http_code=${result: -3}
     if [[ $http_code -ne 200 ]]; then
-        echo "Error: HTTP PATCH request failed with status code $http_code"
+        echo "ERROR | HTTP PATCH request failed with status code $http_code"
         echo "Request URL: $CANVAS_URL/$url"
         echo "Raw result: $result"
         return 1
@@ -256,14 +282,14 @@ canvas_http_delete() {
         "$CANVAS_URL/$url")
 
     if [ $? -ne 0 ]; then
-        echo "Error: failed to send HTTP DELETE request"
+        echo "ERROR | Failed to send HTTP DELETE request" >&2
         return 1
     fi
 
     # Extract the http_code from the end of the result string
     local http_code=${result: -3}
     if [[ $http_code -ne 200 ]]; then
-        echo "Error: HTTP DELETE request failed with status code $http_code"
+        echo "ERROR | HTTP DELETE request failed with status code $http_code" >&2
         echo "Request URL: $CANVAS_URL/$url"
         echo "Raw result: $result"
         return 1

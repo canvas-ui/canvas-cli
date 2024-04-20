@@ -39,6 +39,13 @@ function context() {
         return 1
     fi
 
+    # Check if Canvas API is reachable
+    if [ ! -f $CANVAS_USER_VAR/canvas-ui-shell.connected ]; then
+        echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
+        echo "You need to manually connect to the Canvas API (for now just call the function directly - canvas_connect)" >&2
+        return 1
+    fi
+
     # Parse command and arguments
     local command="$1"
     shift
@@ -172,8 +179,12 @@ function context() {
 }
 
 # Add context URL to prompt
-if canvas_api_reachable; then
-    # Add the initial PS1 prompt
+# TODO: Move to a separate script or a common function (fe updatePrompt())
+
+# Fail fast if no connection file is present
+if [ ! -f "$CANVAS_USER_VAR/canvas-ui-shell.connected" ]; then
+    export PS1="$CANVAS_PROMPT $PS1";
+else 
     export PS1="[\$(context path)] $PS1";
 fi;
 
