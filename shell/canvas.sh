@@ -18,13 +18,13 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 # Disable/Uninstall
 
-# Create context
+# Create session
 
-# List contexts
+# List sessions
 
-# Open context
+# Open session
 
-# Close context
+# Close session
 
 
 
