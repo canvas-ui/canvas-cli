@@ -160,8 +160,6 @@ function context() {
             return 1
         fi
 
-        # Update prompt on disconnect
-        if [ $? -eq 1 ]; then canvas_update_prompt; return 1; fi;
         # TODO: send API request to add file or folder to context
         ;;
 
