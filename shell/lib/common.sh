@@ -18,6 +18,9 @@ CANVAS_USER_DATA="$CANVAS_USER_HOME/data"
 CANVAS_USER_VAR="$CANVAS_USER_HOME/var"
 CANVAS_USER_LOG="$CANVAS_USER_VAR/log"
 
+# Poor-mans session support
+CANVAS_SESSION="$CANVAS_USER_VAR/canvas-ui-shell.session"
+
 # Ensure canvas directories exist
 mkdir -p "$CANVAS_USER_HOME"
 mkdir -p "$CANVAS_USER_CONFIG"
@@ -40,7 +43,6 @@ fi
 if ! test -z "$DEBUG"; then
     echo "DEBUG | Enabling Canvas integration for $SHELL"
 fi
-
 
 #############################
 # Runtime dependencies      #
@@ -89,6 +91,18 @@ CANVAS_HOST="${config[host]:-$CANVAS_HOST}"
 CANVAS_PORT="${config[port]:-$CANVAS_PORT}"
 CANVAS_URL_BASE="${config[baseUrl]:-$CANVAS_URL_BASE}"
 CANVAS_API_KEY="${config[auth.token]:-$CANVAS_API_KEY}"
+
+if [ -f "$CANVAS_SESSION" ]; then
+    source "$CANVAS_SESSION"
+fi
+
+if [ -z "$CANVAS_SESSION_ID" ]; then
+    CANVAS_SESSION_ID="default"
+fi
+
+if [ -z "$CANVAS_CONTEXT_ID" ]; then
+    CANVAS_CONTEXT_ID="default"
+fi
 
 # Construct the canvas server endpoint URL
 CANVAS_URL="$CANVAS_PROTO://$CANVAS_HOST:$CANVAS_PORT$CANVAS_URL_BASE"
@@ -153,6 +167,7 @@ canvas_connected() {
 
 canvas_http_get() {
     local url="${1#/}"
+    local data="$2"
     local response
     local http_code
     local response_body
@@ -162,6 +177,7 @@ canvas_http_get() {
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer $CANVAS_API_KEY" \
         -w "\n%{http_code}" \
+        -d "$data" \
         -o - \
         "$CANVAS_URL/$url")
 

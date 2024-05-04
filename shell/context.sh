@@ -28,7 +28,7 @@ canvas_connect() {
 canvas_update_prompt() {
     # This check is file-based only so nooo worries
     if canvas_connected; then
-        export PS1="[\$(context path)] $ORIGINAL_PROMPT";
+        export PS1="[$CANVAS_SESSION_ID:\$(context path)] $ORIGINAL_PROMPT";
     else
         export PS1="[disconneted] $ORIGINAL_PROMPT";
     fi;
@@ -102,7 +102,7 @@ function context() {
         fi
 
         local url="$1"
-        res=$(canvas_http_post "/context/url" "{\"url\": \"$url\"}")
+        res=$(canvas_http_post "/context/url" "{\"url\": \"$url\", \"sessionId\": \"$CANVAS_SESSION_ID\",\"contextId\": \"$CANVAS_CONTEXT_ID\"}")
 
         # Update prompt on disconnect
         if [ $? -eq 1 ]; then
@@ -129,7 +129,7 @@ function context() {
     path)
         # Check if connected
         if ! canvas_check_connection; then canvas_update_prompt; return 1; fi;
-        canvas_http_get "/context/path" | jq '.payload' | sed 's/"//g';
+        canvas_http_get "/context/path" "{\"sessionId\": \"$CANVAS_SESSION_ID\",\"contextId\": \"$CANVAS_CONTEXT_ID\"}" | jq '.payload' | sed 's/"//g';
         ;;
 
     paths)
@@ -141,13 +141,13 @@ function context() {
     url)
         # Check if connected
         if ! canvas_check_connection; then canvas_update_prompt; return 1; fi;
-        canvas_http_get "/context/url" | jq '.payload'
+        canvas_http_get "/context/url" "{\"sessionId\": \"$CANVAS_SESSION_ID\",\"contextId\": \"$CANVAS_CONTEXT_ID\"}" | jq '.payload'
         ;;
 
     bitmaps)
         # Check if connected
         if ! canvas_check_connection; then canvas_update_prompt; return 1; fi;
-        canvas_http_get "/context/bitmaps" | jq '.payload'
+        canvas_http_get "/context/bitmaps" "{\"sessionId\": \"$CANVAS_SESSION_ID\",\"contextId\": \"$CANVAS_CONTEXT_ID\"}" | jq '.payload'
         ;;
     insert)
         # Check if connected
@@ -169,31 +169,90 @@ function context() {
 
         # Parse optional document type argument
         if [[ $# -eq 0 ]]; then
-            canvas_http_get "/context/documents" | jq .
+            canvas_http_get "/context/documents" "{\"sessionId\": \"$CANVAS_SESSION_ID\",\"contextId\": \"$CANVAS_CONTEXT_ID\"}" | jq .
         else
             case "$1" in
             notes)
-                canvas_http_get "/context/documents/notes" | jq .
+                canvas_http_get "/context/documents/notes" "{\"sessionId\": \"$CANVAS_SESSION_ID\",\"contextId\": \"$CANVAS_CONTEXT_ID\"}" | jq .
                 ;;
             tabs)
-                canvas_http_get "/context/documents/tabs" | jq .
+                canvas_http_get "/context/documents/tabs" "{\"sessionId\": \"$CANVAS_SESSION_ID\",\"contextId\": \"$CANVAS_CONTEXT_ID\"}" | jq .
                 ;;
             todo)
-                canvas_http_get "/context/documents/todo" | jq .
+                canvas_http_get "/context/documents/todo" "{\"sessionId\": \"$CANVAS_SESSION_ID\",\"contextId\": \"$CANVAS_CONTEXT_ID\"}" | jq .
                 ;;
             files)
-                canvas_http_get "/context/documents/files" | jq .
+                canvas_http_get "/context/documents/files" "{\"sessionId\": \"$CANVAS_SESSION_ID\",\"contextId\": \"$CANVAS_CONTEXT_ID\"}" | jq .
                 ;;
 
             *)
                 echo "Error: untested document type '$1'"
                 echo "Usage: context list [notes|tabs|todo|files]"
                 # Temporary
-                canvas_http_get "/context/documents/$1" | jq .
+                canvas_http_get "/context/documents/$1" "{\"sessionId\": \"$CANVAS_SESSION_ID\",\"contextId\": \"$CANVAS_CONTEXT_ID\"}" | jq .
                 ;;
             esac
         fi
         ;;
+
+    sessions)
+        if ! canvas_check_connection; then canvas_update_prompt; return 1; fi;
+        if [[ $# -eq 0 ]]; then
+            echo "Error: invalid arguments for 'session' command"
+            echo "Usage:"
+            echo "  context sessions list"
+            echo "  context sessions set <sessionId>"
+            echo "  context sessions create <sessionId>"
+            echo "  context sessions create <sessionId> <baseUrl>"
+            return 1
+        fi
+
+        local subcommand="$1"
+        shift
+
+        case "$subcommand" in
+        list)
+            canvas_http_get "/sessions" | jq '.payload'
+            ;;
+
+        set)
+            if [[ $# -ne 1 ]]; then
+                echo "Error: invalid arguments for 'session set' command"
+                echo "Usage: context session set <sessionId>"
+                return 1
+            fi
+
+            local sessionId="$1"
+            # Replace the CANVAS_SESSION_ID with the new sessionId in CANVAS_SESSION
+            CANVAS_SESION_ID="$sessionId"
+            sed -i "s/CANVAS_SESSION_ID=.*/CANVAS_SESSION_ID=\"$sessionId\"/" "$CANVAS_SESSION"
+            source "${SCRIPT_DIR}/common.sh"
+            echo "Session ID set to '$sessionId'"
+            canvas_update_prompt
+            ;;
+
+        create)
+            if [[ $# -eq 0 ]]; then
+                echo "Error: invalid arguments for 'sessions create' command"
+                echo "Usage: context sessions create <sessionId>"
+                return 1
+            fi
+
+            local sessionId="$1"
+            local baseUrl="$2"
+
+            res=$(canvas_http_post "/sessions/create" "{\"sessionId\": \"$sessionId\", \"sessionOptions\":{\"baseUrl\": \"$baseUrl\"}}")
+            if echo "$res" | jq .status | grep -q "error"; then
+                echo "Error: failed to create session"
+                echo "Response: $res"
+                return 1
+            fi
+
+            echo "$res" | jq '.payload'
+            ;;
+        esac
+        ;;
+
 
     *)
         echo "Error: unknown command '$command'"
