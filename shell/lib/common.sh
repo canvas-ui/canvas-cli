@@ -111,6 +111,18 @@ CANVAS_URL="$CANVAS_PROTO://$CANVAS_HOST:$CANVAS_PORT$CANVAS_URL_BASE"
 # Utility functions         #
 #############################
 
+
+# Helper script for the below wrapper
+canvas_check_connection() {
+    if ! canvas_connected; then
+        echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
+        echo "Reconnect using canvas_connect (for now)" >&2
+        canvas_update_prompt
+        return 1
+    fi
+}
+
+
 parsePayload() {
     local payload="$1"
     if (echo "$payload" | jq -e . >/dev/null 2>&1); then
@@ -308,4 +320,31 @@ canvas_http_delete() {
     # Extract the payload from the beginning of the result string
     local payload=${result:0:-3}
     parsePayload "$payload"
+}
+
+ORIGINAL_PROMPT="$PS1"
+canvas_update_prompt() {
+    # This check is file-based only so nooo worries
+    if canvas_connected; then
+        export PS1="[$CANVAS_SESSION_ID:\$(context path)] $ORIGINAL_PROMPT";
+    else
+        export PS1="[disconneted] $ORIGINAL_PROMPT";
+    fi;
+}
+
+canvas_connect() {
+    if canvas_api_reachable; then
+        echo "INFO | Successfully connected to Canvas API at \"$CANVAS_URL\""
+        canvas_update_prompt
+        return 0
+    fi
+
+    echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable, status: $(cat $CANVAS_CONNECTION_STATUS)" >&2
+    return 1
+}
+
+canvas_disconnect() {
+    echo "INFO | Disconnected from Canvas API"
+    rm -f "$CANVAS_CONNECTION_STATUS"
+    canvas_update_prompt
 }

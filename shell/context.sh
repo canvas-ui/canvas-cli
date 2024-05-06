@@ -8,49 +8,6 @@ SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
 source "${SCRIPT_DIR}/lib/common.sh"
 
 
-#############################################
-# Canvas functions (TODO: Move to canvas.sh #
-#############################################
-
-ORIGINAL_PROMPT="$PS1"
-
-canvas_connect() {
-    if canvas_api_reachable; then
-        echo "INFO | Successfully connected to Canvas API at \"$CANVAS_URL\""
-        canvas_update_prompt
-        return 0
-    fi
-
-    echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable, status: $(cat $CANVAS_CONNECTION_STATUS)" >&2
-    return 1
-}
-
-canvas_update_prompt() {
-    # This check is file-based only so nooo worries
-    if canvas_connected; then
-        export PS1="[$CANVAS_SESSION_ID:\$(context path)] $ORIGINAL_PROMPT";
-    else
-        export PS1="[disconneted] $ORIGINAL_PROMPT";
-    fi;
-}
-
-canvas_disconnect() {
-    echo "INFO | Disconnected from Canvas API"
-    rm -f "$CANVAS_CONNECTION_STATUS"
-    canvas_update_prompt
-}
-
-# Helper script for the below wrapper
-canvas_check_connection() {
-    if ! canvas_connected; then
-        echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable" >&2
-        echo "Reconnect using canvas_connect (for now)" >&2
-        canvas_update_prompt
-        return 1
-    fi
-}
-
-
 #########################################
 # Canvas REST API bash wrapper          #
 #########################################
@@ -59,6 +16,8 @@ canvas_check_connection() {
 function usage() {
     echo "Usage: context <command> [arguments]"
     echo "Commands:"
+    echo "  connect          Connect to the Canvas API"
+    echo "  disconnect       Disconnect from the Canvas API"
     echo "  set <url>        Set the context URL"
     echo "  tree             Get the context tree"
     echo "  path             Get the current context path"
@@ -67,9 +26,6 @@ function usage() {
     echo "  bitmaps          Get the context bitmaps"
     echo "  list             List all documents for the given context"
     echo "  list <abstr>     List all documents for the given context of a given abstraction"
-    echo "Temporary commands:"
-    echo "  canvas_connect   Connect to the Canvas API"
-    echo "  canvas_disconnect Disconnect from the Canvas API"
     echo ""
 }
 
@@ -90,6 +46,14 @@ function context() {
     shift
 
     case "$command" in
+    connect)
+        canvas_connect
+        ;;
+
+    disconnect)
+        canvas_disconnect
+        ;;
+
     set)
         # Check if connected
         if ! canvas_check_connection; then canvas_update_prompt; return 1; fi;
