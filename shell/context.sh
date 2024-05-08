@@ -190,7 +190,7 @@ function context() {
             # Replace the CANVAS_SESSION_ID with the new sessionId in CANVAS_SESSION
             CANVAS_SESION_ID="$sessionId"
             sed -i "s/CANVAS_SESSION_ID=.*/CANVAS_SESSION_ID=\"$sessionId\"/" "$CANVAS_SESSION"
-            source "${SCRIPT_DIR}/common.sh"
+            CANVAS_SESSION_ID="$sessionId"
             echo "Session ID set to '$sessionId'"
             canvas_update_prompt
             ;;

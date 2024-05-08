@@ -48,6 +48,9 @@ fi
 # Runtime dependencies      #
 #############################
 
+# Backup the current prompt
+ORIGINAL_PROMPT="$PS1"
+
 # Check if jq is available
 if ! command -v jq >/dev/null 2>&1; then
     echo "ERROR | jq is not installed" >&2
@@ -322,7 +325,6 @@ canvas_http_delete() {
     parsePayload "$payload"
 }
 
-ORIGINAL_PROMPT="$PS1"
 canvas_update_prompt() {
     # This check is file-based only so nooo worries
     if canvas_connected; then
