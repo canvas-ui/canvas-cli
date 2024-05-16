@@ -18,7 +18,7 @@ $ nano ~/.canvas/config/transports.rest.json
     "protocol": "https",
     "host": "canvas.domain.tld",
     "port": "443",
-    "baseUrl": "rest/v1",
+    "baseUrl": "/rest/v1",
     "auth": {
         "token": "canvas-rest-api"
     }
@@ -31,7 +31,7 @@ $ nano ~/.canvas/config/transports.rest.json
 # auth.token canvas-rest-api
 ```
 
-Currently, we only support a very limited API used mainly for development/testing purposes
+Currently, we only support a very limited API used mainly for development/testing purposes (always check --help, readme may not be up-to-date)
 
 - set: Sets a context URL
 - url: Returns the current context url
