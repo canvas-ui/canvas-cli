@@ -12,26 +12,43 @@ $ git clone git@github.com:idncsk/canvas-ui-shell.git /path/to/canvas-shell
 $ echo ". /path/to/canvas-shell/context.sh" >> ~/.bashrc
 # Edit your client config
 $ mkdir -p ~/.canvas/config
-# For remote instances
-$ nano ~/.canvas/config/transports.rest.json
+$ nano ~/.canvas/config/client.json
 {
-    "protocol": "https",
-    "host": "canvas.domain.tld",
-    "port": "443",
-    "baseUrl": "/rest/v1",
-    "auth": {
-        "token": "canvas-server-token"
+    "transports": {
+        "rest": {
+            "protocol": "http",
+            "host": "127.0.0.1",
+            "port": 8000,            
+            "baseUrl": "/rest/v1",
+            "auth": {
+                "enabled": true,
+                "user": "",
+                "password": "",
+                "token": "your-canvas-app-token"
+            }
+        },
+        "socketio": {
+            "protocol": "http",
+            "host": "127.0.0.1",
+            "port": 8000,
+            "auth": {
+                "enabled": true,
+                "user": "",
+                "password": "",
+                "token": "your-canvas-app-token"
+            }
+        }
     }
 }
-# If you create an empty file, the following defaults will be used:
-# port 8000
-# host 127.0.0.1
+# If client.json is missing, the following defaults will be used:
 # protocol http
+# host 127.0.0.1
+# port 8000
 # baseUrl /rest/v1
 # auth.token canvas-server-token
 ```
 
-Currently, we only support a very limited API used mainly for development/testing purposes (always check --help, readme may not be up-to-date)
+Currently, we only support a very limited API used mainly for development/testing purposes (always check --help, this readme may not be up-to-date)
 
 - set: Sets a context URL
 - url: Returns the current context url
@@ -43,3 +60,4 @@ Currently, we only support a very limited API used mainly for development/testin
   - tabs: data/abstraction/tab
   - notes: data/abstraction/note
   - todo: data/abstraction/todo
+- sessions: {list, set, create}: If you want to bind your terminal to a specific session (like "work" with base url /work/customer-foo)

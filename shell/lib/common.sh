@@ -30,14 +30,8 @@ mkdir -p "$CANVAS_USER_LOG"
 
 # Set REST API transport config file
 # TODO: Support parsing transports.json, transports.<os>.json
-CANVAS_CONFIG_REST="$CANVAS_USER_CONFIG/transports.rest.json"
+CANVAS_CONFIG_REST="$CANVAS_USER_CONFIG/client.json"
 CANVAS_CONNECTION_STATUS="$CANVAS_USER_VAR/canvas-ui-shell.connection"
-
-# Ensure the REST API transport config file exists
-if [ ! -f "$CANVAS_CONFIG_REST" ]; then
-    echo "INFO | Canvas REST API transport configuration file not found, creating an empty one"
-    echo "{}" > "$CANVAS_CONFIG_REST"
-fi
 
 # TODO: Properly toggle and implement debug mode
 if ! test -z "$DEBUG"; then
@@ -74,19 +68,34 @@ fi
 # REST API Defaults
 CANVAS_PROTO="http"
 CANVAS_HOST="127.0.0.1"
-CANVAS_PORT="8001"
+CANVAS_PORT="8000"
 CANVAS_URL_BASE="/rest/v1"
 CANVAS_API_KEY="canvas-server-token"
 
-# A very ugly JSON config file parser
+# Ensure the REST API transport config file exists
+if [ ! -f "$CANVAS_CONFIG_REST" ]; then
+    echo "INFO | Canvas REST API transport configuration file not found, creating a default configuration file"
+    echo '{
+        "protocol": "'"$CANVAS_PROTO"'",
+        "host": "'"$CANVAS_HOST"'",
+        "port": '"$CANVAS_PORT"',
+        "baseUrl": "'"$CANVAS_URL_BASE"'",
+        "auth": {
+            "enabled": true,
+            "user": "",
+            "password": "",
+            "token": "'"$CANVAS_API_KEY"'"
+        }
+    }' > "$CANVAS_CONFIG_REST"
+fi
+
+# A very ugly JSON config file parser - replaced by a very simple one (yey)
 declare -A config
-while IFS="=" read -r key value; do
-    # Trim whitespace from key and value
-    key="$(echo "$key" | tr -d '[:space:]')"
-    value="$(echo "$value" | tr -d '[:space:]')"
-    # Add key-value pair to associative array
-    config["$key"]="$value"
-done < <(cat "$CANVAS_CONFIG_REST" | jq -r 'to_entries | .[] | if .value | type == "object" then .key + "=\(.value | to_entries | .[] | .value)" else .key + "=" + .value end')
+config["protocol"]=$(cat "$CANVAS_CONFIG_REST" | jq -r '.transports.rest' | jq -r '.protocol')
+config["host"]=$(cat "$CANVAS_CONFIG_REST" | jq -r '.transports.rest' | jq -r '.host')
+config["port"]=$(cat "$CANVAS_CONFIG_REST" | jq -r '.transports.rest' | jq -r '.port')
+config["baseUrl"]=$(cat "$CANVAS_CONFIG_REST" | jq -r '.transports.rest' | jq -r '.baseUrl')
+config["auth.token"]=$(cat "$CANVAS_CONFIG_REST" | jq -r '.transports.rest' | jq -r '.auth.token')
 
 # Update variables with config file values
 CANVAS_PROTO="${config[protocol]:-$CANVAS_PROTO}"
@@ -94,6 +103,7 @@ CANVAS_HOST="${config[host]:-$CANVAS_HOST}"
 CANVAS_PORT="${config[port]:-$CANVAS_PORT}"
 CANVAS_URL_BASE="${config[baseUrl]:-$CANVAS_URL_BASE}"
 CANVAS_API_KEY="${config[auth.token]:-$CANVAS_API_KEY}"
+
 
 if [ -f "$CANVAS_SESSION" ]; then
     source "$CANVAS_SESSION"
