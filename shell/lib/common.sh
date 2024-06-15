@@ -76,7 +76,7 @@ CANVAS_PROTO="http"
 CANVAS_HOST="127.0.0.1"
 CANVAS_PORT="8001"
 CANVAS_URL_BASE="/rest/v1"
-CANVAS_API_KEY="canvas-rest-api"
+CANVAS_API_KEY="canvas-server-token"
 
 # A very ugly JSON config file parser
 declare -A config

@@ -20,15 +20,15 @@ $ nano ~/.canvas/config/transports.rest.json
     "port": "443",
     "baseUrl": "/rest/v1",
     "auth": {
-        "token": "canvas-rest-api"
+        "token": "canvas-server-token"
     }
 }
 # If you create an empty file, the following defaults will be used:
-# port 8001
+# port 8000
 # host 127.0.0.1
 # protocol http
 # baseUrl /rest/v1
-# auth.token canvas-rest-api
+# auth.token canvas-server-token
 ```
 
 Currently, we only support a very limited API used mainly for development/testing purposes (always check --help, readme may not be up-to-date)
@@ -43,8 +43,3 @@ Currently, we only support a very limited API used mainly for development/testin
   - tabs: data/abstraction/tab
   - notes: data/abstraction/note
   - todo: data/abstraction/todo
-
-## TODO
-
-- Context pinning
-- (implies) Context management (you may want to have different terminals using different contexts)
