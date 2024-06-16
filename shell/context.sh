@@ -8,6 +8,11 @@ SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
 source "${SCRIPT_DIR}/lib/common.sh"
 
 
+##
+# Canvas Context CLI
+##
+
+
 #########################################
 # Canvas REST API bash wrapper          #
 #########################################

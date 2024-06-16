@@ -8,23 +8,17 @@ SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
 source "${SCRIPT_DIR}/lib/common.sh"
 
 
-# Connect
+##
+# Canvas Server management CLI
+##
 
-# Disconnect
+# Services
 
-# Status
+# (server) Roles
 
-# Enable/Install
+# Apps
 
-# Disable/Uninstall
-
-# Create session
-
-# List sessions
-
-# Open session
-
-# Close session
+# Users
 
 
 
