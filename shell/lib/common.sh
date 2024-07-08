@@ -72,6 +72,8 @@ CANVAS_PORT="8000"
 CANVAS_URL_BASE="/rest/v1"
 CANVAS_API_KEY="canvas-server-token"
 
+echo $CANVAS_CONFIG_REST
+
 # Ensure the REST API transport config file exists
 if [ ! -f "$CANVAS_CONFIG_REST" ]; then
     echo "INFO | Canvas REST API transport configuration file not found, creating a default configuration file"
@@ -90,12 +92,13 @@ if [ ! -f "$CANVAS_CONFIG_REST" ]; then
 fi
 
 # A very ugly JSON config file parser - replaced by a very simple one (yey)
+# TODO: Fix me! defaults do not really
 declare -A config
-config["protocol"]=$(cat "$CANVAS_CONFIG_REST" | jq -r '.transports.rest' | jq -r '.protocol')
-config["host"]=$(cat "$CANVAS_CONFIG_REST" | jq -r '.transports.rest' | jq -r '.host')
-config["port"]=$(cat "$CANVAS_CONFIG_REST" | jq -r '.transports.rest' | jq -r '.port')
-config["baseUrl"]=$(cat "$CANVAS_CONFIG_REST" | jq -r '.transports.rest' | jq -r '.baseUrl')
-config["auth.token"]=$(cat "$CANVAS_CONFIG_REST" | jq -r '.transports.rest' | jq -r '.auth.token')
+config["protocol"]=$(cat "$CANVAS_CONFIG_REST" | jq -r '.protocol // null')
+config["host"]=$(cat "$CANVAS_CONFIG_REST" | jq -r '.host // null')
+config["port"]=$(cat "$CANVAS_CONFIG_REST" | jq -r '.port // null ')
+config["baseUrl"]=$(cat "$CANVAS_CONFIG_REST" | jq -r '.baseUrl // null')
+config["auth.token"]=$(cat "$CANVAS_CONFIG_REST" | jq -r '.auth.token // null')
 
 # Update variables with config file values
 CANVAS_PROTO="${config[protocol]:-$CANVAS_PROTO}"
