@@ -72,8 +72,6 @@ CANVAS_PORT="8000"
 CANVAS_URL_BASE="/rest/v1"
 CANVAS_API_KEY="canvas-server-token"
 
-echo $CANVAS_CONFIG_REST
-
 # Ensure the REST API transport config file exists
 if [ ! -f "$CANVAS_CONFIG_REST" ]; then
     echo "INFO | Canvas REST API transport configuration file not found, creating a default configuration file"
