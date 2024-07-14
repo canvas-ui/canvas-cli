@@ -7,7 +7,7 @@ Canvas UI shell client (tested with bash)
 ### Canvas bash client
 
 ```bash
-$ git clone git@github.com:idncsk/canvas-ui-shell.git /path/to/canvas-shell
+$ git clone https://github.com/canvas-ai/canvas-shell.git /path/to/canvas-shell
 # Add canvas to your bashrc
 $ echo ". /path/to/canvas-shell/context.sh" >> ~/.bashrc
 # Edit your client config
