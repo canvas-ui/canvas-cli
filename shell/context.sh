@@ -31,6 +31,7 @@ function usage() {
     echo "  bitmaps          Get the context bitmaps"
     echo "  list             List all documents for the given context"
     echo "  list <abstr>     List all documents for the given context of a given abstraction"
+    echo "  get <docid>      (TODO) Get document with the given ID"
     echo "  sessions <list|set|create>  Session support for the terminal"
     echo ""
 }
