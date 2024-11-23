@@ -30,7 +30,7 @@ mkdir -p "$CANVAS_USER_LOG"
 
 # Set REST API transport config file
 # TODO: Support parsing transports.json, transports.<os>.json
-CANVAS_CONFIG_REST="$CANVAS_USER_CONFIG/client.json"
+CANVAS_CONFIG_REST="$CANVAS_USER_CONFIG/canvas-shell.json"
 CANVAS_CONNECTION_STATUS="$CANVAS_USER_VAR/canvas-ui-shell.connection"
 
 # TODO: Properly toggle and implement debug mode
@@ -68,8 +68,8 @@ fi
 # REST API Defaults
 CANVAS_PROTO="http"
 CANVAS_HOST="127.0.0.1"
-CANVAS_PORT="8000"
-CANVAS_URL_BASE="/rest/v1"
+CANVAS_PORT="8001"
+CANVAS_URL_BASE="/rest/v2"
 CANVAS_API_KEY="canvas-server-token"
 
 # Ensure the REST API transport config file exists
