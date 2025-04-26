@@ -1,17 +1,6 @@
 #!/bin/bash
 
-
-# Contextualize your bash history with Canvas
-
-#############################
-# Contex
-# Set the history storage backend
-# Options:
-#   local: Create a local history file in ~/.canvas/data/history
-#   canvas: Store history in Canvas stored
-
-HISTORY_BACKEND="local"
-
+# TODO: Implement bash history interception
 intercept_history() {
 
     echo "Intercepted $BASH_COMMAND"
