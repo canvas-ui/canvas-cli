@@ -51,11 +51,13 @@ function context_usage() {
 
 # List all contexts
 function context_list() {
-    canvas_http_get "/contexts" | jq .
+    canvas_http_get "/contexts" #| jq .
 }
 
 # Switch to a different context
 function context_switch() {
+    # TODO: First list all existing contexts
+
     local context_id="$1"
 
     if [ -z "$context_id" ]; then
