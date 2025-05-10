@@ -138,8 +138,19 @@ canvas_connected() {
 
 parsePayload() {
     local payload="$1"
+    local raw="$2"
+
     if (echo "$payload" | jq -e . >/dev/null 2>&1); then
-        echo "$payload"
+        if [ "$raw" = "true" ]; then
+            echo "$payload"
+        else
+            # Extract payload field if it exists
+            if echo "$payload" | jq -e '.payload' >/dev/null 2>&1; then
+                echo "$payload" | jq '.payload'
+            else
+                echo "$payload"
+            fi
+        fi
     else
         echo "ERROR | Failed to parse API response payload" >&2
         echo "Raw response: $payload"
@@ -150,12 +161,21 @@ parsePayload() {
 parseStatusCode() {
     local request_type="$1"
     local status_code="$2"
+    local response="$3"
 
     if [[ "$status_code" -eq 200 ]]; then
-        return 0
+        # Check if the response indicates success
+        if echo "$response" | jq -e '.status == "success"' >/dev/null 2>&1; then
+            return 0
+        else
+            echo "ERROR | API request failed: $(echo "$response" | jq -r '.message // "Unknown error"')" >&2
+            store_value "$CANVAS_SESSION" "server_status" "disconnected"
+            store_value "$CANVAS_SESSION" "server_status_code" "$status_code"
+            canvas_update_prompt
+            return 1
+        fi
     else
-        # If status code starts with 5, lets mark the connection as down
-        # This is controverseial, parseStatusCode should just do what it supposed to be doing
+        # If status code starts with 5, mark the connection as down
         if [[ "$status_code" =~ ^5 ]]; then
             store_value "$CANVAS_SESSION" "server_status" "disconnected"
             store_value "$CANVAS_SESSION" "server_status_code" "$status_code"
@@ -164,7 +184,7 @@ parseStatusCode() {
 
         echo "ERROR | HTTP $request_type request failed with status code $status_code" >&2
         echo "Request URL: $CANVAS_URL/$url" >&2
-        echo "Raw result: $result" >&2
+        echo "Raw result: $response" >&2
         return $status_code
     fi
 }
@@ -192,6 +212,7 @@ canvas_api_reachable() {
 canvas_http_get() {
     local url="${1#/}"
     local data="$2"
+    local raw="$3"
     local response
     local http_code
     local response_body
@@ -210,23 +231,30 @@ canvas_http_get() {
 
     if [ $? -ne 0 ]; then
         echo "ERROR | Failed to send HTTP GET request" >&2
+        store_value "$CANVAS_SESSION" "server_status" "disconnected"
+        store_value "$CANVAS_SESSION" "server_status_code" "0"
+        canvas_update_prompt
         return 1
     fi
 
     # Check for non-200 HTTP status code
-    if ! parseStatusCode "GET" "$http_code"; then
+    if ! parseStatusCode "GET" "$http_code" "$response_body"; then
         return 1
     fi
 
     # Parse the payload if needed
-    parsePayload "$response_body"
+    parsePayload "$response_body" "$raw"
 }
 
 canvas_http_post() {
-    # Remove leading slash from the URL, if present
     local url="${1#/}"
     local data="$2"
-    local result=$(curl -sk \
+    local raw="$3"
+    local result
+    local http_code
+    local payload
+
+    result=$(curl -sk \
         -X POST \
         -w "%{http_code}" \
         -H "Content-Type: application/json" \
@@ -236,25 +264,32 @@ canvas_http_post() {
 
     if [ $? -ne 0 ]; then
         echo "ERROR | failed to send HTTP POST request" >&2
+        store_value "$CANVAS_SESSION" "server_status" "disconnected"
+        store_value "$CANVAS_SESSION" "server_status_code" "0"
+        canvas_update_prompt
         return 1
     fi
 
     # Extract the http_code from the end of the result string
-    local http_code=${result: -3}
+    http_code=${result: -3}
 
     # Check for non-200 HTTP status code
-    if ! parseStatusCode "POST" "$http_code"; then return 1; fi;
+    if ! parseStatusCode "POST" "$http_code" "${result:0:-3}"; then return 1; fi;
 
     # Extract the payload from the beginning of the result string
-    local payload=${result:0:-3}
-    parsePayload "$payload"
+    payload=${result:0:-3}
+    parsePayload "$payload" "$raw"
 }
 
 canvas_http_put() {
-    # Remove leading slash from the URL, if present
     local url="${1#/}"
     local data="$2"
-    local result=$(curl -sk \
+    local raw="$3"
+    local result
+    local http_code
+    local payload
+
+    result=$(curl -sk \
         -X PUT \
         -w "%{http_code}" \
         -H "Content-Type: application/json" \
@@ -264,25 +299,32 @@ canvas_http_put() {
 
     if [ $? -ne 0 ]; then
         echo "ERROR | Failed to send HTTP PUT request" >&2
+        store_value "$CANVAS_SESSION" "server_status" "disconnected"
+        store_value "$CANVAS_SESSION" "server_status_code" "0"
+        canvas_update_prompt
         return 1
     fi
 
     # Extract the http_code from the end of the result string
-    local http_code=${result: -3}
+    http_code=${result: -3}
 
     # Check for non-200 HTTP status code
-    if ! parseStatusCode "PUT" "$http_code"; then return 1; fi;
+    if ! parseStatusCode "PUT" "$http_code" "${result:0:-3}"; then return 1; fi;
 
     # Extract the payload from the beginning of the result string
-    local payload=${result:0:-3}
-    parsePayload "$payload"
+    payload=${result:0:-3}
+    parsePayload "$payload" "$raw"
 }
 
 canvas_http_patch() {
-    # Remove leading slash from the URL, if present
     local url="${1#/}"
     local data="$2"
-    local result=$(curl -sk \
+    local raw="$3"
+    local result
+    local http_code
+    local payload
+
+    result=$(curl -sk \
         -X PATCH \
         -w "%{http_code}" \
         -H "Content-Type: application/json" \
@@ -292,25 +334,32 @@ canvas_http_patch() {
 
     if [[ $? -ne 0 ]]; then
         echo "ERROR | Failed to send HTTP PATCH request" >&2
+        store_value "$CANVAS_SESSION" "server_status" "disconnected"
+        store_value "$CANVAS_SESSION" "server_status_code" "0"
+        canvas_update_prompt
         return 1
     fi
 
     # Extract the http_code from the end of the result string
-    local http_code=${result: -3}
+    http_code=${result: -3}
 
     # Check for non-200 HTTP status code
-    if ! parseStatusCode "PATCH" "$http_code"; then return 1; fi;
+    if ! parseStatusCode "PATCH" "$http_code" "${result:0:-3}"; then return 1; fi;
 
     # Extract the payload from the beginning of the result string
-    local payload=${result:0:-3}
-    parsePayload "$payload"
+    payload=${result:0:-3}
+    parsePayload "$payload" "$raw"
 }
 
 canvas_http_delete() {
-    # Remove leading slash from the URL, if present
     local url="${1#/}"
     local data="$2"
-    local result=$(curl -sk \
+    local raw="$3"
+    local result
+    local http_code
+    local payload
+
+    result=$(curl -sk \
         -X DELETE \
         -w "%{http_code}" \
         -H "Content-Type: application/json" \
@@ -320,30 +369,43 @@ canvas_http_delete() {
 
     if [ $? -ne 0 ]; then
         echo "ERROR | Failed to send HTTP DELETE request" >&2
+        store_value "$CANVAS_SESSION" "server_status" "disconnected"
+        store_value "$CANVAS_SESSION" "server_status_code" "0"
+        canvas_update_prompt
         return 1
     fi
 
     # Extract the http_code from the end of the result string
-    local http_code=${result: -3}
+    http_code=${result: -3}
 
     # Check for non-200 HTTP status code
-    if ! parseStatusCode "DELETE" "$http_code"; then return 1; fi;
+    if ! parseStatusCode "DELETE" "$http_code" "${result:0:-3}"; then return 1; fi;
 
     # Extract the payload from the beginning of the result string
-    local payload=${result:0:-3}
-    parsePayload "$payload"
+    payload=${result:0:-3}
+    parsePayload "$payload" "$raw"
 }
 
 canvas_update_prompt() {
     # This is solely file-based to make the CLI prompt faster when
     # the server is not reachable.
     if canvas_connected; then
-        workspace_id=$(get_value "$CANVAS_SESSION" "workspace_id")
-        workspace_id=${workspace_id:-"universe"}
-        export PS1="[$workspace_id:\$(context path)] $ORIGINAL_PROMPT";
+        local context_id=$(get_value "$CANVAS_SESSION" "context_id")
+        local context_url
+        context_url=$(canvas_http_get "/contexts/$context_id/url" "" "true" | jq -r '.payload.url // ""')
+
+        if [ -n "$context_url" ]; then
+            # Remove any trailing slashes for cleaner display
+            context_url="${context_url%/}"
+            export PS1="[$context_url] $ORIGINAL_PROMPT"
+        else
+            export PS1="[disconnected] $ORIGINAL_PROMPT"
+            store_value "$CANVAS_SESSION" "server_status" "disconnected"
+            store_value "$CANVAS_SESSION" "server_status_code" "0"
+        fi
     else
-        export PS1="[disconnected] $ORIGINAL_PROMPT";
-    fi;
+        export PS1="[disconnected] $ORIGINAL_PROMPT"
+    fi
 }
 
 canvas_connect() {

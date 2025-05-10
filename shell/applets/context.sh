@@ -51,7 +51,20 @@ function context_usage() {
 
 # List all contexts
 function context_list() {
-    canvas_http_get "/contexts" #| jq .
+    local raw="false"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --raw)
+                raw="true"
+                shift
+                ;;
+            *)
+                echo "Unknown option: $1"
+                return 1
+                ;;
+        esac
+    done
+    canvas_http_get "/contexts" "" "$raw"
 }
 
 # Switch to a different context
@@ -84,7 +97,15 @@ function context_set() {
     fi
 
     local data="{\"url\": \"$url\"}"
-    canvas_http_post "/contexts/$context_id/url" "$data" | jq .
+    local response
+    response=$(canvas_http_post "/contexts/$context_id/url" "$data" "true")
+
+    if [ $? -eq 0 ]; then
+        # Update PS1 after successful URL change
+        canvas_update_prompt
+    fi
+
+    echo "$response" | jq .
 }
 
 # Create a new context
@@ -153,37 +174,119 @@ function context_destroy() {
 # Get context URL
 function context_url() {
     local context_id=$(get_value "$CANVAS_SESSION" "context_id")
-    canvas_http_get "/contexts/$context_id/url" | jq .
+    local raw="false"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --raw)
+                raw="true"
+                shift
+                ;;
+            *)
+                echo "Unknown option: $1"
+                return 1
+                ;;
+        esac
+    done
+    canvas_http_get "/contexts/$context_id/url" "" "$raw"
 }
 
 # Get context base URL
 function context_base_url() {
     local context_id=$(get_value "$CANVAS_SESSION" "context_id")
-    canvas_http_get "/contexts/$context_id/base_url" | jq .
+    local raw="false"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --raw)
+                raw="true"
+                shift
+                ;;
+            *)
+                echo "Unknown option: $1"
+                return 1
+                ;;
+        esac
+    done
+    canvas_http_get "/contexts/$context_id/base_url" "" "$raw"
 }
 
 # Get context path
 function context_path() {
     local context_id=$(get_value "$CANVAS_SESSION" "context_id")
-    canvas_http_get "/contexts/$context_id/path" | jq -r '.path'
+    local raw="false"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --raw)
+                raw="true"
+                shift
+                ;;
+            *)
+                echo "Unknown option: $1"
+                return 1
+                ;;
+        esac
+    done
+    if [ "$raw" = "true" ]; then
+        canvas_http_get "/contexts/$context_id/path" "" "$raw"
+    else
+        canvas_http_get "/contexts/$context_id/path" "" "$raw" | jq -r '.path'
+    fi
 }
 
 # Get context paths
 function context_paths() {
     local context_id=$(get_value "$CANVAS_SESSION" "context_id")
-    canvas_http_get "/contexts/$context_id/paths_array" | jq .
+    local raw="false"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --raw)
+                raw="true"
+                shift
+                ;;
+            *)
+                echo "Unknown option: $1"
+                return 1
+                ;;
+        esac
+    done
+    canvas_http_get "/contexts/$context_id/paths_array" "" "$raw"
 }
 
 # Get context tree
 function context_tree() {
     local context_id=$(get_value "$CANVAS_SESSION" "context_id")
-    canvas_http_get "/contexts/$context_id/tree" | jq .
+    local raw="false"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --raw)
+                raw="true"
+                shift
+                ;;
+            *)
+                echo "Unknown option: $1"
+                return 1
+                ;;
+        esac
+    done
+    canvas_http_get "/contexts/$context_id/tree" "" "$raw"
 }
 
 # Get context workspace
 function context_workspace() {
     local context_id=$(get_value "$CANVAS_SESSION" "context_id")
-    canvas_http_get "/contexts/$context_id/workspace" | jq .
+    local raw="false"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --raw)
+                raw="true"
+                shift
+                ;;
+            *)
+                echo "Unknown option: $1"
+                return 1
+                ;;
+        esac
+    done
+    canvas_http_get "/contexts/$context_id/workspace" "" "$raw"
 }
 
 #########################################
@@ -341,7 +444,7 @@ function context() {
     # Main switch
     case "$cmd" in
         list)
-            context_list
+            context_list "$@"
             ;;
         switch)
             context_switch "$@"
@@ -356,22 +459,22 @@ function context() {
             context_destroy "$@"
             ;;
         url)
-            context_url
+            context_url "$@"
             ;;
         base-url)
-            context_base_url
+            context_base_url "$@"
             ;;
         path)
-            context_path
+            context_path "$@"
             ;;
         paths)
-            context_paths
+            context_paths "$@"
             ;;
         tree)
-            context_tree
+            context_tree "$@"
             ;;
         workspace)
-            context_workspace
+            context_workspace "$@"
             ;;
         note)
             if [[ "$1" == "add" ]]; then

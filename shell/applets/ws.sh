@@ -46,8 +46,24 @@ function ws() {
             ;;
         list)
             # Check if connected
-            if ! canvas_check_connection; then canvas_update_prompt; return 1; fi;
-            canvas_http_get "/workspaces" | jq '.payload'
+            if ! canvas_connected; then
+                canvas_update_prompt
+                return 1
+            fi
+            local raw="false"
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --raw)
+                        raw="true"
+                        shift
+                        ;;
+                    *)
+                        echo "Unknown option: $1"
+                        return 1
+                        ;;
+                esac
+            done
+            canvas_http_get "/workspaces" "" "$raw"
             ;;
         help)
             ws_usage

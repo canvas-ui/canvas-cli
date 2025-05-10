@@ -70,7 +70,20 @@ function canvas() {
             canvas_update_prompt
             ;;
         ping)
-            canvas_ping
+            local raw="false"
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --raw)
+                        raw="true"
+                        shift
+                        ;;
+                    *)
+                        echo "Unknown option: $1"
+                        return 1
+                        ;;
+                esac
+            done
+            canvas_http_get "/ping" "" "$raw"
             if [ $? -eq 1 ]; then
                 echo "Error: failed to ping Canvas API"
                 return 1
