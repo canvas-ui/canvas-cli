@@ -101,6 +101,11 @@ default_context="default"
 default_session="default"
 ```
 
+## TODO
+
+- Add support for custom prompt (PS1)
+- Fix the small timeout delay on start of the terminal(needs further testing, should not really be due to our CLI)
+
 ## License
 
 MIT

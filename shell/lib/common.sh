@@ -441,7 +441,11 @@ canvas_update_prompt() {
         # Re-check connection status, as canvas_http_get might have updated it if the call failed
         if canvas_connected && [ -n "$context_url" ]; then
             context_url="${context_url%/}" # Remove any trailing slash for cleaner display
-            export PS1="[$context_url] $ORIGINAL_PROMPT"
+            if [ "$context_id" == "default" ]; then
+                export PS1="[$context_url] $ORIGINAL_PROMPT"
+            else
+                export PS1="[($context_id) $context_url] $ORIGINAL_PROMPT"
+            fi;
         else
             # Connection lost during the attempt, or context_url is empty
             export PS1="[disconnected] $ORIGINAL_PROMPT"
