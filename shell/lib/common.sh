@@ -440,7 +440,6 @@ canvas_update_prompt() {
 
         # Re-check connection status, as canvas_http_get might have updated it if the call failed
         if canvas_connected && [ -n "$context_url" ]; then
-            context_url="${context_url%/}" # Remove any trailing slash for cleaner display
             if [ "$context_id" == "default" ]; then
                 export PS1="[$context_url] $ORIGINAL_PROMPT"
             else
@@ -459,6 +458,29 @@ canvas_update_prompt() {
 }
 
 canvas_connect() {
+    # Reload configuration to ensure latest settings
+    load_values "$CANVAS_CONFIG"
+    if [ $? -ne 0 ]; then
+        echo "ERROR | Failed to load Canvas SHELL configuration file \"$CANVAS_CONFIG\"" >&2
+        return 1
+    fi
+
+    # Update variables with config file values
+    CANVAS_PROTO="$protocol"
+    CANVAS_HOST="$host"
+    CANVAS_PORT="$port"
+    CANVAS_URL_BASE="$base_url"
+    CANVAS_API_KEY="$api_key"
+
+    # Check if all required variables are set
+    if [ -z "$CANVAS_PROTO" ] || [ -z "$CANVAS_HOST" ] || [ -z "$CANVAS_PORT" ] || [ -z "$CANVAS_URL_BASE" ] || [ -z "$CANVAS_API_KEY" ]; then
+        echo "ERROR | Missing required variables" >&2
+        return 1
+    fi
+
+    # Update the canvas server endpoint URL with new values
+    CANVAS_URL="$CANVAS_PROTO://$CANVAS_HOST:$CANVAS_PORT$CANVAS_URL_BASE"
+
     echo "INFO | Connecting to Canvas API"
     if canvas_api_reachable; then
         echo "INFO | Canvas API endpoint \"$CANVAS_URL\" reachable";
