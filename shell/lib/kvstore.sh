@@ -12,19 +12,25 @@ store_value() {
     local key="$2"
     local value="$3"
 
-    # Create file if it doesn't exist
-    if [ ! -f "$file" ]; then
-        echo "INFO | File $file does not exist, creating it"
-        touch "$file"
+    # Trim leading/trailing whitespace and remove all newlines from value
+    value="$(echo -n "$value" | tr -d '\n' | sed 's/^[ \t\r]*//;s/[ \t\r]*$//')"
+    if [ ${#value} -gt 12 ]; then
+        [ -n "$DEBUG" ] && echo "DEBUG | Storing value for key $key: ${value:0:12}..."
     else
-        echo "INFO | Storing value $value for key $key in file $file"
+        [ -n "$DEBUG" ] && echo "DEBUG | Storing value for key $key: $value"
     fi
 
-    # Check if key exists and replace it, otherwise append
-    if grep -q "^$key=" "$file"; then
-        sed -i "s|^$key=.*|$key=\"$value\"|" "$file"
+    # Only store if value is not empty after trimming
+    if [ -n "$value" ]; then
+        # If key exists (uncommented), replace in-place; else append
+        if grep -q "^$key=" "$file"; then
+            sed -i "s|^$key=.*|$key=\"$value\"|" "$file"
+        else
+            printf '%s="%s"\n' "$key" "$value" >> "$file"
+        fi
     else
-        echo "$key=\"$value\"" >> "$file"
+        # If value is empty, delete the key
+        sed -i "/^$key=/d" "$file"
     fi
 }
 
@@ -40,7 +46,7 @@ get_value() {
         return 1
     fi
 
-    # Extract value (strip quotes)
+    # Extract value (strip quotes), only from uncommented lines
     local value=$(grep "^$key=" "$file" | cut -d= -f2- | sed 's/^"//;s/"$//')
     echo "$value"
 }
@@ -53,6 +59,7 @@ delete_value() {
 
     if [ -f "$file" ]; then
         echo "INFO | Deleting key $key from file $file"
+        # Only delete uncommented lines
         sed -i "/^$key=/d" "$file"
     fi
 }

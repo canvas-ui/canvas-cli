@@ -7,7 +7,7 @@ For a more streamlined experience, use [canvas-cli](https://github.com/canvas-ai
 
 - `context` - Manage Canvas contexts
 - `ws` - Manage Canvas workspaces
-- `canvas` - General Canvas system commands
+- `canvas` - General Canvas system commands (including secure login)
 - Extends the default shell prompt (PS1) with Canvas workspace and context info
 
 ## Installation
@@ -33,6 +33,12 @@ source ~/.bashrc
 ### Canvas Command
 
 ```bash
+# Set or update Canvas API key securely, defaults to localhost
+canvas login
+
+# Set Canvas server URL and API key in one step (URL format: protocol://host[:port])
+canvas login https://my.cnvs.ai
+
 # Connect to Canvas API
 canvas connect
 

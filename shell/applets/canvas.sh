@@ -22,6 +22,7 @@ function canvas_usage() {
     echo "  restart  Restart the Canvas server"
     echo "  connect  Connect to the Canvas server"
     echo "  disconnect  Disconnect from the Canvas server"
+    echo "  login    Set Canvas API key and/or server URL"
     echo "  help     Show this help message"
 }
 
@@ -54,19 +55,19 @@ function canvas() {
         connect)
             canvas_connect
             if [ $? -eq 1 ]; then
-                echo "Error: failed to connect to Canvas API"
-            else
-                echo "Connected to Canvas API"
+                echo "ERROR | Failed to connect to Canvas API"
+                return 1
             fi
+            echo "INFO | Connected to Canvas API"
             canvas_update_prompt
             ;;
         disconnect)
             canvas_disconnect
             if [ $? -eq 1 ]; then
-                echo "Error: failed to disconnect from Canvas API"
+                echo "ERROR | Failed to disconnect from Canvas API"
                 return 1
             fi
-            echo "Disconnected from Canvas API"
+            echo "INFO | Disconnected from Canvas API"
             canvas_update_prompt
             ;;
         ping)
@@ -85,18 +86,19 @@ function canvas() {
             done
             canvas_http_get "/ping" "" "$raw"
             if [ $? -eq 1 ]; then
-                echo "Error: failed to ping Canvas API"
+                echo "ERROR | Failed to ping Canvas API"
                 return 1
             fi
+            echo "INFO | Ponged Canvas API"
             ;;
         status)
             if canvas_connected; then
-                echo "Connected to Canvas API at $CANVAS_URL"
-                echo "Workspace: $(get_value "$CANVAS_SESSION" "workspace_id")"
-                echo "Session: $(get_value "$CANVAS_SESSION" "session_id")"
-                echo "Context: $(get_value "$CANVAS_SESSION" "context_id")"
+                echo "INFO | Connected to Canvas API at $CANVAS_URL"
+                echo "INFO | Workspace ID: $(get_value "$CANVAS_SESSION" "workspace_id")"
+                echo "INFO | Context ID: $(get_value "$CANVAS_SESSION" "context_id")"
             else
-                echo "Canvas API not reachable at $CANVAS_URL"
+                echo "ERROR | Canvas API not reachable at $CANVAS_URL"
+                return 1
             fi
             ;;
         config)
@@ -108,6 +110,19 @@ function canvas() {
             echo "  Base URL: $CANVAS_URL_BASE"
             echo "  Config file: $CANVAS_CONFIG"
             echo "  Session file: $CANVAS_SESSION"
+            echo "  API Key: $CANVAS_API_KEY"
+            ;;
+        login)
+            if [ $# -gt 1 ]; then
+                echo "Usage: canvas login [<url>]"
+                return 1
+            fi
+            if ! canvas_login "$1"; then
+                echo "ERROR | Failed to login to Canvas API"
+                return 1
+            fi
+            canvas_connect
+            canvas_update_prompt
             ;;
         help)
             canvas_usage
@@ -119,4 +134,3 @@ function canvas() {
             ;;
     esac
 }
-
