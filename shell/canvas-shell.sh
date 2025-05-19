@@ -20,5 +20,5 @@ export -f context
 export -f ws
 export -f canvas
 
-# Initialize prompt
+# Initialize canvas-shell prompt
 canvas_update_prompt
