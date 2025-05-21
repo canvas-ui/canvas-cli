@@ -166,18 +166,18 @@ parseStatusCode() {
     local status_code="$2"
     local response_body="$3"
 
-    if [[ "$status_code" -eq 200 ]]; then
+    if [[ "$status_code" =~ ^2[0-9][0-9]$ ]]; then
         # Check if the response indicates success via the 'status' field in the JSON payload
         if echo "$response_body" | jq -e '.status == "success"' >/dev/null 2>&1; then
             return 0 # Indicates success
         else
-            # HTTP 200, but the API's own status field indicates an error
-            echo "ERROR | API request failed with HTTP 200 but reported an error: $(echo "$response_body" | jq -r '.message // "Unknown error"')" >&2
+            # HTTP 2xx, but the API's own status field indicates an error
+            echo "ERROR | API request failed with HTTP $status_code but reported an error: $(echo "$response_body" | jq -r '.message // "Unknown error"')" >&2
             store_value "$CANVAS_SESSION" "server_status" "disconnected"
-            store_value "$CANVAS_SESSION" "server_status_code" "$status_code" # Store 200, but it's an API level error
+            store_value "$CANVAS_SESSION" "server_status_code" "$status_code" # Store 2xx, but it's an API level error
             return 1
         fi
-    else # Non-200 HTTP status code
+    else # Non-2xx HTTP status code
         echo "ERROR | HTTP $request_type request failed with status code $status_code" >&2
         [ -n "$DEBUG" ] && echo "Raw response: $response_body" >&2
         # Auth check: 401 or Invalid API token
@@ -214,25 +214,19 @@ canvas_http_get() {
         -o - \
         "$CANVAS_URL/$url")
 
-    # Check the exit status of the command substitution (curl | head | tail)
-    # This primarily catches issues with the pipe or if curl command itself had a critical error before even making a request.
-    if [ $? -ne 0 ] && [[ "$response" != *"200" ]]; then # Added check for actual success despite $? !=0 in some pipe cases
-        echo "ERROR | Failed to execute HTTP GET request or process its response." >&2
-        store_value "$CANVAS_SESSION" "server_status" "disconnected"
-        store_value "$CANVAS_SESSION" "server_status_code" "0" # Generic failure code
-        # canvas_update_prompt (REMOVED)
-        return 1
-    fi
-
+    # Extract HTTP code and response body first
     http_code=$(echo "$response" | tail -n1)
     response_body=$(echo "$response" | head -n -1)
 
-    # If http_code is empty or not a number (e.g. curl failed silently), treat as error
-    if ! [[ "$http_code" =~ ^[0-9]+$ ]]; then
-        echo "ERROR | Invalid HTTP status code received from GET request." >&2
-        store_value "$CANVAS_SESSION" "server_status" "disconnected"
-        store_value "$CANVAS_SESSION" "server_status_code" "0"
-        return 1
+    # Check the exit status of the command substitution (curl | head | tail)
+    # This primarily catches issues with the pipe or if curl command itself had a critical error before even making a request.
+    if [ $? -ne 0 ]; then
+        if ! [[ "$http_code" =~ ^2[0-9][0-9]$ ]]; then
+            echo "ERROR | Failed to execute HTTP GET request or process its response." >&2
+            store_value "$CANVAS_SESSION" "server_status" "disconnected"
+            store_value "$CANVAS_SESSION" "server_status_code" "0" # Generic failure code
+            return 1
+        fi
     fi
 
     if ! parseStatusCode "GET" "$http_code" "$response_body"; then
@@ -243,6 +237,37 @@ canvas_http_get() {
     parsePayload "$response_body" "$raw"
 }
 
+# Utility: Use file for large payloads or if data is a file path
+canvas_prepare_data_arg() {
+    local data="$1"
+    local __outvar="$2"
+    local max_inline_size=16384 # 16K
+
+    # If data starts with @ and file exists, treat as file path
+    if [[ "$data" == @* ]] && [ -f "${data:1}" ]; then
+        eval $__outvar="\"$data\""
+        return 0
+    fi
+
+    # If data is a file, use it directly
+    if [ -f "$data" ]; then
+        eval $__outvar="\"@$data\""
+        return 0
+    fi
+
+    # If data is small, use as is
+    if [ ${#data} -le $max_inline_size ]; then
+        eval $__outvar="\"$data\""
+        return 0
+    fi
+
+    # Otherwise, write to temp file
+    local tmpfile
+    tmpfile=$(mktemp)
+    echo -n "$data" > "$tmpfile"
+    eval $__outvar="\"@$tmpfile\""
+}
+
 canvas_http_post() {
     local url="${1#/}"
     local data="$2"
@@ -250,31 +275,48 @@ canvas_http_post() {
     local result
     local http_code
     local payload
+    local curl_data_arg
 
-    result=$(curl -sk \
-        -X POST \
-        -w "%{http_code}" \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer $CANVAS_API_KEY" \
-        -d "$data" \
-        "$CANVAS_URL/$url")
-
-    if [ $? -ne 0 ] && [[ "$result" != *"200" ]]; then # Added check for actual success
-        echo "ERROR | Failed to execute HTTP POST request." >&2
-        store_value "$CANVAS_SESSION" "server_status" "disconnected"
-        store_value "$CANVAS_SESSION" "server_status_code" "0"
-        # canvas_update_prompt (REMOVED)
-        return 1
+    # Simplify data handling - only use canvas_prepare_data_arg for file paths
+    # For simple JSON strings from command line, use them directly
+    if [[ "$data" == @* ]] || [ -f "$data" ]; then
+        # This is a file reference, use the helper function
+        canvas_prepare_data_arg "$data" curl_data_arg
+        result=$(curl -sk \
+            -X POST \
+            -w "%{http_code}" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $CANVAS_API_KEY" \
+            -d $curl_data_arg \
+            "$CANVAS_URL/$url")
+    else
+        # Direct data string, use it directly with proper quoting
+        result=$(curl -sk \
+            -X POST \
+            -w "%{http_code}" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $CANVAS_API_KEY" \
+            -d "$data" \
+            "$CANVAS_URL/$url")
     fi
 
-    http_code=${result: -3}
-    payload=${result:0:-3}
+    # Extract HTTP code and payload first
+    if [ ${#result} -ge 3 ]; then
+        http_code=${result: -3}
+        payload=${result:0:$((${#result}-3))}
+    else
+        http_code="0"
+        payload="$result"
+        echo "ERROR | Received malformed response (too short)" >&2
+    fi
 
-    if ! [[ "$http_code" =~ ^[0-9]+$ ]]; then
-        echo "ERROR | Invalid HTTP status code received from POST request." >&2
-        store_value "$CANVAS_SESSION" "server_status" "disconnected"
-        store_value "$CANVAS_SESSION" "server_status_code" "0"
-        return 1
+    if [ $? -ne 0 ]; then
+        if ! [[ "$http_code" =~ ^2[0-9][0-9]$ ]]; then
+            echo "ERROR | Failed to execute HTTP POST request." >&2
+            store_value "$CANVAS_SESSION" "server_status" "disconnected"
+            store_value "$CANVAS_SESSION" "server_status_code" "0"
+            return 1
+        fi
     fi
 
     if ! parseStatusCode "POST" "$http_code" "$payload"; then
@@ -300,22 +342,23 @@ canvas_http_put() {
         -d "$data" \
         "$CANVAS_URL/$url")
 
-    if [ $? -ne 0 ] && [[ "$result" != *"200" ]]; then # Added check for actual success
-        echo "ERROR | Failed to execute HTTP PUT request." >&2
-        store_value "$CANVAS_SESSION" "server_status" "disconnected"
-        store_value "$CANVAS_SESSION" "server_status_code" "0"
-        # canvas_update_prompt (REMOVED)
-        return 1
+    # Extract HTTP code and payload first
+    if [ ${#result} -ge 3 ]; then
+        http_code=${result: -3}
+        payload=${result:0:$((${#result}-3))}
+    else
+        http_code="0"
+        payload="$result"
+        echo "ERROR | Received malformed response (too short)" >&2
     fi
 
-    http_code=${result: -3}
-    payload=${result:0:-3}
-
-    if ! [[ "$http_code" =~ ^[0-9]+$ ]]; then
-        echo "ERROR | Invalid HTTP status code received from PUT request." >&2
-        store_value "$CANVAS_SESSION" "server_status" "disconnected"
-        store_value "$CANVAS_SESSION" "server_status_code" "0"
-        return 1
+    if [ $? -ne 0 ]; then
+        if ! [[ "$http_code" =~ ^2[0-9][0-9]$ ]]; then
+            echo "ERROR | Failed to execute HTTP PUT request." >&2
+            store_value "$CANVAS_SESSION" "server_status" "disconnected"
+            store_value "$CANVAS_SESSION" "server_status_code" "0"
+            return 1
+        fi
     fi
 
     if ! parseStatusCode "PUT" "$http_code" "$payload"; then
@@ -341,22 +384,23 @@ canvas_http_patch() {
         -d "$data" \
         "$CANVAS_URL/$url")
 
-    if [ $? -ne 0 ] && [[ "$result" != *"200" ]]; then # Added check for actual success
-        echo "ERROR | Failed to execute HTTP PATCH request." >&2
-        store_value "$CANVAS_SESSION" "server_status" "disconnected"
-        store_value "$CANVAS_SESSION" "server_status_code" "0"
-        # canvas_update_prompt (REMOVED)
-        return 1
+    # Extract HTTP code and payload first
+    if [ ${#result} -ge 3 ]; then
+        http_code=${result: -3}
+        payload=${result:0:$((${#result}-3))}
+    else
+        http_code="0"
+        payload="$result"
+        echo "ERROR | Received malformed response (too short)" >&2
     fi
 
-    http_code=${result: -3}
-    payload=${result:0:-3}
-
-    if ! [[ "$http_code" =~ ^[0-9]+$ ]]; then
-        echo "ERROR | Invalid HTTP status code received from PATCH request." >&2
-        store_value "$CANVAS_SESSION" "server_status" "disconnected"
-        store_value "$CANVAS_SESSION" "server_status_code" "0"
-        return 1
+    if [ $? -ne 0 ]; then
+        if ! [[ "$http_code" =~ ^2[0-9][0-9]$ ]]; then
+            echo "ERROR | Failed to execute HTTP PATCH request." >&2
+            store_value "$CANVAS_SESSION" "server_status" "disconnected"
+            store_value "$CANVAS_SESSION" "server_status_code" "0"
+            return 1
+        fi
     fi
 
     if ! parseStatusCode "PATCH" "$http_code" "$payload"; then
@@ -382,22 +426,23 @@ canvas_http_delete() {
         -d "$data" \
         "$CANVAS_URL/$url")
 
-    if [ $? -ne 0 ] && [[ "$result" != *"200" ]]; then # Added check for actual success
-        echo "ERROR | Failed to execute HTTP DELETE request." >&2
-        store_value "$CANVAS_SESSION" "server_status" "disconnected"
-        store_value "$CANVAS_SESSION" "server_status_code" "0"
-        # canvas_update_prompt (REMOVED)
-        return 1
+    # Extract HTTP code and payload first
+    if [ ${#result} -ge 3 ]; then
+        http_code=${result: -3}
+        payload=${result:0:$((${#result}-3))}
+    else
+        http_code="0"
+        payload="$result"
+        echo "ERROR | Received malformed response (too short)" >&2
     fi
 
-    http_code=${result: -3}
-    payload=${result:0:-3}
-
-    if ! [[ "$http_code" =~ ^[0-9]+$ ]]; then
-        echo "ERROR | Invalid HTTP status code received from DELETE request." >&2
-        store_value "$CANVAS_SESSION" "server_status" "disconnected"
-        store_value "$CANVAS_SESSION" "server_status_code" "0"
-        return 1
+    if [ $? -ne 0 ]; then
+        if ! [[ "$http_code" =~ ^2[0-9][0-9]$ ]]; then
+            echo "ERROR | Failed to execute HTTP DELETE request." >&2
+            store_value "$CANVAS_SESSION" "server_status" "disconnected"
+            store_value "$CANVAS_SESSION" "server_status_code" "0"
+            return 1
+        fi
     fi
 
     if ! parseStatusCode "DELETE" "$http_code" "$payload"; then
@@ -415,7 +460,7 @@ canvas_api_reachable() {
     if [[ $curl_exit -ne 0 ]]; then
         echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" not reachable (curl error: $curl_exit)"
         return 1
-    elif [[ "$status" -eq 200 ]]; then
+    elif [[ "$status" =~ ^2[0-9][0-9]$ ]]; then
         return 0
     else
         echo "ERROR | Canvas API endpoint \"$CANVAS_URL\" returned status code: $status"

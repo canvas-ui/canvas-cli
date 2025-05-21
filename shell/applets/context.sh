@@ -295,19 +295,12 @@ function context_workspace() {
 
 # Add a note
 function context_note_add() {
-    local content="$1"
-    shift
-
-    if [ -z "$content" ]; then
-        echo "Error: Missing note content"
-        return 1
-    fi
-
+    local content=""
     local title=""
     local tags=""
     local file_path=""
 
-    # Parse optional parameters
+    # Parse arguments: look for --path, --title, --tags, and positional content
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --title)
@@ -322,55 +315,78 @@ function context_note_add() {
                 file_path="$2"
                 shift 2
                 ;;
-            *)
+            --)
+                shift
+                break
+                ;;
+            -*)
                 echo "Unknown option: $1"
                 return 1
+                ;;
+            *)
+                # First non-option argument is content
+                if [ -z "$content" ]; then
+                    content="$1"
+                else
+                    content="$content $1"
+                fi
+                shift
                 ;;
         esac
     done
 
-    local context_id=$(get_value "$CANVAS_SESSION" "context_id")
-
-    # If a file path is provided, read content from the file
-    if [ -n "$file_path" ] && [ -f "$file_path" ]; then
-        content=$(cat "$file_path")
+    # After parsing, check for both content and file_path
+    if [ -n "$content" ] && [ -n "$file_path" ]; then
+        echo "Error: Cannot provide both note content and --path. Please use only one."
+        return 1
     fi
 
-    # Build the feature array with note abstraction
-    local feature_array='["data/abstraction/note"'
+    if [ -n "$file_path" ]; then
+        if [ ! -f "$file_path" ]; then
+            echo "Error: File not found: $file_path"
+            return 1
+        fi
+        content=$(<"$file_path")
+    fi
 
-    # Add tags if provided
+    if [ -z "$content" ]; then
+        echo "Error: Missing note content. Provide content as an argument or use --path <file>."
+        return 1
+    fi
+
+    local context_id=$(get_value "$CANVAS_SESSION" "context_id")
+
+    # Build the feature array with note abstraction and tags
+    local feature_array='["data/abstraction/note"'
     if [ -n "$tags" ]; then
         IFS=',' read -ra TAG_ARRAY <<< "$tags"
         for tag in "${TAG_ARRAY[@]}"; do
             feature_array="$feature_array, \"tag/$tag\""
         done
     fi
-
     feature_array="$feature_array]"
 
-    # Build the options object
-    local options="{}"
-    if [ -n "$title" ]; then
-        options="{\"title\": \"$title\"}"
-    fi
-
-    # Build the complete request data
-    local data="{\"content\": \"$content\", \"featureArray\": $feature_array, \"options\": $options}"
-
-    canvas_http_post "/contexts/$context_id/documents" "$data" | jq .
+    # Use jq --arg for robust JSON construction
+    local tmpjson
+    tmpjson=$(mktemp)
+    jq --arg content "$content" --arg title "$title" --argjson featureArray "$feature_array" '
+        {featureArray: $featureArray, documents: {schema: "data/abstraction/note", data: {content: $content} } }
+        | if $title != "" then .documents.data.title = $title else . end
+    ' <<< '{}' > "$tmpjson"
+    canvas_http_post "/contexts/$context_id/documents" "$tmpjson" | jq .
+    rm -f "$tmpjson"
 }
 
 # List notes
 function context_notes() {
     local context_id=$(get_value "$CANVAS_SESSION" "context_id")
-    canvas_http_get "/contexts/$context_id/documents?features=data/abstraction/note" | jq .
+    canvas_http_get "/contexts/$context_id/documents?featureArray=data/abstraction/note" | jq .
 }
 
 # List tabs
 function context_tabs() {
     local context_id=$(get_value "$CANVAS_SESSION" "context_id")
-    canvas_http_get "/contexts/$context_id/documents?features=data/abstraction/tab" | jq .
+    canvas_http_get "/contexts/$context_id/documents?featureArray=data/abstraction/tab" | jq .
 }
 
 # Add a tab
@@ -406,24 +422,22 @@ function context_tab_add() {
 
     local context_id=$(get_value "$CANVAS_SESSION" "context_id")
 
-    # Build the feature array with tab abstraction
+    # Build the feature array with tab abstraction and tags
     local feature_array='["data/abstraction/tab"'
-
-    # Add tags if provided
     for tag in "${tags[@]}"; do
         feature_array="$feature_array, \"tag/$tag\""
     done
-
     feature_array="$feature_array]"
 
-    # Build the options object
-    local options="{\"url\": \"$url\"}"
+    # Build the data object for the tab document
+    local data_obj="{\"url\": \"$url\""
     if [ -n "$title" ]; then
-        options="{\"url\": \"$url\", \"title\": \"$title\"}"
+        data_obj="$data_obj, \"title\": \"$title\""
     fi
+    data_obj="$data_obj}"
 
-    # Build the complete request data
-    local data="{\"content\": \"\", \"featureArray\": $feature_array, \"options\": $options}"
+    # Build the complete request data with the new schema under 'documents'
+    local data="{\"featureArray\": $feature_array, \"documents\": {\"schema\": \"data/abstraction/tab\", \"data\": $data_obj}}"
 
     canvas_http_post "/contexts/$context_id/documents" "$data" | jq .
 }
