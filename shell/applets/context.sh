@@ -490,6 +490,9 @@ function context() {
         workspace)
             context_workspace "$@"
             ;;
+        documents)
+            canvas_http_get "/contexts/$context_id/documents" "" "$raw"
+            ;;
         note)
             if [[ "$1" == "add" ]]; then
                 shift
