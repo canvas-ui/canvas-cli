@@ -11,14 +11,21 @@ source "$CANVAS_SCRIPT_DIR/lib/common.sh"
 #############################
 
 # Import canvas-shell applets
-source "$CANVAS_SCRIPT_DIR/applets/context.sh"
-source "$CANVAS_SCRIPT_DIR/applets/canvas.sh"
-source "$CANVAS_SCRIPT_DIR/applets/ws.sh"
+if [ "$cli_enable_context" != false ]; then
+    source "$CANVAS_SCRIPT_DIR/applets/context.sh"
+    export -f context
+fi
 
-# Export functions for use in the shell
-export -f context
-export -f ws
-export -f canvas
+if [ "$cli_enable_canvas" != false ]; then
+    source "$CANVAS_SCRIPT_DIR/applets/canvas.sh"
+    export -f canvas
+fi
+
+if [ "$cli_enable_ws" != false ]; then
+    source "$CANVAS_SCRIPT_DIR/applets/ws.sh"
+    export -f ws
+fi
 
 # Initialize canvas-shell prompt
 canvas_update_prompt
+
