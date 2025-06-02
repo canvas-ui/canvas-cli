@@ -26,6 +26,18 @@ if [ "$cli_enable_ws" != false ]; then
     export -f ws
 fi
 
-# Initialize canvas-shell prompt
-canvas_update_prompt
+# Store bash history in canvas-server contextualized (ok Dont do it,
+# one JSON Document per command is a overkill, we need to support a more
+# lightweight approach first)
+#export HISTCONTROL=ignoredups:erasedups
+#export HISTSIZE=10000
+#export HISTFILESIZE=20000
+#shopt -s histappend
+#export PROMPT_COMMAND="history -a; canvas_update_prompt; $PROMPT_COMMAND"
 
+# Hook canvas_update_prompt into the PROMPT_COMMAND
+[[ "$PROMPT_COMMAND" != *canvas_update_prompt* ]] && \
+  PROMPT_COMMAND="canvas_update_prompt; $PROMPT_COMMAND"
+
+# Export the PROMPT_COMMAND
+export PROMPT_COMMAND;
