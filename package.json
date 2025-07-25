@@ -66,6 +66,7 @@
   "devDependencies": {
     "@eslint/js": "^9.22.0",
     "@types/node": "^22.13.10",
+    "bun": "^1.2.19",
     "eslint": "^9.22.0",
     "eslint-config-prettier": "^10.1.1",
     "globals": "^15.9.0",
