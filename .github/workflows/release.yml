@@ -56,8 +56,12 @@ jobs:
         echo "🔨 Building macOS ARM64..."
         bun run build:macos-arm || (echo "❌ macOS ARM64 build failed" && exit 1)
 
-        echo "🔨 Building Windows x64..."
+                echo "🔨 Building Windows x64..."
         bun run build:windows || (echo "❌ Windows x64 build failed" && exit 1)
+
+        # Fix Windows binary permissions (Bun cross-compilation bug)
+        echo "🔧 Fixing Windows binary permissions..."
+        chmod 755 dist/canvas-windows.exe || (echo "❌ Failed to fix Windows binary permissions" && exit 1)
 
         echo "✅ All builds completed successfully!"
 
