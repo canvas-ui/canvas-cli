@@ -166,20 +166,27 @@ install_canvas() {
         warning "Skipped cleanup - temp directory path looks suspicious: '$temp_dir'"
     fi
 
-    # Final test
+        # Final test
     log "Verifying installation..."
+
+    # Change to a safe directory before testing the installed binary
+    # The current directory might be the temp directory which we just deleted
+    cd "$HOME" || cd "/" || error "Cannot change to a safe directory for verification"
+
     local installed_version
     local exit_code
 
-    # Capture both output and exit code
+    # Capture both output and exit code without set -e interfering
+    set +e  # Temporarily disable exit on error
     installed_version=$("$INSTALL_DIR/$BINARY_NAME" --version 2>&1)
     exit_code=$?
+    set -e  # Re-enable exit on error
 
     # Check if we got version information (success) regardless of connection status
-    if [[ $exit_code -eq 0 ]] || [[ "$installed_version" =~ canvas-cli[[:space:]]v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+    if [[ $exit_code -eq 0 ]] || [[ "$installed_version" =~ canvas-cli[[:space:]]v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.-]+)? ]]; then
         success "Canvas CLI installed successfully!"
         # Extract just the version from the output
-        if [[ "$installed_version" =~ canvas-cli[[:space:]]v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+        if [[ "$installed_version" =~ canvas-cli[[:space:]]v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.-]+)? ]]; then
             log "Installed version: ${BASH_REMATCH[0]}"
         else
             log "Binary installed and working"

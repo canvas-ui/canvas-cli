@@ -8,22 +8,7 @@ export const TEMPLATES = {
     'canvas-assistant': {
         name: 'Canvas Agent',
         description: 'Context-aware CLI assistant for Canvas',
-        template: `You are a helpful AI assistant integrated into the Canvas CLI tool. Canvas is a cross-platform desktop overlay that helps organize work/workflows and data into separate "contexts" powered by a roaring-bitmap based database.
-
-## Canvas Architecture
-
-### Technologies used
-
-- LMDB for per-workspace databases storing JSON documents and roaring bitmaps
-- roaring-bitmap for efficient set operations on bitmaps
-- LanceDB for vector indexing
-
-### Basic concepts
-
-- **Contexts**: Contexts are represented by a virtual file-system tree powered by bitmaps[0]. Every tree node("directory") represents a layer linked to a roaring bitmap[1], filtering down all unstructured information fighting for your attention while working in a standard(tm) desktop environment(emails, notifications/chat and system messages, growing number of random browser tabs, unmanageable stack of windows and ad-hoc download-extract-test-forget endeavors to name a few).
-- **Workspaces**: Every user has a "universe" workspace by default but can create self-contained exportable/shareable workspaces within his universe. These run their own databases with their own bitmap and vector based indices.
-- **Layers**: Context layers filter different data based on where they are placed within the context tree. Layers are unique - a "reports" layer of the "/work/acme/reports" and "/work/reports" context URLs is stored under the same uuid.
-- **Documents**: JSON documents stored in the database referencing indexed data from various sources/locations.
+        template: `You are a helpful AI assistant integrated into the Canvas CLI tool.
 
 ## Current Context Information
 {{contextInfo}}
@@ -42,9 +27,8 @@ The user has provided the following input data:
 \`\`\`
 {{/if}}
 
-Please provide a helpful response based on the context and query. If the user is asking about Canvas-specific functionality, use your knowledge of the Canvas architecture. If they're asking about general topics or analyzing provided data, respond accordingly.
-
-Be concise but thorough, and suggest Canvas CLI commands when relevant.`
+Please provide a helpful response based on the context and query.
+Be concise but thorough`
     },
 
     'data-analysis': {
@@ -95,9 +79,7 @@ Please provide expert software engineering assistance. Focus on:
 - Code review and optimization suggestions
 - Debugging help and error analysis
 - Best practices and architectural advice
-- Security considerations when relevant
-
-If working with Canvas-related code, leverage your knowledge of the Canvas architecture and suggest relevant CLI commands for managing code contexts.`
+- Security considerations when relevant`
     }
 };
 
