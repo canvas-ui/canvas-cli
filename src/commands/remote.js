@@ -1,11 +1,13 @@
 'use strict';
 
 import chalk from 'chalk';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const read = require('read');
 import BaseCommand from './base.js';
 import { remoteStore } from '../utils/config.js';
 import {
     parseRemoteIdentifier,
-    constructRemoteIdentifier,
     isLocalRemote
 } from '../utils/address-parser.js';
 
@@ -75,6 +77,10 @@ export class RemoteCommand extends BaseCommand {
                 throw new Error(`Remote '${remoteId}' already exists. Use 'canvas remote remove ${remoteId}' first.`);
             }
 
+            // Check if this is the first remote BEFORE adding
+            const existingRemotes = await this.remoteStore.getRemotes();
+            const isFirstRemote = Object.keys(existingRemotes).length === 0;
+
             // Create remote configuration
             const remoteConfig = {
                 url: url,
@@ -100,9 +106,32 @@ export class RemoteCommand extends BaseCommand {
                 console.log(chalk.yellow('  Authentication: Password-based (use login command)'));
             }
 
-            // Offer to bind as default if it's the first remote
-            const remotes = await this.remoteStore.getRemotes();
-            if (Object.keys(remotes).length === 1) {
+            // If this was the first remote, auto-bind + offer login
+            if (isFirstRemote) {
+                // Automatically bind as default remote
+                await this.remoteStore.updateSession({
+                    boundRemote: remoteId,
+                    boundAt: new Date().toISOString()
+                });
+                console.log(chalk.green(`✓ Set as default remote (first remote added)`));
+
+                // Prompt for login if no token was provided
+                if (!parsed.options.token) {
+                    console.log();
+                    console.log(chalk.cyan('Would you like to login now? This will authenticate with the remote server.'));
+
+                    try {
+                        const shouldLogin = await this.promptYesNo('Login now?', true);
+                        if (shouldLogin) {
+                            console.log();
+                            return await this.performLogin(remoteId);
+                        }
+                    } catch (_error) {
+                        console.log(chalk.yellow('Skipping login. You can login later with:'));
+                        console.log(`  canvas remote login ${remoteId} --email your@email.com`);
+                    }
+                }
+            } else {
                 console.log();
                 console.log(chalk.cyan(`Tip: Set as default remote with: canvas remote bind ${remoteId}`));
             }
@@ -342,37 +371,81 @@ export class RemoteCommand extends BaseCommand {
             throw new Error('Remote identifier is required');
         }
 
-        const email = parsed.options.email || parsed.options.username;
-        const password = parsed.options.password;
+        return await this.performLogin(remoteId, parsed.options);
+    }
 
-        if (!email) {
-            throw new Error('Email is required (use --email)');
-        }
-
-        if (!password) {
-            throw new Error('Password is required (use --password)');
-        }
-
+    /**
+     * Perform login to a remote with secure password input
+     */
+    async performLogin(remoteId, options = {}) {
         try {
             const remote = await this.remoteStore.getRemote(remoteId);
             if (!remote) {
                 throw new Error(`Remote '${remoteId}' not found`);
             }
 
-            console.log(chalk.blue(`Logging into remote '${remoteId}'...`));
+            let email = options.email || options.username;
+            let password = options.password;
+            const token = options.token;
+
+            // If token is provided, use token-based authentication
+            if (token) {
+                console.log(chalk.blue(`Logging into remote '${remoteId}' with token...`));
+
+                // Update remote config with new token
+                await this.remoteStore.updateRemote(remoteId, {
+                    auth: {
+                        method: 'token',
+                        tokenType: 'jwt',
+                        token: token
+                    }
+                });
+
+                console.log(chalk.green(`✓ Successfully logged into '${remoteId}' with token`));
+                console.log(chalk.gray('Token stored in remote configuration'));
+                return 0;
+            }
+
+            // For email-based authentication, prompt for email if not provided
+            if (!email) {
+                try {
+                    email = await this.promptForInput('Email: ');
+                } catch (error) {
+                    throw new Error('Email is required for login. Use --email option or provide interactively.');
+                }
+            }
+
+            if (!email) {
+                throw new Error('Email is required. Use --email option or provide when prompted.');
+            }
+
+            // Prompt for password securely if not provided
+            if (!password) {
+                try {
+                    password = await this.promptForPassword('Password: ');
+                } catch (error) {
+                    throw new Error('Password is required for login. Use --password option or provide interactively.');
+                }
+            }
+
+            if (!password) {
+                throw new Error('Password is required. Use --password option or provide when prompted.');
+            }
+
+            console.log(chalk.blue(`Logging into remote '${remoteId}' as ${email}...`));
 
             const apiClient = await this.createRemoteApiClient(remoteId);
             const response = await apiClient.login({ email, password });
 
             const responseData = response.payload || response.data || response;
-            const { token, user } = responseData;
+            const { token: authToken, user } = responseData;
 
             // Update remote config with new token
             await this.remoteStore.updateRemote(remoteId, {
                 auth: {
                     method: 'token',
                     tokenType: 'jwt',
-                    token: token
+                    token: authToken
                 }
             });
 
@@ -548,6 +621,61 @@ export class RemoteCommand extends BaseCommand {
     }
 
     /**
+     * Helper method to prompt for input
+     */
+    async promptForInput(prompt) {
+        return new Promise((resolve, reject) => {
+            read({ prompt }, (err, result) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(result);
+                }
+            });
+        });
+    }
+
+    /**
+     * Helper method to prompt for password securely (no echo)
+     */
+    async promptForPassword(prompt) {
+        return new Promise((resolve, reject) => {
+            read({ prompt, silent: true }, (err, result) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(result);
+                }
+            });
+        });
+    }
+
+    /**
+     * Helper method to prompt for yes/no confirmation
+     */
+    async promptYesNo(prompt, defaultValue = false) {
+        const defaultText = defaultValue ? 'Y/n' : 'y/N';
+        return new Promise((resolve, reject) => {
+            read({ prompt: `${prompt} (${defaultText}): ` }, (err, result) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    const answer = result.toLowerCase().trim();
+                    if (answer === '') {
+                        resolve(defaultValue);
+                    } else if (answer === 'y' || answer === 'yes') {
+                        resolve(true);
+                    } else if (answer === 'n' || answer === 'no') {
+                        resolve(false);
+                    } else {
+                        reject(new Error('Please answer yes or no'));
+                    }
+                }
+            });
+        });
+    }
+
+    /**
      * Show help
      */
     showHelp() {
@@ -565,9 +693,9 @@ export class RemoteCommand extends BaseCommand {
         console.log();
         console.log(chalk.bold('Options:'));
         console.log('  --token <token>           API token for authentication');
-        console.log('  --email <email>           Email for login');
-        console.log('  --username <email>        Email for login (alias)');
-        console.log('  --password <password>     Password for login');
+        console.log('  --email <email>           Email for login (required for email auth)');
+        console.log('  --username <email>        Email for login (alias for --email)');
+        console.log('  --password <password>     Password for login (will prompt securely if not provided)');
         console.log('  --api-base <path>         API base path (default: /rest/v2)');
         console.log('  --description <desc>      Remote description');
         console.log('  --force                   Force action without confirmation');
@@ -578,7 +706,8 @@ export class RemoteCommand extends BaseCommand {
         console.log('  canvas remote list');
         console.log('  canvas remote sync admin@canvas.local');
         console.log('  canvas remote bind admin@canvas.local');
-        console.log('  canvas remote login user@work.server --email user@company.com --password mypass');
+        console.log('  canvas remote login user@work.server --email user@company.com');
+        console.log('  canvas remote login user@work.server --token your-api-token');
         console.log('  canvas remote ping admin@canvas.local');
         console.log('  canvas remote show admin@canvas.local');
         console.log('  canvas remote rename old@server new@server');
@@ -589,7 +718,13 @@ export class RemoteCommand extends BaseCommand {
         console.log('  admin@canvas.local        Local Canvas server');
         console.log('  john@work.company.com     Remote Canvas server');
         console.log();
+        console.log(chalk.bold('Authentication:'));
+        console.log('  For email/password auth: Use --email (password will be prompted securely)');
+        console.log('  For token auth: Use --token with your API token');
+        console.log('  Interactive login: Run without --email or --token to be prompted');
+        console.log();
         console.log(chalk.cyan('Note: After adding a remote, use sync to fetch available workspaces and contexts.'));
+        console.log(chalk.cyan('First remote added is automatically set as default and offers login prompt.'));
     }
 }
 
