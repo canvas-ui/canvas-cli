@@ -39,11 +39,40 @@ jobs:
     - name: Build all platforms
       run: |
         echo "Building for all platforms..."
-        bun run build:linux
-        bun run build:linux-arm
-        bun run build:macos
-        bun run build:macos-arm
-        bun run build:windows
+
+        # Ensure dist directory exists and has proper permissions
+        mkdir -p dist
+        chmod 755 dist
+
+        echo "🔨 Building Linux x64..."
+        bun run build:linux || (echo "❌ Linux x64 build failed" && exit 1)
+
+        echo "🔨 Building Linux ARM64..."
+        bun run build:linux-arm || (echo "❌ Linux ARM64 build failed" && exit 1)
+
+        echo "🔨 Building macOS x64..."
+        bun run build:macos || (echo "❌ macOS x64 build failed" && exit 1)
+
+        echo "🔨 Building macOS ARM64..."
+        bun run build:macos-arm || (echo "❌ macOS ARM64 build failed" && exit 1)
+
+        echo "🔨 Building Windows x64..."
+        bun run build:windows || (echo "❌ Windows x64 build failed" && exit 1)
+
+        echo "✅ All builds completed successfully!"
+
+        # Verify all expected files exist
+        echo "🔍 Verifying build outputs..."
+        ls -la dist/
+
+        for file in canvas-linux canvas-linux-arm canvas-macos canvas-macos-arm canvas-windows.exe; do
+          if [ ! -f "dist/$file" ]; then
+            echo "❌ Missing expected build output: dist/$file"
+            exit 1
+          else
+            echo "✅ Found: dist/$file"
+          fi
+        done
 
     - name: Test binaries
       run: |
@@ -56,11 +85,24 @@ jobs:
         mkdir -p release-assets
 
         # Copy binaries with proper names
-        cp dist/canvas-linux release-assets/canvas-linux-x64
-        cp dist/canvas-linux-arm release-assets/canvas-linux-arm64
-        cp dist/canvas-macos release-assets/canvas-macos-x64
-        cp dist/canvas-macos-arm release-assets/canvas-macos-arm64
-        cp dist/canvas-windows.exe release-assets/canvas-windows-x64.exe
+        echo "📦 Copying binaries to release assets..."
+
+        echo "Copying Linux x64..."
+        cp dist/canvas-linux release-assets/canvas-linux-x64 || (echo "❌ Failed to copy Linux x64 binary" && exit 1)
+
+        echo "Copying Linux ARM64..."
+        cp dist/canvas-linux-arm release-assets/canvas-linux-arm64 || (echo "❌ Failed to copy Linux ARM64 binary" && exit 1)
+
+        echo "Copying macOS x64..."
+        cp dist/canvas-macos release-assets/canvas-macos-x64 || (echo "❌ Failed to copy macOS x64 binary" && exit 1)
+
+        echo "Copying macOS ARM64..."
+        cp dist/canvas-macos-arm release-assets/canvas-macos-arm64 || (echo "❌ Failed to copy macOS ARM64 binary" && exit 1)
+
+        echo "Copying Windows x64..."
+        cp dist/canvas-windows.exe release-assets/canvas-windows-x64.exe || (echo "❌ Failed to copy Windows x64 binary" && exit 1)
+
+        echo "✅ All binaries copied successfully!"
 
         # Create compressed archives
         cd release-assets
