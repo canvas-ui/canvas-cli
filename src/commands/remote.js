@@ -1,9 +1,7 @@
 'use strict';
 
 import chalk from 'chalk';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const read = require('read');
+import { createInterface } from 'readline';
 import BaseCommand from './base.js';
 import { remoteStore } from '../utils/config.js';
 import {
@@ -624,13 +622,15 @@ export class RemoteCommand extends BaseCommand {
      * Helper method to prompt for input
      */
     async promptForInput(prompt) {
-        return new Promise((resolve, reject) => {
-            read({ prompt }, (err, result) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(result);
-                }
+        const rl = createInterface({
+            input: process.stdin,
+            output: process.stdout
+        });
+
+        return new Promise((resolve) => {
+            rl.question(prompt, (answer) => {
+                rl.close();
+                resolve(answer);
             });
         });
     }
@@ -639,14 +639,53 @@ export class RemoteCommand extends BaseCommand {
      * Helper method to prompt for password securely (no echo)
      */
     async promptForPassword(prompt) {
-        return new Promise((resolve, reject) => {
-            read({ prompt, silent: true }, (err, result) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(result);
+        const rl = createInterface({
+            input: process.stdin,
+            output: process.stdout
+        });
+
+        return new Promise((resolve) => {
+            process.stdout.write(prompt);
+
+            // Hide input by setting raw mode
+            process.stdin.setRawMode(true);
+            process.stdin.resume();
+            process.stdin.setEncoding('utf8');
+
+            let password = '';
+
+            const onData = (char) => {
+                switch (char) {
+                    case '\n':
+                    case '\r':
+                    case '\u0004': // Ctrl+D
+                        process.stdin.setRawMode(false);
+                        process.stdin.removeListener('data', onData);
+                        process.stdout.write('\n');
+                        rl.close();
+                        resolve(password);
+                        break;
+                    case '\u0003': // Ctrl+C
+                        process.stdin.setRawMode(false);
+                        process.stdin.removeListener('data', onData);
+                        process.stdout.write('\n');
+                        rl.close();
+                        process.exit(1);
+                        break;
+                    case '\u007f': // Backspace
+                        if (password.length > 0) {
+                            password = password.slice(0, -1);
+                            process.stdout.write('\b \b');
+                        }
+                        break;
+                    default:
+                        password += char;
+                        process.stdout.write('*');
+                        break;
                 }
-            });
+            };
+
+            process.stdin.on('data', onData);
         });
     }
 
@@ -655,21 +694,25 @@ export class RemoteCommand extends BaseCommand {
      */
     async promptYesNo(prompt, defaultValue = false) {
         const defaultText = defaultValue ? 'Y/n' : 'y/N';
-        return new Promise((resolve, reject) => {
-            read({ prompt: `${prompt} (${defaultText}): ` }, (err, result) => {
-                if (err) {
-                    reject(err);
+        const rl = createInterface({
+            input: process.stdin,
+            output: process.stdout
+        });
+
+        return new Promise((resolve) => {
+            rl.question(`${prompt} (${defaultText}): `, (answer) => {
+                rl.close();
+                const trimmed = answer.toLowerCase().trim();
+                if (trimmed === '') {
+                    resolve(defaultValue);
+                } else if (trimmed === 'y' || trimmed === 'yes') {
+                    resolve(true);
+                } else if (trimmed === 'n' || trimmed === 'no') {
+                    resolve(false);
                 } else {
-                    const answer = result.toLowerCase().trim();
-                    if (answer === '') {
-                        resolve(defaultValue);
-                    } else if (answer === 'y' || answer === 'yes') {
-                        resolve(true);
-                    } else if (answer === 'n' || answer === 'no') {
-                        resolve(false);
-                    } else {
-                        reject(new Error('Please answer yes or no'));
-                    }
+                    // Invalid input, ask again
+                    process.stdout.write('Please answer yes or no.\n');
+                    this.promptYesNo(prompt, defaultValue).then(resolve);
                 }
             });
         });
