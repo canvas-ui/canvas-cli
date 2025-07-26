@@ -129,6 +129,7 @@ export class WorkspaceFormatter extends BaseFormatter {
 
         const table = new Table({
             head: [
+                chalk.cyan('Remote'),
                 chalk.cyan('Name'),
                 chalk.cyan('Owner'),
                 chalk.cyan('Color'),
@@ -142,6 +143,7 @@ export class WorkspaceFormatter extends BaseFormatter {
         data.forEach(workspace => {
             if (workspace) {
                 table.push([
+                    workspace.remote || 'N/A',
                     workspace.label || workspace.name || 'N/A',
                     this.truncate(workspace.ownerEmail || workspace.owner, 20),
                     this.formatColor(workspace.color),
@@ -283,6 +285,7 @@ export class ContextFormatter extends BaseFormatter {
 
         const table = new Table({
             head: [
+                chalk.cyan('Remote'),
                 chalk.cyan('Name'),
                 chalk.cyan('URL'),
                 chalk.cyan('BaseUrl'),
@@ -298,6 +301,7 @@ export class ContextFormatter extends BaseFormatter {
             const contextId = this.formatContextId(context.id, context.color);
 
             table.push([
+                context.remote || 'N/A',
                 contextId,
                 this.truncate(context.url || 'N/A', 35),
                 context.baseUrl || 'N/A',

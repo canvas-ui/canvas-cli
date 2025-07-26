@@ -19,8 +19,12 @@ export class WorkspaceCommand extends BaseCommand {
             // Collect client context for this execution
             this.collectClientContext();
 
-            // Check if server is reachable
-            await this.checkConnection();
+            // Skip connection check for list action since we use cached data
+            const action = parsed.args[0] || 'list';
+            if (action !== 'list') {
+                // Check if server is reachable for non-list actions
+                await this.checkConnection();
+            }
 
             // If no arguments, default to list
             if (parsed.args.length === 0) {
@@ -80,10 +84,28 @@ export class WorkspaceCommand extends BaseCommand {
      */
     async handleList(parsed) {
         try {
-            const response = await this.apiClient.getWorkspaces();
+            // Use cached workspaces from local storage instead of API call
+            const cachedWorkspaces = await this.apiClient.getCachedWorkspaces();
 
-            // Handle ResponseObject format
-            const workspaces = response.payload || response.data || response;
+            // Transform cached data to include remote information
+            const workspaces = [];
+            for (const [key, workspace] of Object.entries(cachedWorkspaces)) {
+                // Parse key format: remoteId:workspaceId
+                const [remoteId, workspaceId] = key.includes(':') ? key.split(':', 2) : ['local', key];
+
+                workspaces.push({
+                    remote: remoteId,
+                    ...workspace
+                });
+            }
+
+            // Sort by remote, then by name
+            workspaces.sort((a, b) => {
+                if (a.remote !== b.remote) {
+                    return a.remote.localeCompare(b.remote);
+                }
+                return (a.name || a.label || '').localeCompare(b.name || b.label || '');
+            });
 
             this.output(workspaces, 'workspace');
             return 0;

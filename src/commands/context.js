@@ -19,11 +19,14 @@ export class ContextCommand extends BaseCommand {
             // Collect client context for this execution
             this.collectClientContext();
 
-            // Check if server is reachable
-            await this.checkConnection();
+            // Skip connection check for list action since we use cached data
+            const action = parsed.args[0] || 'current';
+            if (action !== 'list') {
+                // Check if server is reachable for non-list actions
+                await this.checkConnection();
+            }
 
             // Handle special case for hyphenated commands
-            const action = parsed.args[0] || 'current';
             let methodName;
 
             if (action === 'base-url') {
@@ -53,8 +56,28 @@ export class ContextCommand extends BaseCommand {
      */
     async handleList(parsed) {
         try {
-            const response = await this.apiClient.getContexts();
-            const contexts = response.payload || response.data || response;
+            // Use cached contexts from local storage instead of API call
+            const cachedContexts = await this.apiClient.getCachedContexts();
+
+            // Transform cached data to include remote information
+            const contexts = [];
+            for (const [key, context] of Object.entries(cachedContexts)) {
+                // Parse key format: remoteId:contextId
+                const [remoteId, contextId] = key.includes(':') ? key.split(':', 2) : ['local', key];
+
+                contexts.push({
+                    remote: remoteId,
+                    ...context
+                });
+            }
+
+            // Sort by remote, then by id
+            contexts.sort((a, b) => {
+                if (a.remote !== b.remote) {
+                    return a.remote.localeCompare(b.remote);
+                }
+                return (a.id || '').localeCompare(b.id || '');
+            });
 
             this.output(contexts, 'context');
             return 0;
