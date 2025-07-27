@@ -94,15 +94,16 @@ export class WorkspaceCommand extends BaseCommand {
                 const [remoteId, workspaceId] = key.includes(':') ? key.split(':', 2) : ['local', key];
 
                 workspaces.push({
-                    remote: remoteId,
+                    address: remoteId, // Show full remote identifier as address
+                    id: workspaceId,
                     ...workspace
                 });
             }
 
-            // Sort by remote, then by name
+            // Sort by address, then by name
             workspaces.sort((a, b) => {
-                if (a.remote !== b.remote) {
-                    return a.remote.localeCompare(b.remote);
+                if (a.address !== b.address) {
+                    return a.address.localeCompare(b.address);
                 }
                 return (a.name || a.label || '').localeCompare(b.name || b.label || '');
             });
@@ -463,6 +464,75 @@ export class WorkspaceCommand extends BaseCommand {
     }
 
     /**
+     * Show current workspace (based on bound context)
+     */
+    async handleCurrent(parsed) {
+        try {
+            // Get current context
+            const session = await this.apiClient.remoteStore.getSession();
+
+            if (!session.boundContext) {
+                console.log(chalk.yellow('No context currently bound'));
+                console.log();
+                console.log(chalk.cyan('Bind to a context first:'));
+                console.log('  canvas context bind <context-address>');
+                return 1;
+            }
+
+            // Parse the context address to get remote and context info
+            const resolvedContextAddress = await this.apiClient.remoteStore.resolveAlias(session.boundContext);
+            const contextParts = resolvedContextAddress.includes(':') ? resolvedContextAddress.split(':') : [null, resolvedContextAddress];
+
+            if (contextParts.length < 2) {
+                console.log(chalk.red('Invalid context address format'));
+                return 1;
+            }
+
+            const [remoteId] = contextParts;
+
+            if (!remoteId) {
+                console.log(chalk.red('Cannot determine remote from context address'));
+                return 1;
+            }
+
+            // Get current remote info
+            const remote = await this.apiClient.remoteStore.getRemote(remoteId);
+            if (!remote) {
+                console.log(chalk.red(`Remote '${remoteId}' not found`));
+                return 1;
+            }
+
+            console.log(chalk.cyan('Current workspace context:'));
+            console.log(`  Bound Context: ${resolvedContextAddress}`);
+            console.log(`  Remote: ${remoteId}`);
+            console.log(`  Remote URL: ${remote.url}`);
+            console.log(`  Remote Version: ${remote.version || 'Unknown'}`);
+
+            if (session.boundAt) {
+                console.log(`  Bound At: ${new Date(session.boundAt).toLocaleString()}`);
+            }
+
+            // Try to get context details to show workspace info
+            try {
+                const contextResponse = await this.apiClient.getContext(resolvedContextAddress);
+                const context = contextResponse.payload || contextResponse.data || contextResponse;
+
+                if (context && context.url) {
+                    const workspaceName = context.url.split('://')[0] || 'universe';
+                    console.log(`  Workspace: ${workspaceName}`);
+                    console.log(`  Context URL: ${context.url}`);
+                }
+            } catch (error) {
+                console.log(chalk.yellow(`  Note: Could not fetch context details (${error.message})`));
+            }
+
+            return 0;
+        } catch (error) {
+            throw new Error(`Failed to get current workspace: ${error.message}`);
+        }
+    }
+
+    /**
      * Display a tree node recursively
      */
     displayTreeNode(node, prefix = '', isLast = true) {
@@ -495,6 +565,7 @@ export class WorkspaceCommand extends BaseCommand {
     showHelp() {
         console.log(chalk.bold('Workspace Commands:'));
         console.log('  list                           List all workspaces from default remote');
+        console.log('  current                        Show current workspace (based on bound context)');
         console.log('  show <address>                 Show workspace details');
         console.log('  create <name>                  Create new workspace on default remote');
         console.log('  update <address>               Update workspace');
@@ -520,6 +591,7 @@ export class WorkspaceCommand extends BaseCommand {
         console.log();
         console.log(chalk.bold('Examples:'));
         console.log('  canvas workspace list');
+        console.log('  canvas workspace current                         # Show current workspace');
         console.log('  canvas workspace show admin@canvas.local:universe');
         console.log('  canvas workspace show universe                    # Uses default remote');
         console.log('  canvas workspace create my-workspace --description "My workspace"');
@@ -528,6 +600,7 @@ export class WorkspaceCommand extends BaseCommand {
         console.log('  canvas workspace delete old-workspace --force');
         console.log();
         console.log(chalk.cyan('Note: Set a default remote with: canvas remote bind <user@remote>'));
+        console.log(chalk.cyan('      Aliases can be used in place of full addresses: canvas alias set prod user@remote:workspace'));
     }
 }
 

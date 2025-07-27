@@ -129,26 +129,32 @@ export class BaseCommand {
 
 
     /**
-     * Get current context from session or options (supports resource addresses)
+     * Get current context from session or options (supports resource addresses and aliases)
      */
     async getCurrentContext(options = {}) {
+        let contextAddress;
+
         if (options.context) {
-            return options.context;
+            contextAddress = options.context;
+        } else {
+            // Get from session-cli.json
+            const session = await this.apiClient.remoteStore.getSession();
+            if (session.boundContext) {
+                contextAddress = session.boundContext;
+            } else {
+                // Fallback to 'default' on current remote
+                const currentRemote = await this.apiClient.getCurrentRemote();
+                if (currentRemote) {
+                    contextAddress = `${currentRemote}:default`;
+                } else {
+                    throw new Error('No default remote bound. Use: canvas remote bind <user@remote>');
+                }
+            }
         }
 
-        // Get from session-cli.json
-        const session = await this.apiClient.remoteStore.getSession();
-        if (session.boundContext) {
-            return session.boundContext;
-        }
-
-        // Fallback to 'default' on current remote
-        const currentRemote = await this.apiClient.getCurrentRemote();
-        if (currentRemote) {
-            return `${currentRemote}:default`;
-        }
-
-        throw new Error('No default remote bound. Use: canvas remote bind <user@remote>');
+        // Resolve alias if needed
+        const resolvedAddress = await this.apiClient.remoteStore.resolveAlias(contextAddress);
+        return resolvedAddress;
     }
 
     /**

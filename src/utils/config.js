@@ -17,8 +17,6 @@ const debug = debugInstance('canvas:cli:config');
 const MACHINE_ID = machineIdSync(true);
 const APP_ID = 'canvas-cli';
 
-const USER_HOME = process.env.CANVAS_USER_HOME || getUserHome();
-
 function getUserHome() {
     const SERVER_MODE = process.env.SERVER_MODE || 'user';
     const SERVER_HOME = process.env.SERVER_HOME || process.cwd();
@@ -35,15 +33,15 @@ function getUserHome() {
     return path.join(SERVER_HOME, 'users');
 }
 
-const CANVAS_USER_HOME = USER_HOME;
-const CANVAS_USER_CONFIG = path.join(CANVAS_USER_HOME, 'config');
+const CANVAS_USER_HOME = process.env.CANVAS_USER_HOME || getUserHome();
 
 // CLI config files in config directory
 const CLI_CONFIG_DIR = path.join(CANVAS_USER_HOME, 'config');
 const REMOTES_FILE = path.join(CLI_CONFIG_DIR, 'remotes.json');
-const CONTEXTS_FILE = path.join(CLI_CONFIG_DIR, 'contexts.json');
-const WORKSPACES_FILE = path.join(CLI_CONFIG_DIR, 'workspaces.json');
-const SESSION_CLI_FILE = path.join(CLI_CONFIG_DIR, 'session-cli.json');
+const CONTEXTS_FILE = path.join(CLI_CONFIG_DIR, 'contexts.index.json');
+const WORKSPACES_FILE = path.join(CLI_CONFIG_DIR, 'workspaces.index.json');
+const ALIASES_FILE = path.join(CLI_CONFIG_DIR, 'cli-aliases.json');
+const SESSION_CLI_FILE = path.join(CLI_CONFIG_DIR, 'cli-session.json');
 
 // Default configuration for main config (simplified for resource address schema)
 const DEFAULT_CONFIG = {
@@ -77,11 +75,19 @@ const DEFAULT_CONFIG = {
         defaultConnector: 'anthropic',
         priority: ['anthropic', 'openai', 'ollama'],
         contextTemplate: 'canvas-assistant',
+    },
+    sync: {
+        autoSyncInterval: 5, // minutes
+        staleThreshold: 15, // minutes - when to consider cache stale
+        enabled: true
     }
 };
 
 // Default remote configuration (empty - users must add remotes explicitly)
 const DEFAULT_REMOTE_CONFIG = {};
+
+// Default aliases configuration (empty - users can add aliases as needed)
+const DEFAULT_ALIASES_CONFIG = {};
 
 // Default session configuration
 const DEFAULT_SESSION_CONFIG = {
@@ -102,8 +108,8 @@ const EXIT_CODES = {
 // Main config using Conf library
 const config = new Conf({
     projectName: 'canvas',
-    configName: 'canvas-cli',
-    cwd: CANVAS_USER_CONFIG,
+    configName: 'cli',
+    cwd: CLI_CONFIG_DIR,
     defaults: DEFAULT_CONFIG,
     configFileMode: 0o600, // Secure file permissions
 });
@@ -116,6 +122,7 @@ class RemoteStore {
         this.remotesFile = REMOTES_FILE;
         this.contextsFile = CONTEXTS_FILE;
         this.workspacesFile = WORKSPACES_FILE;
+        this.aliasesFile = ALIASES_FILE;
         this.sessionFile = SESSION_CLI_FILE;
         this.ensureFiles();
     }
@@ -134,6 +141,9 @@ class RemoteStore {
         }
         if (!existsSync(this.workspacesFile)) {
             await this.writeFile(this.workspacesFile, {});
+        }
+        if (!existsSync(this.aliasesFile)) {
+            await this.writeFile(this.aliasesFile, DEFAULT_ALIASES_CONFIG);
         }
         if (!existsSync(this.sessionFile)) {
             await this.writeFile(this.sessionFile, DEFAULT_SESSION_CONFIG);
@@ -256,6 +266,54 @@ class RemoteStore {
         await this.writeFile(this.sessionFile, updatedSession);
     }
 
+    // Aliases management
+    async getAliases() {
+        return this.readFile(this.aliasesFile);
+    }
+
+    async getAlias(alias) {
+        const aliases = await this.getAliases();
+        return aliases[alias] || null;
+    }
+
+    async setAlias(alias, resourceAddress) {
+        const aliases = await this.getAliases();
+        aliases[alias] = {
+            address: resourceAddress,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+        await this.writeFile(this.aliasesFile, aliases);
+    }
+
+    async removeAlias(alias) {
+        const aliases = await this.getAliases();
+        delete aliases[alias];
+        await this.writeFile(this.aliasesFile, aliases);
+    }
+
+    async updateAlias(alias, resourceAddress) {
+        const aliases = await this.getAliases();
+        if (aliases[alias]) {
+            aliases[alias] = {
+                ...aliases[alias],
+                address: resourceAddress,
+                updatedAt: new Date().toISOString()
+            };
+            await this.writeFile(this.aliasesFile, aliases);
+        }
+    }
+
+    /**
+     * Resolve alias to full resource address
+     * @param {string} aliasOrAddress - Alias name or full address
+     * @returns {Promise<string>} Resolved address
+     */
+    async resolveAlias(aliasOrAddress) {
+        const alias = await this.getAlias(aliasOrAddress);
+        return alias ? alias.address : aliasOrAddress;
+    }
+
     // Cleanup helper
     async cleanupRemoteData(remoteId) {
         // Remove contexts for this remote
@@ -286,8 +344,6 @@ export default config;
 export {
     MACHINE_ID,
     APP_ID,
-    CANVAS_USER_HOME,
-    CANVAS_USER_CONFIG,
     CLI_CONFIG_DIR,
     CLIENT_CONTEXT_ARRAY,
     EXIT_CODES,
@@ -295,6 +351,7 @@ export {
     REMOTES_FILE,
     CONTEXTS_FILE,
     WORKSPACES_FILE,
+    ALIASES_FILE,
     SESSION_CLI_FILE,
 };
 

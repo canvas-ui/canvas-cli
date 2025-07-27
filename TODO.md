@@ -35,6 +35,8 @@ instead of
 $ canvas ws user@remote:universe
 This is already implemented in some commands
 
+--
+
 4) The following list commands should be implemented
 $ canvas remotes        # list all remotes
 $ canvas remote list    # list all remotes
@@ -49,6 +51,27 @@ $ canvas workspaces     # list all workspaces
 $ canvas workspace list # list all workspaces
 $ canvas workspace      # show current bound workspace based on the bound context 
 Create a alias "ws" for workspace
+4) The following list commands should be implemented
+$ canvas remotes        # list all remotes
+$ canvas remote list    # list all remotes
+$ canvas remote         # shows current remote
+
+$ canvas contexts       # list all contexts ()
+$ canvas context list   # list all contexts
+$ canvas context        # show current bound context
+Create a alias "ctx" for context
+
+$ canvas workspaces     # list all workspaces
+$ canvas workspace list # list all workspaces
+$ canvas workspace      # show current bound workspace based on the bound context
+Create a alias "ws" for workspace
+
+
+All list commands should contain user.name@remote.id in the first column
+
+If a remote is bound and remote lastSynced is more than 15min ago, fetch the resources from remote and update local cache
+The autoResync interval should be controlled via configuration and default to 5min, a sync command is already implemented (canvas remote <id> sync)
+
 
 All list commands should contain user.name@remote.id in the first column
 

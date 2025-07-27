@@ -25,6 +25,7 @@ import ConfigCommand from './commands/config.js';
 import ServerCommand from './commands/server.js';
 import QCommand from './commands/q.js';
 import RemoteCommand from './commands/remote.js';
+import AliasCommand from './commands/alias.js';
 import DiagnosticCommand from './commands/diagnostic.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -44,12 +45,16 @@ const debug = setupDebug('canvas:cli');
 const COMMANDS = {
     workspace: WorkspaceCommand,
     ws: WorkspaceCommand, // alias
+    workspaces: WorkspaceCommand, // list alias
     context: ContextCommand,
     ctx: ContextCommand, // alias
+    contexts: ContextCommand, // list alias
     auth: AuthCommand,
     config: ConfigCommand,
     server: ServerCommand,
     remote: RemoteCommand, // remote management
+    remotes: RemoteCommand, // list alias
+    alias: AliasCommand, // alias management
     q: QCommand, // AI query command
     diagnostic: DiagnosticCommand, // diagnostic tools
     diag: DiagnosticCommand, // alias
@@ -134,6 +139,24 @@ export async function main(argv = process.argv.slice(2)) {
             const commandInstance = new CommandClass(config);
 
             const parsedInput = parseInput(args); // parseInput needs full args for context
+
+            // Handle special list command aliases
+            if (commandNameFromArgs === 'remotes' || commandNameFromArgs === 'contexts' || commandNameFromArgs === 'workspaces') {
+                // Force list action for plural forms
+                if (parsedInput.args.length === 0) {
+                    parsedInput.args = ['list'];
+                }
+            }
+
+            // Handle "show current" behavior for singular commands with no args
+            if (commandNameFromArgs === 'remote' && parsedInput.args.length === 0) {
+                parsedInput.args = ['current'];
+            }
+
+            if (commandNameFromArgs === 'workspace' && parsedInput.args.length === 0) {
+                parsedInput.args = ['current'];
+            }
+
             let stdinData = null;
             if (!process.stdin.isTTY) {
                 stdinData = await readStdin();
@@ -196,12 +219,15 @@ function showHelp() {
 
     console.log(chalk.bold('Commands:'));
     console.log('  workspace, ws     Manage workspaces');
+    console.log('  workspaces        List all workspaces (alias)');
     console.log('  context, ctx      Manage contexts');
     console.log('  contexts          List all contexts (alias)');
     console.log('  auth              Manage authentication');
     console.log('  config            Manage configuration');
     console.log('  server            Manage local Canvas server (PM2)');
     console.log('  remote            Manage remote Canvas servers');
+    console.log('  remotes           List all remotes (alias)');
+    console.log('  alias             Manage resource aliases');
     console.log('  q                 AI assistant (context-aware)');
     console.log('  diagnostic, diag  Platform diagnostic tools');
     console.log();
@@ -221,12 +247,21 @@ function showHelp() {
     console.log('  canvas remote add admin@canvas.local http://localhost:8001');
     console.log('  canvas remote sync admin@canvas.local');
     console.log('  canvas remote bind admin@canvas.local');
-    console.log('  canvas ws                           # List workspaces');
+    console.log('  canvas remotes                      # List all remotes');
+    console.log('  canvas remote                       # Show current remote');
+    console.log('  canvas alias set prod admin@production.server:universe');
+    console.log('  canvas alias list                   # List all aliases');
+    console.log('  canvas workspaces                   # List all workspaces');
+    console.log('  canvas workspace                    # Show current workspace');
+    console.log('  canvas ws                           # List workspaces (alias)');
     console.log('  canvas ws universe                  # Show universe workspace');
     console.log('  canvas ws universe tree             # Show workspace tree');
+    console.log('  canvas contexts                     # List all contexts');
     console.log('  canvas context                      # Show current context');
+    console.log('  canvas ctx                          # Show current context (alias)');
     console.log('  canvas context create my-project');
     console.log('  canvas context switch my-project');
+    console.log('  canvas context switch prod          # Using alias');
     console.log('  canvas context documents');
     console.log('  canvas context tabs');
     console.log('  canvas context notes                # List notes');

@@ -79,11 +79,11 @@ export class RemoteCommand extends BaseCommand {
             const existingRemotes = await this.remoteStore.getRemotes();
             const isFirstRemote = Object.keys(existingRemotes).length === 0;
 
-            // Create remote configuration
+            // Create remote configuration - initially without version
             const remoteConfig = {
                 url: url,
                 apiBase: parsed.options.apiBase || '/rest/v2',
-                description: parsed.options.description || `Remote Canvas server at ${url}`,
+                version: null, // Will be fetched from server
                 auth: {
                     method: parsed.options.token ? 'token' : 'password',
                     tokenType: 'jwt',
@@ -91,12 +91,63 @@ export class RemoteCommand extends BaseCommand {
                 }
             };
 
+            // Try to fetch server version
+            try {
+                // Create temporary config for testing connection
+                const tempConfig = {
+                    get: (key) => {
+                        if (key === 'server.url') {
+                            return url + remoteConfig.apiBase;
+                        }
+                        if (key === 'server.auth.token') {
+                            return remoteConfig.auth.token;
+                        }
+                        return null;
+                    }
+                };
+
+                // Use axios directly for a simple ping test
+                const axios = (await import('axios')).default;
+                const testClient = axios.create({
+                    baseURL: url + remoteConfig.apiBase,
+                    timeout: 10000,
+                    headers: {
+                        'Accept': 'application/json',
+                        'User-Agent': 'canvas-cli/1.0.0'
+                    }
+                });
+
+                if (remoteConfig.auth.token) {
+                    testClient.defaults.headers.Authorization = `Bearer ${remoteConfig.auth.token}`;
+                }
+
+                console.log(chalk.blue(`Testing connection to remote '${remoteId}'...`));
+                const pingResponse = await testClient.get('/ping');
+                const serverInfo = pingResponse.data;
+
+                // Handle ResponseObject format
+                const responseData = serverInfo.payload || serverInfo.data || serverInfo;
+
+                if (responseData.version) {
+                    remoteConfig.version = responseData.version;
+                    console.log(chalk.green(`✓ Connection successful - Server version: ${responseData.version}`));
+                } else {
+                    console.log(chalk.yellow('⚠ Connection successful but no version information available'));
+                }
+            } catch (error) {
+                console.log(chalk.yellow(`⚠ Could not fetch server version: ${error.message}`));
+                console.log(chalk.yellow('  Remote will be added but may not be functional yet'));
+            }
+
             // Add remote to store
             await this.remoteStore.addRemote(remoteId, remoteConfig);
 
             console.log(chalk.green(`✓ Remote '${remoteId}' added successfully`));
             console.log(`  URL: ${url}`);
             console.log(`  API Base: ${remoteConfig.apiBase}`);
+            if (remoteConfig.version) {
+                console.log(`  Server Version: ${remoteConfig.version}`);
+            }
 
             if (parsed.options.token) {
                 console.log(chalk.yellow('  Authentication: Token-based'));
@@ -159,7 +210,7 @@ export class RemoteCommand extends BaseCommand {
             this.output(Object.entries(remotes).map(([id, config]) => ({
                 id,
                 url: config.url,
-                description: config.description || '',
+                version: config.version || 'Unknown',
                 auth: config.auth?.method || 'unknown',
                 lastSynced: config.lastSynced ? new Date(config.lastSynced).toLocaleString() : 'Never',
                 isDefault: session.boundRemote === id ? '✓' : '',
@@ -351,7 +402,57 @@ export class RemoteCommand extends BaseCommand {
 
             console.log(chalk.green(`✓ Bound to remote '${remoteId}' as default`));
             console.log(`  URL: ${remote.url}`);
-            console.log(`  Description: ${remote.description || 'No description'}`);
+            console.log(`  Version: ${remote.version || 'Unknown'}`);
+
+            // Automatically sync after binding
+            console.log();
+            console.log(chalk.blue(`Syncing with remote '${remoteId}'...`));
+
+            try {
+                // Create API client for this remote
+                const apiClient = await this.createRemoteApiClient(remoteId);
+
+                // Test connection
+                await apiClient.ping();
+                console.log(chalk.green('  ✓ Connection verified'));
+
+                // Sync workspaces
+                console.log('  📦 Syncing workspaces...');
+                const workspacesResponse = await apiClient.getWorkspaces();
+                const workspaces = workspacesResponse.payload || workspacesResponse.data || workspacesResponse;
+
+                if (Array.isArray(workspaces)) {
+                    for (const workspace of workspaces) {
+                        const workspaceKey = `${remoteId}:${workspace.id || workspace.name}`;
+                        await this.remoteStore.updateWorkspace(workspaceKey, workspace);
+                    }
+                    console.log(chalk.green(`    ✓ Synced ${workspaces.length} workspaces`));
+                }
+
+                // Sync contexts
+                console.log('  📋 Syncing contexts...');
+                const contextsResponse = await apiClient.getContexts();
+                const contexts = contextsResponse.payload || contextsResponse.data || contextsResponse;
+
+                if (Array.isArray(contexts)) {
+                    for (const context of contexts) {
+                        const contextKey = `${remoteId}:${context.id}`;
+                        await this.remoteStore.updateContext(contextKey, context);
+                    }
+                    console.log(chalk.green(`    ✓ Synced ${contexts.length} contexts`));
+                }
+
+                // Update last synced timestamp
+                await this.remoteStore.updateRemote(remoteId, {
+                    lastSynced: new Date().toISOString()
+                });
+
+                console.log(chalk.green(`✓ Sync completed for remote '${remoteId}'`));
+            } catch (syncError) {
+                console.log(chalk.yellow(`⚠ Sync failed: ${syncError.message}`));
+                console.log(chalk.yellow('  Remote bound successfully but sync failed. You can manually sync later with:'));
+                console.log(`  canvas remote sync ${remoteId}`);
+            }
 
             return 0;
         } catch (error) {
@@ -565,7 +666,7 @@ export class RemoteCommand extends BaseCommand {
             console.log();
             console.log(`URL: ${remote.url}`);
             console.log(`API Base: ${remote.apiBase}`);
-            console.log(`Description: ${remote.description || 'No description'}`);
+            console.log(`Version: ${remote.version || 'Unknown'}`);
             console.log(`Authentication: ${remote.auth?.method || 'unknown'}`);
             console.log(`Token Type: ${remote.auth?.tokenType || 'N/A'}`);
             console.log(`Has Token: ${remote.auth?.token ? 'Yes' : 'No'}`);
@@ -588,6 +689,42 @@ export class RemoteCommand extends BaseCommand {
             return 0;
         } catch (error) {
             throw new Error(`Failed to show remote details: ${error.message}`);
+        }
+    }
+
+    /**
+     * Show current remote
+     */
+    async handleCurrent(parsed) {
+        try {
+            const session = await this.remoteStore.getSession();
+
+            if (!session.boundRemote) {
+                console.log(chalk.yellow('No remote currently bound'));
+                console.log();
+                console.log(chalk.cyan('Bind to a remote with:'));
+                console.log('  canvas remote bind <user@remote>');
+                return 1;
+            }
+
+            const remote = await this.remoteStore.getRemote(session.boundRemote);
+            if (!remote) {
+                console.log(chalk.red(`Current remote '${session.boundRemote}' not found in configuration`));
+                console.log(chalk.yellow('The remote may have been removed. Re-add it or bind to a different remote.'));
+                return 1;
+            }
+
+            console.log(chalk.cyan('Current remote:'), session.boundRemote);
+            console.log(`  URL: ${remote.url}`);
+            console.log(`  Version: ${remote.version || 'Unknown'}`);
+            console.log(`  Last Synced: ${remote.lastSynced ? new Date(remote.lastSynced).toLocaleString() : 'Never'}`);
+            if (session.boundAt) {
+                console.log(`  Bound At: ${new Date(session.boundAt).toLocaleString()}`);
+            }
+
+            return 0;
+        } catch (error) {
+            throw new Error(`Failed to get current remote: ${error.message}`);
         }
     }
 
@@ -645,47 +782,26 @@ export class RemoteCommand extends BaseCommand {
         });
 
         return new Promise((resolve) => {
-            process.stdout.write(prompt);
+            // Enable muted mode
+            rl.stdoutMuted = true;
+            rl.query = prompt;
 
-            // Hide input by setting raw mode
-            process.stdin.setRawMode(true);
-            process.stdin.resume();
-            process.stdin.setEncoding('utf8');
-
-            let password = '';
-
-            const onData = (char) => {
-                switch (char) {
-                    case '\n':
-                    case '\r':
-                    case '\u0004': // Ctrl+D
-                        process.stdin.setRawMode(false);
-                        process.stdin.removeListener('data', onData);
-                        process.stdout.write('\n');
-                        rl.close();
-                        resolve(password);
-                        break;
-                    case '\u0003': // Ctrl+C
-                        process.stdin.setRawMode(false);
-                        process.stdin.removeListener('data', onData);
-                        process.stdout.write('\n');
-                        rl.close();
-                        process.exit(1);
-                        break;
-                    case '\u007f': // Backspace
-                        if (password.length > 0) {
-                            password = password.slice(0, -1);
-                            process.stdout.write('\b \b');
-                        }
-                        break;
-                    default:
-                        password += char;
-                        process.stdout.write('*');
-                        break;
+            // Override the _writeToOutput method to control what gets displayed
+            rl._writeToOutput = function _writeToOutput(stringToWrite) {
+                if (rl.stdoutMuted) {
+                    // Show only asterisks - one for each character in the line
+                    const asterisks = '*'.repeat(rl.line.length);
+                    rl.output.write("\x1B[2K\x1B[200D" + rl.query + asterisks);
+                } else {
+                    rl.output.write(stringToWrite);
                 }
             };
 
-            process.stdin.on('data', onData);
+            rl.question(rl.query, function(password) {
+                rl.output.write('\n');
+                rl.close();
+                resolve(password);
+            });
         });
     }
 
@@ -728,11 +844,12 @@ export class RemoteCommand extends BaseCommand {
         console.log('  remove <user@remote>       Remove a remote server');
         console.log('  sync <user@remote>         Sync workspaces and contexts from remote');
         console.log('  ping <user@remote>         Test connectivity to remote');
-        console.log('  bind <user@remote>         Set remote as default');
+        console.log('  bind <user@remote>         Set remote as default (auto-syncs)');
         console.log('  login <user@remote>        Login to remote (JWT)');
         console.log('  logout <user@remote>       Logout from remote');
         console.log('  rename <old> <new>         Rename a remote identifier');
         console.log('  show <user@remote>         Show detailed remote information');
+        console.log('  current                    Show the currently bound remote');
         console.log();
         console.log(chalk.bold('Options:'));
         console.log('  --token <token>           API token for authentication');
@@ -740,7 +857,6 @@ export class RemoteCommand extends BaseCommand {
         console.log('  --username <email>        Email for login (alias for --email)');
         console.log('  --password <password>     Password for login (will prompt securely if not provided)');
         console.log('  --api-base <path>         API base path (default: /rest/v2)');
-        console.log('  --description <desc>      Remote description');
         console.log('  --force                   Force action without confirmation');
         console.log();
         console.log(chalk.bold('Examples:'));
@@ -755,6 +871,7 @@ export class RemoteCommand extends BaseCommand {
         console.log('  canvas remote show admin@canvas.local');
         console.log('  canvas remote rename old@server new@server');
         console.log('  canvas remote remove old@server --force');
+        console.log('  canvas remote current');
         console.log();
         console.log(chalk.bold('Remote Identifier Format:'));
         console.log('  user@remote-name          Where user is your username on that remote');
@@ -767,6 +884,8 @@ export class RemoteCommand extends BaseCommand {
         console.log('  Interactive login: Run without --email or --token to be prompted');
         console.log();
         console.log(chalk.cyan('Note: After adding a remote, use sync to fetch available workspaces and contexts.'));
+        console.log(chalk.cyan('Server version is automatically fetched and displayed during remote addition.'));
+        console.log(chalk.cyan('The bind command automatically syncs workspaces and contexts after binding.'));
         console.log(chalk.cyan('First remote added is automatically set as default and offers login prompt.'));
     }
 }

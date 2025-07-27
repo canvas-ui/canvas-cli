@@ -66,15 +66,16 @@ export class ContextCommand extends BaseCommand {
                 const [remoteId, contextId] = key.includes(':') ? key.split(':', 2) : ['local', key];
 
                 contexts.push({
-                    remote: remoteId,
+                    address: remoteId, // Show full remote identifier as address
+                    id: contextId,
                     ...context
                 });
             }
 
-            // Sort by remote, then by id
+            // Sort by address, then by id
             contexts.sort((a, b) => {
-                if (a.remote !== b.remote) {
-                    return a.remote.localeCompare(b.remote);
+                if (a.address !== b.address) {
+                    return a.address.localeCompare(b.address);
                 }
                 return (a.id || '').localeCompare(b.id || '');
             });
@@ -196,13 +197,20 @@ export class ContextCommand extends BaseCommand {
         }
 
         try {
+            // Resolve alias if needed
+            const resolvedAddress = await this.apiClient.remoteStore.resolveAlias(contextAddress);
+
             // Update session with bound context
             await this.apiClient.remoteStore.updateSession({
-                boundContext: contextAddress,
+                boundContext: resolvedAddress,
                 boundAt: new Date().toISOString()
             });
 
-            console.log(chalk.green(`✓ Switched to context '${contextAddress}'`));
+            if (resolvedAddress !== contextAddress) {
+                console.log(chalk.green(`✓ Switched to context '${resolvedAddress}' (resolved from alias '${contextAddress}')`));
+            } else {
+                console.log(chalk.green(`✓ Switched to context '${resolvedAddress}'`));
+            }
             return 0;
         } catch (error) {
             throw new Error(`Failed to bind context: ${error.message}`);
@@ -984,6 +992,7 @@ export class ContextCommand extends BaseCommand {
         console.log();
         console.log(chalk.cyan('Note: Set up remotes first with: canvas remote add <user@remote> <url>'));
         console.log(chalk.cyan('      Then bind to default: canvas remote bind <user@remote>'));
+        console.log(chalk.cyan('      Aliases can be used in place of full addresses: canvas alias set prod user@remote:context'));
     }
 }
 

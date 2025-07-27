@@ -414,22 +414,25 @@ export class CanvasApiClient {
 
     /**
      * Resolve a resource address to API client and resource identifier
-     * @param {string} addressOrId - Resource address or simple ID
+     * @param {string} addressOrId - Resource address or simple ID (or alias)
      * @returns {Promise<{apiClient: BaseCanvasApiClient, resourceId: string, remoteId: string}>}
      */
     async resolveResource(addressOrId) {
         let remoteId;
         let resourceId;
 
+        // First, try to resolve as alias
+        const resolvedAddress = await this.remoteStore.resolveAlias(addressOrId);
+
         // Try to parse as resource address first
-        const parsed = parseResourceAddress(addressOrId);
+        const parsed = parseResourceAddress(resolvedAddress);
         if (parsed) {
             // Full address format: user@remote:resource
-            remoteId = extractRemoteIdentifier(addressOrId);
+            remoteId = extractRemoteIdentifier(resolvedAddress);
             resourceId = parsed.resource;
         } else {
             // Simple ID format - use current/default remote
-            resourceId = addressOrId;
+            resourceId = resolvedAddress;
             remoteId = await this.getCurrentRemote();
 
             if (!remoteId) {
@@ -454,6 +457,9 @@ export class CanvasApiClient {
                 throw new Error('No default remote bound. Use: canvas remote bind <user@remote>');
             }
         }
+
+        // Check and perform auto-sync if needed
+        await this.checkAndAutoSync(remoteId);
 
         const apiClient = await this.getApiClient(remoteId);
         const response = await apiClient.getWorkspaces();
@@ -558,6 +564,9 @@ export class CanvasApiClient {
                 throw new Error('No default remote bound. Use: canvas remote bind <user@remote>');
             }
         }
+
+        // Check and perform auto-sync if needed
+        await this.checkAndAutoSync(remoteId);
 
         const apiClient = await this.getApiClient(remoteId);
         const response = await apiClient.getContexts();
@@ -721,6 +730,104 @@ export class CanvasApiClient {
 
         const apiClient = await this.getApiClient(remoteId);
         return await apiClient.ping();
+    }
+
+    /**
+     * Check if remote needs syncing and perform auto-sync if enabled
+     * @param {string} remoteId - Remote identifier
+     * @returns {Promise<boolean>} True if sync was performed
+     */
+    async checkAndAutoSync(remoteId) {
+        try {
+            // Get sync configuration
+            const syncConfig = this.config.get('sync') || {};
+            if (!syncConfig.enabled) {
+                return false;
+            }
+
+            const staleThreshold = syncConfig.staleThreshold || 15; // minutes
+
+            // Get remote configuration
+            const remote = await this.remoteStore.getRemote(remoteId);
+            if (!remote) {
+                return false;
+            }
+
+            // Check if remote needs syncing
+            if (!remote.lastSynced) {
+                debug(`Remote '${remoteId}' has never been synced, performing sync...`);
+                return await this.performAutoSync(remoteId);
+            }
+
+            const lastSyncTime = new Date(remote.lastSynced).getTime();
+            const now = Date.now();
+            const minutesSinceSync = (now - lastSyncTime) / (1000 * 60);
+
+            if (minutesSinceSync > staleThreshold) {
+                debug(`Remote '${remoteId}' last synced ${Math.round(minutesSinceSync)} minutes ago, performing sync...`);
+                return await this.performAutoSync(remoteId);
+            }
+
+            return false;
+        } catch (error) {
+            debug(`Auto-sync check failed for remote '${remoteId}':`, error.message);
+            return false;
+        }
+    }
+
+    /**
+     * Perform automatic sync for a remote
+     * @param {string} remoteId - Remote identifier
+     * @returns {Promise<boolean>} True if sync was successful
+     */
+    async performAutoSync(remoteId) {
+        try {
+            const apiClient = await this.getApiClient(remoteId);
+
+            // Test connection first
+            await apiClient.ping();
+
+            // Sync workspaces
+            try {
+                const workspacesResponse = await apiClient.getWorkspaces();
+                const workspaces = workspacesResponse.payload || workspacesResponse.data || workspacesResponse;
+
+                if (Array.isArray(workspaces)) {
+                    for (const workspace of workspaces) {
+                        const workspaceKey = `${remoteId}:${workspace.id || workspace.name}`;
+                        await this.remoteStore.updateWorkspace(workspaceKey, workspace);
+                    }
+                }
+            } catch (error) {
+                debug(`Failed to sync workspaces for '${remoteId}':`, error.message);
+            }
+
+            // Sync contexts
+            try {
+                const contextsResponse = await apiClient.getContexts();
+                const contexts = contextsResponse.payload || contextsResponse.data || contextsResponse;
+
+                if (Array.isArray(contexts)) {
+                    for (const context of contexts) {
+                        const contextKey = `${remoteId}:${context.id}`;
+                        await this.remoteStore.updateContext(contextKey, context);
+                    }
+                }
+            } catch (error) {
+                debug(`Failed to sync contexts for '${remoteId}':`, error.message);
+            }
+
+            // Update last synced timestamp
+            await this.remoteStore.updateRemote(remoteId, {
+                lastSynced: new Date().toISOString()
+            });
+
+            debug(`Auto-sync completed for remote '${remoteId}'`);
+            return true;
+        } catch (error) {
+            debug(`Auto-sync failed for remote '${remoteId}':`, error.message);
+            return false;
+        }
     }
 
     /**
