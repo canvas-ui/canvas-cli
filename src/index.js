@@ -27,6 +27,7 @@ import QCommand from './commands/q.js';
 import RemoteCommand from './commands/remote.js';
 import AliasCommand from './commands/alias.js';
 import DiagnosticCommand from './commands/diagnostic.js';
+import DotCommand from './commands/dot.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -58,6 +59,7 @@ const COMMANDS = {
     q: QCommand, // AI query command
     diagnostic: DiagnosticCommand, // diagnostic tools
     diag: DiagnosticCommand, // alias
+    dot: DotCommand, // dotfile manager
     help: null, // handled separately
     version: null // handled separately
 };
@@ -230,6 +232,7 @@ function showHelp() {
     console.log('  alias             Manage resource aliases');
     console.log('  q                 AI assistant (context-aware)');
     console.log('  diagnostic, diag  Platform diagnostic tools');
+    console.log('  dot               Dotfile manager');
     console.log();
 
     console.log(chalk.bold('Global Options:'));
@@ -273,6 +276,10 @@ function showHelp() {
     console.log('  cat error.log | canvas q "What does this error mean?"');
     console.log('  canvas diagnostic platform          # Show platform info');
     console.log('  canvas diagnostic console           # Test console output');
+    console.log('  canvas dot init admin@mycanvas:work  # Initialize dotfiles repo');
+    console.log('  canvas dot clone admin@mycanvas:work # Clone dotfiles locally');
+    console.log('  canvas dot add ~/.bashrc work/bashrc # Add dotfile to repo');
+    console.log('  canvas dot activate admin@mycanvas:work/bashrc # Activate specific dotfile');
     console.log();
 
 
