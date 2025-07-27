@@ -33,3 +33,6 @@ canvas q <agent.id>   #
 canvas hi <agent.id>  # canvas hi lucy did we get any emails for that china project yesterday?
 
 All list commands should contain user.name@remote.id as the first column
+
+
+canvas remote add should fetch the canvas-server version as well, we should display it instead of the description field
