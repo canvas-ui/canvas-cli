@@ -184,26 +184,21 @@ export class DotCommand extends BaseCommand {
     /**
      * Get Canvas API token for git authentication
      */
-    async getApiToken() {
-        // Try to get token from config or session
-        const session = await this.apiClient.remoteStore.getSession();
-        if (session.token) {
-            return session.token;
+    async getApiToken(remoteId) {
+        // Get token from remote configuration
+        const remote = await this.apiClient.remoteStore.getRemote(remoteId);
+        if (remote?.auth?.token) {
+            return remote.auth.token;
         }
 
-        // Fallback to config token
+        // Fallback to config token (for backwards compatibility)
         return this.config.get('server.auth.token');
     }
 
-    /**
+        /**
      * Build git URL for Canvas dotfiles repository
      */
     async buildGitUrl(address) {
-        const token = await this.getApiToken();
-        if (!token) {
-            throw new Error('No authentication token available');
-        }
-
         // Get remote URL from config
         const remotes = await this.apiClient.remoteStore.getRemotes();
         const remoteKey = `${address.userIdentifier}@${address.remote}`;
@@ -246,7 +241,7 @@ export class DotCommand extends BaseCommand {
         return 0;
     }
 
-    /**
+        /**
      * Initialize remote dotfiles repository
      */
     async handleInit(parsed) {
@@ -260,7 +255,11 @@ export class DotCommand extends BaseCommand {
         try {
             await this.checkConnection();
 
-            const response = await this.apiClient.client.post(`/workspaces/${address.resource}/dotfiles/init`);
+            // Get the API client for the specific remote
+            const remoteId = `${address.userIdentifier}@${address.remote}`;
+            const apiClient = await this.apiClient.getApiClient(remoteId);
+
+            const response = await apiClient.client.post(`/workspaces/${address.resource}/dotfiles/init`, {});
 
             if (response.data.status === 'success') {
                 console.log(chalk.green(`✓ Dotfiles repository initialized for ${address.full}`));
@@ -293,8 +292,9 @@ export class DotCommand extends BaseCommand {
 
         const address = await this.parseAddress(addressStr);
         const localDir = this.getLocalDotfilesDir(address);
+        const remoteId = `${address.userIdentifier}@${address.remote}`;
         const gitUrl = await this.buildGitUrl(address);
-        const token = await this.getApiToken();
+        const token = await this.getApiToken(remoteId);
 
         // Create authenticated URL
         const authUrl = gitUrl.replace('://', `://user:${token}@`);
@@ -438,10 +438,11 @@ export class DotCommand extends BaseCommand {
             throw new Error('Address is required: dot push user@remote:workspace');
         }
 
-        const address = await this.parseAddress(addressStr);
+                const address = await this.parseAddress(addressStr);
         const localDir = this.getLocalDotfilesDir(address);
+        const remoteId = `${address.userIdentifier}@${address.remote}`;
         const gitUrl = await this.buildGitUrl(address);
-        const token = await this.getApiToken();
+        const token = await this.getApiToken(remoteId);
 
         if (!existsSync(localDir)) {
             throw new Error(`Local dotfiles directory not found. Run: dot clone ${address.full}`);
@@ -454,11 +455,22 @@ export class DotCommand extends BaseCommand {
             // Update remote URL
             await this.execGit(['remote', 'set-url', 'origin', authUrl], localDir);
 
-            // Push changes
-            console.log(chalk.blue(`Pushing to ${address.full}...`));
-            await this.execGit(['push', 'origin', 'main'], localDir);
+            // Get current branch
+            const { stdout: branchOutput } = await this.execGit(['branch', '--show-current'], localDir);
+            const currentBranch = branchOutput.trim() || 'master';
 
-            console.log(chalk.green('✓ Pushed changes successfully'));
+                        // Push changes
+            console.log(chalk.blue(`Pushing to ${address.full}...`));
+            try {
+                await this.execGit(['push', 'origin', currentBranch], localDir);
+                console.log(chalk.green('✓ Pushed changes successfully'));
+            } catch (error) {
+                if (error.message.includes('Everything up-to-date')) {
+                    console.log(chalk.green('✓ Repository is up-to-date'));
+                } else {
+                    throw error;
+                }
+            }
 
             return 0;
         } catch (error) {
@@ -478,8 +490,9 @@ export class DotCommand extends BaseCommand {
 
         const address = await this.parseAddress(addressStr);
         const localDir = this.getLocalDotfilesDir(address);
+        const remoteId = `${address.userIdentifier}@${address.remote}`;
         const gitUrl = await this.buildGitUrl(address);
-        const token = await this.getApiToken();
+        const token = await this.getApiToken(remoteId);
 
         if (!existsSync(localDir)) {
             throw new Error(`Local dotfiles directory not found. Run: dot clone ${address.full}`);
@@ -492,9 +505,13 @@ export class DotCommand extends BaseCommand {
             // Update remote URL
             await this.execGit(['remote', 'set-url', 'origin', authUrl], localDir);
 
+            // Get current branch
+            const { stdout: branchOutput } = await this.execGit(['branch', '--show-current'], localDir);
+            const currentBranch = branchOutput.trim() || 'master';
+
             // Pull changes
             console.log(chalk.blue(`Pulling from ${address.full}...`));
-            await this.execGit(['pull', 'origin', 'main'], localDir);
+            await this.execGit(['pull', 'origin', currentBranch], localDir);
 
             console.log(chalk.green('✓ Pulled changes successfully'));
 
@@ -540,11 +557,15 @@ export class DotCommand extends BaseCommand {
             console.log(chalk.gray(`Local directory not found: ${localDir}`));
         }
 
-        // Check remote status
+                // Check remote status
         try {
             await this.checkConnection();
 
-            const response = await this.apiClient.client.get(`/workspaces/${address.resource}/dotfiles/status`);
+            // Get the API client for the specific remote
+            const remoteId = `${address.userIdentifier}@${address.remote}`;
+            const apiClient = await this.apiClient.getApiClient(remoteId);
+
+            const response = await apiClient.client.get(`/workspaces/${address.resource}/dotfiles/status`);
 
             if (response.data.status === 'success') {
                 const status = response.data.payload;
