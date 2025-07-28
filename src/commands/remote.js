@@ -265,13 +265,32 @@ export class RemoteCommand extends BaseCommand {
                 return 0;
             }
 
-            this.output(Object.entries(remotes).map(([id, config]) => ({
+            // Update session with current workspace information if we have a bound context
+            try {
+                if (session.boundContext) {
+                    // Get the workspace from the bound context
+                    const apiClient = await this.createRemoteApiClient(session.boundRemote);
+                    const contextResponse = await apiClient.getContext(session.boundContext);
+                    const context = contextResponse.payload || contextResponse.data || contextResponse;
+                    
+                    if (context && context.url) {
+                        const workspaceName = context.url.split('://')[0] || 'universe';
+                        await this.remoteStore.updateSession({
+                            defaultWorkspace: workspaceName
+                        });
+                    }
+                }
+            } catch (error) {
+                // Ignore errors when updating session - this is not critical
+                this.debug('Failed to update session with workspace info:', error.message);
+            }
+
+            await this.output(Object.entries(remotes).map(([id, config]) => ({
                 id,
                 url: config.url,
                 version: config.version || 'Unknown',
                 auth: config.auth?.method || 'unknown',
                 lastSynced: config.lastSynced ? new Date(config.lastSynced).toLocaleString() : 'Never',
-                isDefault: session.boundRemote === id ? '✓' : '',
                 status: this.getRemoteStatus(config)
             })), 'remote');
 

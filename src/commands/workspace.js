@@ -108,7 +108,34 @@ export class WorkspaceCommand extends BaseCommand {
                 return (a.name || a.label || '').localeCompare(b.name || b.label || '');
             });
 
-            this.output(workspaces, 'workspace');
+            // Update session with current workspace information if we have a bound context
+            try {
+                const session = await this.apiClient.remoteStore.getSession();
+                if (session.boundContext) {
+                    // Get the workspace from the bound context
+                    const contextResponse = await this.apiClient.getContext(session.boundContext);
+                    const context = contextResponse.payload || contextResponse.data || contextResponse;
+                    
+                    if (context && context.url) {
+                        const workspaceName = context.url.split('://')[0] || 'universe';
+                        // Find the workspace in our list that matches the current workspace
+                        const currentWorkspace = workspaces.find(w => 
+                            w.label === workspaceName || w.name === workspaceName || w.id === workspaceName
+                        );
+                        
+                        if (currentWorkspace) {
+                            await this.apiClient.remoteStore.updateSession({
+                                defaultWorkspace: `${currentWorkspace.address}:${currentWorkspace.id}`
+                            });
+                        }
+                    }
+                }
+            } catch (error) {
+                // Ignore errors when updating session - this is not critical
+                this.debug('Failed to update session with workspace info:', error.message);
+            }
+
+            await this.output(workspaces, 'workspace');
             return 0;
         } catch (error) {
             throw new Error(`Failed to list workspaces: ${error.message}`);
@@ -135,7 +162,7 @@ export class WorkspaceCommand extends BaseCommand {
                 workspace = workspace.workspace;
             }
 
-            this.output(workspace, 'workspace');
+            await this.output(workspace, 'workspace');
             return 0;
         } catch (error) {
             throw new Error(`Failed to show workspace: ${error.message}`);
@@ -168,7 +195,7 @@ export class WorkspaceCommand extends BaseCommand {
             const workspace = response.payload || response.data || response;
 
             console.log(chalk.green(`✓ Workspace '${name}' created successfully`));
-            this.output(workspace, 'workspace');
+            await this.output(workspace, 'workspace');
             return 0;
         } catch (error) {
             throw new Error(`Failed to create workspace: ${error.message}`);
@@ -201,7 +228,7 @@ export class WorkspaceCommand extends BaseCommand {
             const workspace = response.payload || response.data || response;
 
             console.log(chalk.green(`✓ Workspace '${workspaceAddress}' updated successfully`));
-            this.output(workspace, 'workspace');
+            await this.output(workspace, 'workspace');
             return 0;
         } catch (error) {
             throw new Error(`Failed to update workspace: ${error.message}`);
@@ -248,7 +275,7 @@ export class WorkspaceCommand extends BaseCommand {
             const workspace = response.payload || response.data || response;
 
             console.log(chalk.green(`✓ Workspace '${workspaceAddress}' started successfully`));
-            this.output(workspace, 'workspace');
+            await this.output(workspace, 'workspace');
             return 0;
         } catch (error) {
             throw new Error(`Failed to start workspace: ${error.message}`);
@@ -293,7 +320,7 @@ export class WorkspaceCommand extends BaseCommand {
             const workspace = response.payload || response.data || response;
 
             console.log(chalk.green(`✓ Workspace '${workspaceId}' opened successfully`));
-            this.output(workspace, 'workspace');
+            await this.output(workspace, 'workspace');
             return 0;
         } catch (error) {
             throw new Error(`Failed to open workspace: ${error.message}`);
@@ -316,7 +343,7 @@ export class WorkspaceCommand extends BaseCommand {
             const workspace = response.payload || response.data || response;
 
             console.log(chalk.green(`✓ Workspace '${workspaceId}' closed successfully`));
-            this.output(workspace, 'workspace');
+            await this.output(workspace, 'workspace');
             return 0;
         } catch (error) {
             throw new Error(`Failed to close workspace: ${error.message}`);
@@ -361,7 +388,7 @@ export class WorkspaceCommand extends BaseCommand {
             // Handle ResponseObject format
             const documents = response.payload || response.data || response;
 
-            this.output(documents, 'document');
+            await this.output(documents, 'document');
             return 0;
         } catch (error) {
             throw new Error(`Failed to list documents: ${error.message}`);
@@ -386,7 +413,7 @@ export class WorkspaceCommand extends BaseCommand {
             // Handle ResponseObject format
             const tabs = response.payload || response.data || response;
 
-            this.output(tabs, 'document', 'tab');
+            await this.output(tabs, 'document', 'tab');
             return 0;
         } catch (error) {
             throw new Error(`Failed to list tabs: ${error.message}`);
@@ -427,7 +454,7 @@ export class WorkspaceCommand extends BaseCommand {
             // Handle ResponseObject format
             const notes = response.payload || response.data || response;
 
-            this.output(notes, 'document', 'note');
+            await this.output(notes, 'document', 'note');
             return 0;
         } catch (error) {
             throw new Error(`Failed to list notes: ${error.message}`);

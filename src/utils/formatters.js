@@ -16,7 +16,7 @@ class BaseFormatter {
         };
     }
 
-    format(data, schema = null) {
+    format(data, session = null) {
         if (this.options.raw) {
             return JSON.stringify(data, null, 2);
         }
@@ -25,25 +25,20 @@ class BaseFormatter {
             case 'json':
                 return JSON.stringify(data, null, 2);
             case 'csv':
-                return this.formatCsv(data, schema);
+                return this.formatCsv(data);
             case 'table':
             default:
-                return this.formatTable(data, schema);
+                return this.formatTable(data, session);
         }
     }
 
-    formatTable(data, schema) {
+    formatTable(data, session = null) {
         if (!Array.isArray(data)) {
             data = [data];
         }
 
         if (data.length === 0 || !data[0]) {
             return chalk.yellow('No data found');
-        }
-
-        // Use schema-specific formatter if available
-        if (schema && this[`format${schema.charAt(0).toUpperCase() + schema.slice(1)}Table`]) {
-            return this[`format${schema.charAt(0).toUpperCase() + schema.slice(1)}Table`](data);
         }
 
         return this.formatGenericTable(data);
@@ -112,17 +107,17 @@ class BaseFormatter {
  * Workspace formatter
  */
 export class WorkspaceFormatter extends BaseFormatter {
-    formatTable(data) {
+    formatTable(data, session = null) {
         if (!Array.isArray(data)) {
             // Single workspace - show detailed vertical table
             return this.formatDetailedTable(data);
         }
 
         // Multiple workspaces - show list table
-        return this.formatListTable(data);
+        return this.formatListTable(data, session);
     }
 
-    formatListTable(data) {
+    formatListTable(data, session = null) {
         if (data.length === 0 || !data[0]) {
             return chalk.yellow('No workspaces found');
         }
@@ -135,6 +130,7 @@ export class WorkspaceFormatter extends BaseFormatter {
                 chalk.cyan('Color'),
                 chalk.cyan('Description'),
                 chalk.cyan('Created'),
+                chalk.cyan('Default'),
                 chalk.cyan('Status')
             ],
             style: { head: [], border: [] }
@@ -142,6 +138,12 @@ export class WorkspaceFormatter extends BaseFormatter {
 
         data.forEach(workspace => {
             if (workspace) {
+                // Check if this workspace is the default workspace
+                const isDefault = session && session.defaultWorkspace && 
+                    (session.defaultWorkspace === workspace.id || 
+                     session.defaultWorkspace === `${workspace.address}:${workspace.id}`);
+                const defaultMark = isDefault ? chalk.green('✓') : '';
+                
                 table.push([
                     workspace.address || workspace.remote || 'N/A',
                     workspace.label || workspace.name || 'N/A',
@@ -149,6 +151,7 @@ export class WorkspaceFormatter extends BaseFormatter {
                     this.formatColor(workspace.color),
                     this.truncate(workspace.description, 25),
                     this.formatDate(workspace.created || workspace.createdAt),
+                    defaultMark,
                     this.formatWorkspaceStatus(workspace.status)
                 ]);
             }
@@ -268,17 +271,17 @@ export class WorkspaceFormatter extends BaseFormatter {
  * Context formatter
  */
 export class ContextFormatter extends BaseFormatter {
-    formatTable(data) {
+    formatTable(data, session = null) {
         if (!Array.isArray(data)) {
             // Single context - show detailed vertical table
             return this.formatDetailedTable(data);
         }
 
         // Multiple contexts - show list table
-        return this.formatListTable(data);
+        return this.formatListTable(data, session);
     }
 
-    formatListTable(data) {
+    formatListTable(data, session = null) {
         if (data.length === 0 || !data[0]) {
             return chalk.yellow('No contexts found');
         }
@@ -290,7 +293,8 @@ export class ContextFormatter extends BaseFormatter {
                 chalk.cyan('URL'),
                 chalk.cyan('BaseUrl'),
                 chalk.cyan('Owner'),
-                chalk.cyan('Locked')
+                chalk.cyan('Locked'),
+                chalk.cyan('Bound')
             ],
             style: { head: [], border: [] }
         });
@@ -299,6 +303,12 @@ export class ContextFormatter extends BaseFormatter {
             const owner = context.ownerEmail || context.userId || 'N/A';
             const locked = context.locked ? chalk.red('Yes') : chalk.green('No');
             const contextId = this.formatContextId(context.id, context.color);
+            
+            // Check if this context is the bound context
+            const isBound = session && session.boundContext && 
+                (session.boundContext === context.id || 
+                 session.boundContext === `${context.address}:${context.id}`);
+            const boundMark = isBound ? chalk.green('✓') : '';
 
             table.push([
                 context.address || context.remote || 'N/A',
@@ -306,7 +316,8 @@ export class ContextFormatter extends BaseFormatter {
                 this.truncate(context.url || 'N/A', 35),
                 context.baseUrl || 'N/A',
                 this.truncate(owner, 20),
-                locked
+                locked,
+                boundMark
             ]);
         });
 
@@ -447,7 +458,7 @@ export class ContextFormatter extends BaseFormatter {
  * Document formatter
  */
 export class DocumentFormatter extends BaseFormatter {
-    formatTable(data, schema = null) {
+    formatTable(data, session = null, schema = null) {
         if (!data || (Array.isArray(data) && data.length === 0) ||
             (typeof data === 'object' && Object.keys(data).length === 0)) {
             const docType = schema ? (typeof schema === 'string' ? schema : schema.name).toLowerCase() : 'document';
@@ -759,7 +770,7 @@ export class AuthFormatter extends BaseFormatter {
  * Remote formatter
  */
 export class RemoteFormatter extends BaseFormatter {
-    formatTable(data) {
+    formatTable(data, session = null) {
         if (!Array.isArray(data)) {
             data = [data];
         }
@@ -782,13 +793,16 @@ export class RemoteFormatter extends BaseFormatter {
         });
 
         data.forEach(remote => {
+            const isDefault = session && session.boundRemote === remote.id;
+            const defaultMark = isDefault ? chalk.green('✓') : '';
+            
             table.push([
                 remote.id || 'N/A',
                 this.truncate(remote.url, 30),
                 this.truncate(remote.version, 25),
                 remote.auth || 'N/A',
                 remote.lastSynced || 'Never',
-                remote.isDefault || '',
+                defaultMark,
                 remote.status || 'Unknown'
             ]);
         });

@@ -80,7 +80,35 @@ export class ContextCommand extends BaseCommand {
                 return (a.id || '').localeCompare(b.id || '');
             });
 
-            this.output(contexts, 'context');
+            // Update session with current workspace information if we have a bound context
+            try {
+                const session = await this.apiClient.remoteStore.getSession();
+                if (session.boundContext) {
+                    // Get the workspace from the bound context
+                    const contextResponse = await this.apiClient.getContext(session.boundContext);
+                    const context = contextResponse.payload || contextResponse.data || contextResponse;
+                    
+                    if (context && context.url) {
+                        const workspaceName = context.url.split('://')[0] || 'universe';
+                        // Find the context in our list that matches the bound context
+                        const boundContext = contexts.find(c => 
+                            `${c.address}:${c.id}` === session.boundContext || c.id === session.boundContext
+                        );
+                        
+                        if (boundContext) {
+                            // Update session with workspace information
+                            await this.apiClient.remoteStore.updateSession({
+                                defaultWorkspace: workspaceName
+                            });
+                        }
+                    }
+                }
+            } catch (error) {
+                // Ignore errors when updating session - this is not critical
+                this.debug('Failed to update session with workspace info:', error.message);
+            }
+
+            await this.output(contexts, 'context');
             return 0;
         } catch (error) {
             throw new Error(`Failed to list contexts: ${error.message}`);
@@ -102,7 +130,7 @@ export class ContextCommand extends BaseCommand {
                 context = context.context;
             }
 
-            this.output(context, 'context');
+            await this.output(context, 'context');
             return 0;
         } catch (error) {
             throw new Error(`Failed to show context: ${error.message}`);
@@ -151,7 +179,7 @@ export class ContextCommand extends BaseCommand {
             }
 
             console.log(chalk.green(`✓ Context '${contextId}' created successfully`));
-            this.output(context, 'context');
+            await this.output(context, 'context');
             return 0;
         } catch (error) {
             throw new Error(`Failed to create context: ${error.message}`);
@@ -430,7 +458,7 @@ export class ContextCommand extends BaseCommand {
                     context = context.context;
                 }
 
-                this.output(context, 'context');
+                await this.output(context, 'context');
                 return 0;
             } catch (error) {
                 console.log(chalk.yellow('Warning: Current context not found on server'));
@@ -471,7 +499,7 @@ export class ContextCommand extends BaseCommand {
             }
 
             console.log(chalk.green(`✓ Context '${contextId}' updated successfully`));
-            this.output(context, 'context');
+            await this.output(context, 'context');
             return 0;
         } catch (error) {
             throw new Error(`Failed to update context: ${error.message}`);
@@ -488,7 +516,7 @@ export class ContextCommand extends BaseCommand {
             const response = await this.apiClient.getDocuments(contextAddress, 'context');
             const documents = response.payload || response.data || response;
 
-            this.output(documents, 'document');
+            await this.output(documents, 'document');
             return 0;
         } catch (error) {
             throw new Error(`Failed to list documents: ${error.message}`);
@@ -538,7 +566,7 @@ export class ContextCommand extends BaseCommand {
             const response = await this.apiClient.getDocuments(contextAddress, 'context', options);
             const tabs = response.payload || response.data || response;
 
-            this.output(tabs, 'document', 'tab');
+            await this.output(tabs, 'document', 'tab');
             return 0;
         } catch (error) {
             throw new Error(`Failed to list tabs: ${error.message}`);
@@ -598,7 +626,7 @@ export class ContextCommand extends BaseCommand {
                 document = document.document;
             }
 
-            this.output(document, 'document', 'tab');
+            await this.output(document, 'document', 'tab');
             return 0;
         } catch (error) {
             throw new Error(`Failed to get tab: ${error.message}`);
@@ -672,7 +700,7 @@ export class ContextCommand extends BaseCommand {
             const response = await this.apiClient.getDocuments(contextAddress, 'context', options);
             const notes = response.payload || response.data || response;
 
-            this.output(notes, 'document', 'note');
+            await this.output(notes, 'document', 'note');
             return 0;
         } catch (error) {
             throw new Error(`Failed to list notes: ${error.message}`);
@@ -736,7 +764,7 @@ export class ContextCommand extends BaseCommand {
                 document = document.document;
             }
 
-            this.output(document, 'document', 'note');
+            await this.output(document, 'document', 'note');
             return 0;
         } catch (error) {
             throw new Error(`Failed to get note: ${error.message}`);
@@ -808,7 +836,7 @@ export class ContextCommand extends BaseCommand {
                 document = document.document;
             }
 
-            this.output(document, 'document');
+            await this.output(document, 'document');
             return 0;
         } catch (error) {
             throw new Error(`Failed to get document: ${error.message}`);

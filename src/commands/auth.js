@@ -109,7 +109,7 @@ export class AuthCommand extends BaseCommand {
             // Handle ResponseObject format
             const tokens = response.payload || response.data || response;
 
-            this.output(tokens, 'auth');
+            await this.output(tokens, 'auth');
             return 0;
         } catch (error) {
             throw new Error(`Failed to list tokens: ${error.message}`);
