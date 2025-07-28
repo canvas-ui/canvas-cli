@@ -233,7 +233,11 @@ export class DotCommand extends BaseCommand {
             if (config.files && config.files.length > 0) {
                 for (const file of config.files) {
                     const fileStatus = file.active ? chalk.green('  ●') : chalk.gray('  ○');
-                    console.log(`${fileStatus} ${file.src} → ${file.dst}`);
+                    if (file.type === 'folder') {
+                        console.log(`${fileStatus} 📁 ${file.src} → ${file.dst}`);
+                    } else {
+                        console.log(`${fileStatus} ${file.src} → ${file.dst}`);
+                    }
                 }
             }
         }
@@ -321,8 +325,41 @@ export class DotCommand extends BaseCommand {
         }
     }
 
+        /**
+     * Execute system command
+     */
+    async execCommand(command, args, cwd = process.cwd()) {
+        return new Promise((resolve, reject) => {
+            const proc = spawn(command, args, {
+                cwd,
+                stdio: ['pipe', 'pipe', 'pipe']
+            });
+
+            let stdout = '';
+            let stderr = '';
+
+            proc.stdout.on('data', (data) => {
+                stdout += data.toString();
+            });
+
+            proc.stderr.on('data', (data) => {
+                stderr += data.toString();
+            });
+
+            proc.on('close', (code) => {
+                if (code === 0) {
+                    resolve({ stdout, stderr });
+                } else {
+                    reject(new Error(`Command failed (${code}): ${stderr || stdout}`));
+                }
+            });
+
+            proc.on('error', reject);
+        });
+    }
+
     /**
-     * Add dotfile to repository
+     * Add dotfile or folder to repository
      */
     async handleAdd(parsed) {
         const srcPath = parsed.args[1];
@@ -349,18 +386,11 @@ export class DotCommand extends BaseCommand {
         const destFilePath = path.join(localDir, destPath);
 
         if (!existsSync(expandedSrcPath)) {
-            throw new Error(`Source file not found: ${expandedSrcPath}`);
+            throw new Error(`Source not found: ${expandedSrcPath}`);
         }
 
         try {
-            // Create destination directory if needed
-            await fs.mkdir(path.dirname(destFilePath), { recursive: true });
-
-            // Copy file
-            await fs.copyFile(expandedSrcPath, destFilePath);
-            console.log(chalk.green(`✓ Added ${srcPath} → ${destPath}`));
-
-            // Update index
+            const stats = await fs.stat(expandedSrcPath);
             const index = await this.loadDotfilesIndex();
             const key = `${address.userIdentifier}@${address.remote}:${address.resource}`;
 
@@ -368,20 +398,52 @@ export class DotCommand extends BaseCommand {
                 index[key] = { path: localDir, status: 'inactive', files: [] };
             }
 
-            // Remove existing entry for this source
+            // Remove existing entries for this source
             index[key].files = index[key].files.filter(f => f.src !== srcPath);
 
-            // Add new entry
-            index[key].files.push({
-                src: srcPath,
-                dst: destPath,
-                active: false,
-                addedAt: new Date().toISOString()
-            });
+                        if (stats.isFile()) {
+                // Handle single file
+                await fs.mkdir(path.dirname(destFilePath), { recursive: true });
+                await fs.copyFile(expandedSrcPath, destFilePath);
+                console.log(chalk.green(`✓ Added file ${srcPath} → ${destPath}`));
+
+                // Add file entry to index
+                index[key].files.push({
+                    src: srcPath,
+                    dst: destPath,
+                    type: 'file',
+                    active: false,
+                    addedAt: new Date().toISOString()
+                });
+
+            } else if (stats.isDirectory()) {
+                // Handle directory using cp -r
+                console.log(chalk.blue(`Adding folder ${srcPath} → ${destPath}`));
+
+                // Create parent directory if it doesn't exist
+                await fs.mkdir(path.dirname(destFilePath), { recursive: true });
+
+                // Use cp -r to copy the directory
+                await this.execCommand('cp', ['-r', expandedSrcPath, destFilePath]);
+
+                console.log(chalk.green(`✓ Added folder ${srcPath} → ${destPath}`));
+
+                // Add folder entry to index
+                index[key].files.push({
+                    src: srcPath,
+                    dst: destPath,
+                    type: 'folder',
+                    active: false,
+                    addedAt: new Date().toISOString()
+                });
+
+            } else {
+                throw new Error(`Unsupported file type: ${srcPath}`);
+            }
 
             await this.saveDotfilesIndex(index);
-
             return 0;
+
         } catch (error) {
             throw new Error(`Failed to add dotfile: ${error.message}`);
         }
@@ -729,7 +791,7 @@ export class DotCommand extends BaseCommand {
     // Helper methods
 
     /**
-     * Activate a single dotfile (create symlink)
+     * Activate a single dotfile or folder (create symlink)
      */
     async activateFile(fileEntry, localDir) {
         const srcPath = fileEntry.src.replace(/^~/, os.homedir());
@@ -743,16 +805,17 @@ export class DotCommand extends BaseCommand {
         if (existsSync(srcPath)) {
             // Create backup
             const backupPath = `${srcPath}.backup.${Date.now()}`;
-            await fs.rename(srcPath, backupPath);
-            console.log(chalk.yellow(`Backed up existing file to: ${backupPath}`));
+            await this.execCommand('mv', [srcPath, backupPath]);
+            const type = fileEntry.type === 'folder' ? 'folder' : 'file';
+            console.log(chalk.yellow(`Backed up existing ${type} to: ${backupPath}`));
         }
 
-        // Create symlink
+        // Create symlink (works for both files and directories)
         await fs.symlink(dotfilePath, srcPath);
     }
 
     /**
-     * Deactivate a single dotfile (remove symlink)
+     * Deactivate a single dotfile or folder (remove symlink)
      */
     async deactivateFile(fileEntry, localDir) {
         const srcPath = fileEntry.src.replace(/^~/, os.homedir());
@@ -762,15 +825,22 @@ export class DotCommand extends BaseCommand {
             return; // Already deactivated
         }
 
-        // Check if it's a symlink to our dotfile
+        // Check if it's a symlink to our dotfile/folder
         try {
             const stats = await fs.lstat(srcPath);
             if (stats.isSymbolicLink()) {
                 const linkTarget = await fs.readlink(srcPath);
                 if (path.resolve(linkTarget) === path.resolve(dotfilePath)) {
-                    // Remove symlink and replace with file content
+                    // Remove symlink and replace with copy
                     await fs.unlink(srcPath);
-                    await fs.copyFile(dotfilePath, srcPath);
+
+                    if (fileEntry.type === 'folder') {
+                        // For folders, use cp -r to restore
+                        await this.execCommand('cp', ['-r', dotfilePath, srcPath]);
+                    } else {
+                        // For files, use regular copy
+                        await fs.copyFile(dotfilePath, srcPath);
+                    }
                 }
             }
         } catch (error) {
@@ -791,7 +861,7 @@ export class DotCommand extends BaseCommand {
         console.log('  list                                 List all dotfiles');
         console.log('  init <user@remote:workspace>         Initialize remote repository');
         console.log('  clone <user@remote:workspace>        Clone repository locally');
-        console.log('  add <src> <workspace/dest>           Add dotfile to repository');
+        console.log('  add <src> <workspace/dest>           Add dotfile or folder to repository');
         console.log('  commit <workspace> [message]         Commit changes');
         console.log('  push <workspace>                     Push changes to remote');
         console.log('  pull <workspace>                     Pull changes from remote');
@@ -809,6 +879,7 @@ export class DotCommand extends BaseCommand {
         console.log('  dot init john@mycanvas:work');
         console.log('  dot clone john@mycanvas:work');
         console.log('  dot add ~/.bashrc work/bashrc');
+        console.log('  dot add ~/.config/nvim work/nvim');
         console.log('  dot activate john@mycanvas:work/bashrc');
         console.log('  dot list');
     }
