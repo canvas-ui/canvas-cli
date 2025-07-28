@@ -155,7 +155,33 @@ export class RemoteCommand extends BaseCommand {
                 console.log(chalk.yellow('  Authentication: Password-based (use login command)'));
             }
 
-            // If this was the first remote, auto-bind + offer login
+            // Always try to login after adding a remote
+            console.log();
+            if (parsed.options.token) {
+                // Token-based authentication - login automatically
+                console.log(chalk.blue('Logging in with provided token...'));
+                try {
+                    await this.performLogin(remoteId, { token: parsed.options.token });
+                } catch (loginError) {
+                    console.log(chalk.yellow(`⚠ Login failed: ${loginError.message}`));
+                    console.log(chalk.yellow('  Remote added but authentication failed. You can login later with:'));
+                    console.log(`  canvas remote login ${remoteId} --token your-token`);
+                }
+            } else {
+                // Prompt for login credentials
+                console.log(chalk.cyan('Attempting to authenticate with the remote server...'));
+                try {
+                    const shouldLogin = await this.promptYesNo('Login now?', true);
+                    if (shouldLogin) {
+                        await this.performLogin(remoteId);
+                    }
+                } catch (_error) {
+                    console.log(chalk.yellow('Skipping login. You can login later with:'));
+                    console.log(`  canvas remote login ${remoteId} --email your@email.com`);
+                }
+            }
+
+            // If this was the first remote, auto-bind
             if (isFirstRemote) {
                 // Automatically bind as default remote
                 await this.remoteStore.updateSession({
@@ -163,26 +189,58 @@ export class RemoteCommand extends BaseCommand {
                     boundAt: new Date().toISOString()
                 });
                 console.log(chalk.green(`✓ Set as default remote (first remote added)`));
-
-                // Prompt for login if no token was provided
-                if (!parsed.options.token) {
-                    console.log();
-                    console.log(chalk.cyan('Would you like to login now? This will authenticate with the remote server.'));
-
-                    try {
-                        const shouldLogin = await this.promptYesNo('Login now?', true);
-                        if (shouldLogin) {
-                            console.log();
-                            return await this.performLogin(remoteId);
-                        }
-                    } catch (_error) {
-                        console.log(chalk.yellow('Skipping login. You can login later with:'));
-                        console.log(`  canvas remote login ${remoteId} --email your@email.com`);
-                    }
-                }
             } else {
                 console.log();
                 console.log(chalk.cyan(`Tip: Set as default remote with: canvas remote bind ${remoteId}`));
+            }
+
+            // Automatically sync all information after successful setup
+            console.log();
+            console.log(chalk.blue(`Syncing workspaces and contexts from remote '${remoteId}'...`));
+            try {
+                // Create API client for this remote
+                const apiClient = await this.createRemoteApiClient(remoteId);
+
+                // Test connection
+                await apiClient.ping();
+                console.log(chalk.green('  ✓ Connection verified'));
+
+                // Sync workspaces
+                console.log('  📦 Syncing workspaces...');
+                const workspacesResponse = await apiClient.getWorkspaces();
+                const workspaces = workspacesResponse.payload || workspacesResponse.data || workspacesResponse;
+
+                if (Array.isArray(workspaces)) {
+                    for (const workspace of workspaces) {
+                        const workspaceKey = `${remoteId}:${workspace.id || workspace.name}`;
+                        await this.remoteStore.updateWorkspace(workspaceKey, workspace);
+                    }
+                    console.log(chalk.green(`    ✓ Synced ${workspaces.length} workspaces`));
+                }
+
+                // Sync contexts
+                console.log('  📋 Syncing contexts...');
+                const contextsResponse = await apiClient.getContexts();
+                const contexts = contextsResponse.payload || contextsResponse.data || contextsResponse;
+
+                if (Array.isArray(contexts)) {
+                    for (const context of contexts) {
+                        const contextKey = `${remoteId}:${context.id}`;
+                        await this.remoteStore.updateContext(contextKey, context);
+                    }
+                    console.log(chalk.green(`    ✓ Synced ${contexts.length} contexts`));
+                }
+
+                // Update last synced timestamp
+                await this.remoteStore.updateRemote(remoteId, {
+                    lastSynced: new Date().toISOString()
+                });
+
+                console.log(chalk.green(`✓ Sync completed for remote '${remoteId}'`));
+            } catch (syncError) {
+                console.log(chalk.yellow(`⚠ Sync failed: ${syncError.message}`));
+                console.log(chalk.yellow('  Remote added successfully but sync failed. You can manually sync later with:'));
+                console.log(`  canvas remote sync ${remoteId}`);
             }
 
             return 0;
