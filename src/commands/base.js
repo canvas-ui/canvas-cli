@@ -110,13 +110,27 @@ export class BaseCommand {
      * @param {string} type - Formatter type
      * @param {string} schema - Schema type for documents
      */
-    output(data, type = 'generic', schema = null) {
+    async output(data, type = 'generic', schema = null) {
         const formatter = createFormatter(type, {
             raw: this.options?.raw || false,
             format: this.options?.format || 'table'
         });
 
-        console.log(formatter.format(data, schema));
+        // Get session data for formatters that need it
+        let session = null;
+        if (['remote', 'workspace', 'context'].includes(type)) {
+            try {
+                session = await this.apiClient.remoteStore.getSession();
+            } catch (error) {
+                this.debug('Failed to get session for formatter:', error.message);
+            }
+        }
+
+        if (type === 'document' && schema) {
+            console.log(formatter.format(data, session, schema));
+        } else {
+            console.log(formatter.format(data, session));
+        }
     }
 
     /**

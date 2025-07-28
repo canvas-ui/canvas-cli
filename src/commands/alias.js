@@ -55,7 +55,7 @@ export class AliasCommand extends BaseCommand {
                 return 0;
             }
 
-            this.output(Object.entries(aliases).map(([alias, config]) => ({
+            await this.output(Object.entries(aliases).map(([alias, config]) => ({
                 alias,
                 address: config.address,
                 createdAt: new Date(config.createdAt).toLocaleString(),
