@@ -292,9 +292,20 @@ export class RemoteCommand extends BaseCommand {
             // Create API client for this remote
             const apiClient = await this.createRemoteApiClient(remoteId);
 
-            // Test connection
-            await apiClient.ping();
+            // Test connection and fetch server info
+            const pingResponse = await apiClient.ping();
             console.log(chalk.green('  ✓ Connection verified'));
+
+            // Extract version information from ping response
+            const serverInfo = pingResponse.payload || pingResponse.data || pingResponse;
+            if (serverInfo.version) {
+                console.log(chalk.gray(`    Server version: ${serverInfo.version}`));
+                // Update remote with version info
+                await this.remoteStore.updateRemote(remoteId, {
+                    version: serverInfo.version,
+                    appName: serverInfo.appName || 'canvas-server'
+                });
+            }
 
             // Sync workspaces
             console.log('  📦 Syncing workspaces...');
