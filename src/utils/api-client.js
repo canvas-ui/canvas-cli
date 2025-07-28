@@ -37,9 +37,15 @@ class BaseCanvasApiClient {
                 config.headers.Authorization = `Bearer ${this.token}`;
             }
 
-            // Set content-type for POST/PUT/PATCH requests (whether they have data or not)
+            // Set content-type for POST/PUT/PATCH requests only when there's data
             if (config.method === 'post' || config.method === 'put' || config.method === 'patch') {
-                config.headers['Content-Type'] = 'application/json';
+                if (config.data !== undefined && config.data !== null) {
+                    config.headers['Content-Type'] = 'application/json';
+                } else {
+                    // For requests without data, send an empty JSON object to avoid server errors
+                    config.data = {};
+                    config.headers['Content-Type'] = 'application/json';
+                }
             }
 
             debug('Request:', config.method?.toUpperCase(), config.url);
@@ -549,6 +555,21 @@ export class CanvasApiClient {
     async getWorkspaceTree(addressOrId) {
         const { apiClient, resourceId } = await this.resolveResource(addressOrId);
         return await apiClient.getWorkspaceTree(resourceId);
+    }
+
+    async getWorkspaceStatus(addressOrId) {
+        const { apiClient, resourceId } = await this.resolveResource(addressOrId);
+        return await apiClient.getWorkspaceStatus(resourceId);
+    }
+
+    async openWorkspace(addressOrId) {
+        const { apiClient, resourceId } = await this.resolveResource(addressOrId);
+        return await apiClient.openWorkspace(resourceId);
+    }
+
+    async closeWorkspace(addressOrId) {
+        const { apiClient, resourceId } = await this.resolveResource(addressOrId);
+        return await apiClient.closeWorkspace(resourceId);
     }
 
     /**

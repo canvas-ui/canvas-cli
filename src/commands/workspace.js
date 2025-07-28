@@ -35,7 +35,7 @@ export class WorkspaceCommand extends BaseCommand {
             const secondArg = parsed.args[1];
 
             // Check if first arg is a known action
-            const knownActions = ['list', 'show', 'create', 'update', 'delete', 'start', 'stop', 'documents', 'document', 'tabs', 'notes', 'tree', 'help'];
+            const knownActions = ['list', 'show', 'create', 'update', 'delete', 'start', 'stop', 'open', 'close', 'status', 'documents', 'document', 'tabs', 'notes', 'tree', 'current', 'help'];
 
             if (knownActions.includes(firstArg)) {
                 // Route to appropriate action
@@ -572,6 +572,9 @@ export class WorkspaceCommand extends BaseCommand {
         console.log('  delete <address>               Delete workspace');
         console.log('  start <address>                Start workspace');
         console.log('  stop <address>                 Stop workspace');
+        console.log('  open <address>                 Open workspace');
+        console.log('  close <address>                Close workspace');
+        console.log('  status <address>               Show workspace status');
         console.log('  documents <address>            List documents in workspace');
         console.log('  tabs <address>                 List tabs in workspace');
         console.log('  notes <address>                List notes in workspace');
