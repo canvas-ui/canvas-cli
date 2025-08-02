@@ -13,7 +13,9 @@
   "scripts": {
     "lint": "eslint \"**/*.js\"",
     "lint:fix": "eslint \"**/*.js\" --fix",
-    "format": "prettier --write \"**/*.js\"",
+    "format": "prettier --write \"**/*.{js,md}\"",
+    "format:js": "prettier --write \"**/*.js\"",
+    "format:md": "prettier --write \"**/*.md\"",
     "build": "npm run build:all",
     "build:all": "npm run build:linux && npm run build:macos && npm run build:windows",
     "build:linux": "bun build --compile --target=bun-linux-x64 --minify --icon=assets/icons/canvas.png --outfile=dist/canvas-linux ./src/index.js",

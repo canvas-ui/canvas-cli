@@ -47,17 +47,17 @@ Once you push a tag, GitHub Actions will automatically:
 1. ✅ **Extract version** from the tag
 2. ✅ **Update version** in source code
 3. ✅ **Build binaries** for all platforms:
-   - Linux x64 & ARM64
-   - macOS x64 & ARM64 (Apple Silicon)
-   - Windows x64
+    - Linux x64 & ARM64
+    - macOS x64 & ARM64 (Apple Silicon)
+    - Windows x64
 4. ✅ **Test binaries** to ensure they work
 5. ✅ **Create archives** (.tar.gz for Unix, .zip for Windows)
 6. ✅ **Generate checksums** for verification
 7. ✅ **Create GitHub Release** with:
-   - Professional release notes
-   - Download links for all platforms
-   - Installation instructions
-   - Checksum verification
+    - Professional release notes
+    - Download links for all platforms
+    - Installation instructions
+    - Checksum verification
 
 ### 4. Post-Release
 
@@ -190,4 +190,4 @@ Planned improvements to the release process:
 - [ ] **Auto-update mechanism** in the CLI
 - [ ] **Release candidates** workflow
 - [ ] **Homebrew formula** auto-update
-- [ ] **Package manager integrations** (APT, Chocolatey, etc.) 
+- [ ] **Package manager integrations** (APT, Chocolatey, etc.)

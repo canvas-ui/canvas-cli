@@ -9,7 +9,7 @@ A command-line interface for managing Canvas workspaces, contexts, and documents
 **No dependencies required!** Download the latest release for your platform:
 
 | Platform | Architecture | Download |
-|----------|-------------|----------|
+| --- | --- | --- |
 | **Linux** | x64 | [📦 canvas-linux-x64.tar.gz](https://github.com/canvas-ai/canvas-cli/releases/latest) |
 | **Linux** | ARM64 | [📦 canvas-linux-arm64.tar.gz](https://github.com/canvas-ai/canvas-cli/releases/latest) |
 | **macOS** | x64 | [📦 canvas-macos-x64.tar.gz](https://github.com/canvas-ai/canvas-cli/releases/latest) |
@@ -17,6 +17,7 @@ A command-line interface for managing Canvas workspaces, contexts, and documents
 | **Windows** | x64 | [📦 canvas-windows-x64.zip](https://github.com/canvas-ai/canvas-cli/releases/latest) |
 
 **Quick install with our script:**
+
 ```bash
 # One-liner installation (Linux/macOS)
 curl -sSL https://raw.githubusercontent.com/canvas-ai/canvas-cli/main/scripts/install.sh | bash
@@ -30,15 +31,17 @@ sudo mv canvas-* ~/.local/bin/canvas
 ### Method 2: Manual Install (Cross-Platform)
 
 **Platform Requirements:**
+
 - **Node.js**: v20 LTS or higher
 - **Operating Systems**: Linux, macOS, Windows 10/11
 - **Optional**: PM2 for local server management (`npm install -g pm2`)
 
 #### Git clone this repository
-`git clone https://github.com/canvas-ai/canvas-cli ~/path/to/canvas-cli`
-`cd ~/path/to/canvas-cli`
+
+`git clone https://github.com/canvas-ai/canvas-cli ~/path/to/canvas-cli` `cd ~/path/to/canvas-cli`
 
 #### Linux/Mac
+
 ```bash
 
 # Create symlinks to your local bin directory
@@ -59,6 +62,7 @@ npm install -g pm2
 ```
 
 #### Windows
+
 ```powershell
 # Option 1: PowerShell (Run as Administrator)
 # Add Canvas CLI bin directory to your PATH
@@ -86,6 +90,7 @@ node bin/q.js "test query"
 ```
 
 ### Method 3: Global NPM Installation
+
 ```bash
 # Install dependencies
 npm install
@@ -95,12 +100,14 @@ npm link
 ```
 
 This creates global symlinks:
+
 - `canvas` → Canvas CLI main command
 - `context` → Context management shortcut
 - `ws` → Workspace management shortcut
 - `q` → AI assistant shortcut
 
 ### Method 4: Direct Execution (Development)
+
 ```bash
 # Linux/Mac
 node bin/canvas.js --help
@@ -131,6 +138,7 @@ canvas config set server.url http://localhost:8001/rest/v2
 ## Commands
 
 ### Workspace Management
+
 - `canvas workspace list` - List all workspaces
 - `canvas workspace show <id>` - Show workspace details
 - `canvas workspace create <name>` - Create new workspace
@@ -170,6 +178,7 @@ canvas config set server.url http://localhost:8001/rest/v2
 - `canvas q "<query>" --show-prompt-only` - Display prompt without AI call
 
 ### Server Management (Local)
+
 - `canvas server start` - Start Canvas server locally with PM2
 - `canvas server stop` - Stop Canvas server
 - `canvas server restart` - Restart Canvas server
@@ -186,7 +195,7 @@ context list              # Same as: canvas context list
 context create my-project # Same as: canvas context create my-project
 context current           # Same as: canvas context current
 
-# Direct workspace commands  
+# Direct workspace commands
 ws list                   # Same as: canvas workspace list
 ws create test            # Same as: canvas workspace create test
 
@@ -276,6 +285,7 @@ canvas q templates
 The CLI includes built-in server management for local development using PM2:
 
 ### Features
+
 - **Start/Stop/Restart**: Full lifecycle management of Canvas server
 - **Status Monitoring**: Shows both PM2 process status and API connectivity
 - **Log Streaming**: Real-time log viewing with configurable line count
@@ -283,6 +293,7 @@ The CLI includes built-in server management for local development using PM2:
 - **Environment Variables**: Supports admin user auto-generation from env.js
 
 ### Requirements
+
 - PM2 must be installed globally: `npm install -g pm2`
 - Canvas server code must be available locally
 - Server management only works for local instances
@@ -293,12 +304,14 @@ The CLI includes built-in server management for local development using PM2:
 The CLI can manage a local Canvas server, but requires the server code to be available. You have several options:
 
 #### Option 1: Environment Variable (Recommended for development)
+
 ```bash
 export CANVAS_SERVER_ROOT=/path/to/your/canvas-server
 canvas server start
 ```
 
 #### Option 2: Clone Server as Submodule (Standalone CLI)
+
 ```bash
 # Clone Canvas server into ./server directory
 git clone https://github.com/canvas-ai/canvas-server ./server
@@ -310,6 +323,7 @@ canvas server start
 ```
 
 #### Option 3: Standalone Server Installation
+
 ```bash
 # Clone Canvas server separately
 git clone https://github.com/canvas-ai/canvas-server
@@ -321,14 +335,17 @@ canvas server start
 ```
 
 ### Admin User Generation
+
 When starting the server locally, Canvas will automatically generate admin credentials if not set:
+
 - Check the server logs for generated admin email/password
 - Use environment variables to set custom admin credentials:
-  ```bash
-  export CANVAS_ADMIN_EMAIL="admin@example.com"
-  export CANVAS_ADMIN_PASSWORD="your-secure-password"
-  canvas server start
-  ```
+
+    ```bash
+    export CANVAS_ADMIN_EMAIL="admin@example.com"
+    export CANVAS_ADMIN_PASSWORD="your-secure-password"
+    canvas server start
+    ```
 
 ## Configuration
 
@@ -336,43 +353,43 @@ Configuration is stored in `~/.canvas/config/canvas-cli.json`:
 
 ```json
 {
-  "server": {
-    "url": "http://localhost:8001/rest/v2",
-    "auth": {
-      "type": "token",
-      "token": "canvas-server-token"
-    }
-  },
-  "session": {
-    "context": {
-      "id": "default",
-      "clientArray": ["client/app/canvas-cli", "..."]
-    }
-  },
-  "connectors": {
-    "anthropic": {
-      "driver": "anthropic",
-      "apiKey": "",
-      "model": "claude-3-5-sonnet-20241022",
-      "maxTokens": 4096
+    "server": {
+        "url": "http://localhost:8001/rest/v2",
+        "auth": {
+            "type": "token",
+            "token": "canvas-server-token"
+        }
     },
-    "openai": {
-      "driver": "openai", 
-      "apiKey": "",
-      "model": "gpt-4o",
-      "maxTokens": 4096
+    "session": {
+        "context": {
+            "id": "default",
+            "clientArray": ["client/app/canvas-cli", "..."]
+        }
     },
-    "ollama": {
-      "driver": "ollama",
-      "host": "http://localhost:11434",
-      "model": "qwen2.5-coder:latest"
+    "connectors": {
+        "anthropic": {
+            "driver": "anthropic",
+            "apiKey": "",
+            "model": "claude-3-5-sonnet-20241022",
+            "maxTokens": 4096
+        },
+        "openai": {
+            "driver": "openai",
+            "apiKey": "",
+            "model": "gpt-4o",
+            "maxTokens": 4096
+        },
+        "ollama": {
+            "driver": "ollama",
+            "host": "http://localhost:11434",
+            "model": "qwen2.5-coder:latest"
+        }
+    },
+    "ai": {
+        "defaultConnector": "anthropic",
+        "priority": ["anthropic", "openai", "ollama"],
+        "contextTemplate": "canvas-assistant"
     }
-  },
-  "ai": {
-    "defaultConnector": "anthropic",
-    "priority": ["anthropic", "openai", "ollama"],
-    "contextTemplate": "canvas-assistant"
-  }
 }
 ```
 
