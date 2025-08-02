@@ -1,6 +1,6 @@
-"use strict";
+'use strict';
 
-import debugInstance from "debug";
+import debugInstance from 'debug';
 
 /**
  * Setup debug logging
@@ -8,7 +8,7 @@ import debugInstance from "debug";
  * @returns {Function} Debug function
  */
 export function setupDebug(namespace) {
-  return debugInstance(namespace);
+    return debugInstance(namespace);
 }
 
 /**
@@ -16,16 +16,16 @@ export function setupDebug(namespace) {
  * @param {string} namespaces - Comma-separated debug namespaces
  */
 export function enableDebug(namespaces) {
-  process.env.DEBUG = namespaces;
-  debugInstance.enabled = () => true;
+    process.env.DEBUG = namespaces;
+    debugInstance.enabled = () => true;
 }
 
 /**
  * Disable debug logging
  */
 export function disableDebug() {
-  delete process.env.DEBUG;
-  debugInstance.enabled = () => false;
+    delete process.env.DEBUG;
+    debugInstance.enabled = () => false;
 }
 
 export default setupDebug;

@@ -1,8 +1,8 @@
-"use strict";
+'use strict';
 
-import { setupDebug } from "../lib/debug.js";
+import { setupDebug } from '../lib/debug.js';
 
-const debug = setupDebug("canvas:cli:address-parser");
+const debug = setupDebug('canvas:cli:address-parser');
 
 /**
  * Canvas Resource Address Parser
@@ -23,43 +23,43 @@ const debug = setupDebug("canvas:cli:address-parser");
  * @returns {Object|null} Parsed address object or null if invalid
  */
 export function parseResourceAddress(address) {
-  if (!address || typeof address !== "string") {
-    debug("Invalid address: not a string or empty");
-    return null;
-  }
+    if (!address || typeof address !== 'string') {
+        debug('Invalid address: not a string or empty');
+        return null;
+    }
 
-  // Pattern: [user.name]@[remote]:[resource][/optional/path]
-  const addressRegex = /^([^@]+)@([^:]+):([^/]+)(.*)$/;
-  const match = address.match(addressRegex);
+    // Pattern: [user.name]@[remote]:[resource][/optional/path]
+    const addressRegex = /^([^@]+)@([^:]+):([^/]+)(.*)$/;
+    const match = address.match(addressRegex);
 
-  if (!match) {
-    debug("Invalid address format:", address);
-    return null;
-  }
+    if (!match) {
+        debug('Invalid address format:', address);
+        return null;
+    }
 
-  const [, userIdentifier, remote, resource, optionalPath] = match;
+    const [, userIdentifier, remote, resource, optionalPath] = match;
 
-  // Validate components
-  if (!userIdentifier.trim() || !remote.trim() || !resource.trim()) {
-    debug("Invalid address: empty components");
-    return null;
-  }
+    // Validate components
+    if (!userIdentifier.trim() || !remote.trim() || !resource.trim()) {
+        debug('Invalid address: empty components');
+        return null;
+    }
 
-  const parsed = {
-    userIdentifier: userIdentifier.trim(),
-    remote: remote.trim(),
-    resource: resource.trim(),
-    path: optionalPath || "",
-    full: address,
-    isLocal: isLocalRemote(remote.trim()),
-    isRemote: !isLocalRemote(remote.trim()),
-  };
+    const parsed = {
+        userIdentifier: userIdentifier.trim(),
+        remote: remote.trim(),
+        resource: resource.trim(),
+        path: optionalPath || '',
+        full: address,
+        isLocal: isLocalRemote(remote.trim()),
+        isRemote: !isLocalRemote(remote.trim()),
+    };
 
-  // Determine resource type
-  parsed.resourceType = determineResourceType(parsed.resource);
+    // Determine resource type
+    parsed.resourceType = determineResourceType(parsed.resource);
 
-  debug("Parsed address:", parsed);
-  return parsed;
+    debug('Parsed address:', parsed);
+    return parsed;
 }
 
 /**
@@ -71,18 +71,18 @@ export function parseResourceAddress(address) {
  * @returns {string} Constructed address
  */
 export function constructResourceAddress(
-  userIdentifier,
-  remote,
-  resource,
-  path = "",
+    userIdentifier,
+    remote,
+    resource,
+    path = '',
 ) {
-  if (!userIdentifier || !remote || !resource) {
-    throw new Error("userIdentifier, remote, and resource are required");
-  }
+    if (!userIdentifier || !remote || !resource) {
+        throw new Error('userIdentifier, remote, and resource are required');
+    }
 
-  const address = `${userIdentifier}@${remote}:${resource}${path}`;
-  debug("Constructed address:", address);
-  return address;
+    const address = `${userIdentifier}@${remote}:${resource}${path}`;
+    debug('Constructed address:', address);
+    return address;
 }
 
 /**
@@ -91,26 +91,26 @@ export function constructResourceAddress(
  * @returns {Object|null} Parsed remote object or null if invalid
  */
 export function parseRemoteIdentifier(remoteId) {
-  if (!remoteId || typeof remoteId !== "string") {
-    return null;
-  }
+    if (!remoteId || typeof remoteId !== 'string') {
+        return null;
+    }
 
-  const parts = remoteId.split("@");
-  if (parts.length !== 2) {
-    return null;
-  }
+    const parts = remoteId.split('@');
+    if (parts.length !== 2) {
+        return null;
+    }
 
-  const [userIdentifier, remote] = parts;
-  if (!userIdentifier.trim() || !remote.trim()) {
-    return null;
-  }
+    const [userIdentifier, remote] = parts;
+    if (!userIdentifier.trim() || !remote.trim()) {
+        return null;
+    }
 
-  return {
-    userIdentifier: userIdentifier.trim(),
-    remote: remote.trim(),
-    full: remoteId,
-    isLocal: isLocalRemote(remote.trim()),
-  };
+    return {
+        userIdentifier: userIdentifier.trim(),
+        remote: remote.trim(),
+        full: remoteId,
+        isLocal: isLocalRemote(remote.trim()),
+    };
 }
 
 /**
@@ -120,10 +120,10 @@ export function parseRemoteIdentifier(remoteId) {
  * @returns {string} Remote identifier
  */
 export function constructRemoteIdentifier(userIdentifier, remote) {
-  if (!userIdentifier || !remote) {
-    throw new Error("userIdentifier and remote are required");
-  }
-  return `${userIdentifier}@${remote}`;
+    if (!userIdentifier || !remote) {
+        throw new Error('userIdentifier and remote are required');
+    }
+    return `${userIdentifier}@${remote}`;
 }
 
 /**
@@ -132,11 +132,11 @@ export function constructRemoteIdentifier(userIdentifier, remote) {
  * @returns {string|null} Remote identifier or null
  */
 export function extractRemoteIdentifier(address) {
-  const parsed = parseResourceAddress(address);
-  if (!parsed) {
-    return null;
-  }
-  return constructRemoteIdentifier(parsed.userIdentifier, parsed.remote);
+    const parsed = parseResourceAddress(address);
+    if (!parsed) {
+        return null;
+    }
+    return constructRemoteIdentifier(parsed.userIdentifier, parsed.remote);
 }
 
 /**
@@ -145,16 +145,16 @@ export function extractRemoteIdentifier(address) {
  * @returns {string|null} Resource key for local storage or null
  */
 export function extractResourceKey(address) {
-  const parsed = parseResourceAddress(address);
-  if (!parsed) {
-    return null;
-  }
+    const parsed = parseResourceAddress(address);
+    if (!parsed) {
+        return null;
+    }
 
-  const remoteId = constructRemoteIdentifier(
-    parsed.userIdentifier,
-    parsed.remote,
-  );
-  return `${remoteId}:${parsed.resource}`;
+    const remoteId = constructRemoteIdentifier(
+        parsed.userIdentifier,
+        parsed.remote,
+    );
+    return `${remoteId}:${parsed.resource}`;
 }
 
 /**
@@ -163,14 +163,14 @@ export function extractResourceKey(address) {
  * @returns {boolean} True if remote is local
  */
 export function isLocalRemote(remote) {
-  const localRemotes = [
-    "canvas.local",
-    "local",
-    "localhost",
-    "127.0.0.1",
-    "::1",
-  ];
-  return localRemotes.includes(remote.toLowerCase());
+    const localRemotes = [
+        'canvas.local',
+        'local',
+        'localhost',
+        '127.0.0.1',
+        '::1',
+    ];
+    return localRemotes.includes(remote.toLowerCase());
 }
 
 /**
@@ -179,20 +179,20 @@ export function isLocalRemote(remote) {
  * @returns {string} Resource type (workspace, context, unknown)
  */
 export function determineResourceType(resource) {
-  // Simple heuristics - could be enhanced with patterns or prefixes
-  if (resource.includes("workspace") || resource.match(/^ws-/)) {
-    return "workspace";
-  }
-  if (
-    resource.includes("context") ||
-    resource.includes("ctx") ||
+    // Simple heuristics - could be enhanced with patterns or prefixes
+    if (resource.includes('workspace') || resource.match(/^ws-/)) {
+        return 'workspace';
+    }
+    if (
+        resource.includes('context') ||
+    resource.includes('ctx') ||
     resource.match(/^ctx-/)
-  ) {
-    return "context";
-  }
+    ) {
+        return 'context';
+    }
 
-  // Default to context for simple identifiers
-  return "context";
+    // Default to context for simple identifiers
+    return 'context';
 }
 
 /**
@@ -201,7 +201,7 @@ export function determineResourceType(resource) {
  * @returns {boolean} True if valid format
  */
 export function isValidResourceAddress(address) {
-  return parseResourceAddress(address) !== null;
+    return parseResourceAddress(address) !== null;
 }
 
 /**
@@ -210,16 +210,16 @@ export function isValidResourceAddress(address) {
  * @returns {string|null} Normalized address or null if invalid
  */
 export function normalizeResourceAddress(address) {
-  const parsed = parseResourceAddress(address);
-  if (!parsed) {
-    return null;
-  }
-  return constructResourceAddress(
-    parsed.userIdentifier,
-    parsed.remote,
-    parsed.resource,
-    parsed.path,
-  );
+    const parsed = parseResourceAddress(address);
+    if (!parsed) {
+        return null;
+    }
+    return constructResourceAddress(
+        parsed.userIdentifier,
+        parsed.remote,
+        parsed.resource,
+        parsed.path,
+    );
 }
 
 /**
@@ -228,10 +228,10 @@ export function normalizeResourceAddress(address) {
  * @returns {Array<string>} Path components
  */
 export function splitResourcePath(path) {
-  if (!path || path === "/") {
-    return [];
-  }
-  return path.split("/").filter((component) => component.length > 0);
+    if (!path || path === '/') {
+        return [];
+    }
+    return path.split('/').filter((component) => component.length > 0);
 }
 
 /**
@@ -240,10 +240,10 @@ export function splitResourcePath(path) {
  * @returns {string} Resource path
  */
 export function joinResourcePath(components) {
-  if (!Array.isArray(components) || components.length === 0) {
-    return "";
-  }
-  return "/" + components.join("/");
+    if (!Array.isArray(components) || components.length === 0) {
+        return '';
+    }
+    return '/' + components.join('/');
 }
 
 /**
@@ -252,29 +252,29 @@ export function joinResourcePath(components) {
  * @returns {string|null} Base address or null if invalid
  */
 export function getBaseResourceAddress(address) {
-  const parsed = parseResourceAddress(address);
-  if (!parsed) {
-    return null;
-  }
-  return constructResourceAddress(
-    parsed.userIdentifier,
-    parsed.remote,
-    parsed.resource,
-  );
+    const parsed = parseResourceAddress(address);
+    if (!parsed) {
+        return null;
+    }
+    return constructResourceAddress(
+        parsed.userIdentifier,
+        parsed.remote,
+        parsed.resource,
+    );
 }
 
 export default {
-  parseResourceAddress,
-  constructResourceAddress,
-  parseRemoteIdentifier,
-  constructRemoteIdentifier,
-  extractRemoteIdentifier,
-  extractResourceKey,
-  isLocalRemote,
-  determineResourceType,
-  isValidResourceAddress,
-  normalizeResourceAddress,
-  splitResourcePath,
-  joinResourcePath,
-  getBaseResourceAddress,
+    parseResourceAddress,
+    constructResourceAddress,
+    parseRemoteIdentifier,
+    constructRemoteIdentifier,
+    extractRemoteIdentifier,
+    extractResourceKey,
+    isLocalRemote,
+    determineResourceType,
+    isValidResourceAddress,
+    normalizeResourceAddress,
+    splitResourcePath,
+    joinResourcePath,
+    getBaseResourceAddress,
 };
