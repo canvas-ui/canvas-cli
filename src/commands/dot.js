@@ -5,6 +5,7 @@ import path from 'path';
 import os from 'os';
 import fs from 'fs/promises';
 import { existsSync, readFileSync } from 'fs';
+import readline from 'readline';
 import { spawn } from 'child_process';
 import BaseCommand from './base.js';
 import { parseResourceAddress } from '../utils/address-parser.js';
@@ -359,6 +360,50 @@ export class DotCommand extends BaseCommand {
     }
 
     /**
+     * Simple yes/no prompt on TTY (returns boolean)
+     */
+    async promptYesNo(question) {
+        if (!process.stdin.isTTY) return false;
+        return new Promise((resolve) => {
+            const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+            rl.question(chalk.blue(question), (answer) => {
+                rl.close();
+                resolve(/^y(es)?$/i.test(answer.trim()));
+            });
+        });
+    }
+
+    async execCommand(command, args, cwd = process.cwd()) {
+        return new Promise((resolve, reject) => {
+            const proc = spawn(command, args, {
+                cwd,
+                stdio: ['pipe', 'pipe', 'pipe']
+            });
+
+            let stdout = '';
+            let stderr = '';
+
+            proc.stdout.on('data', (data) => {
+                stdout += data.toString();
+            });
+
+            proc.stderr.on('data', (data) => {
+                stderr += data.toString();
+            });
+
+            proc.on('close', (code) => {
+                if (code === 0) {
+                    resolve({ stdout, stderr });
+                } else {
+                    reject(new Error(`Command failed (${code}): ${stderr || stdout}`));
+                }
+            });
+
+            proc.on('error', reject);
+        });
+    }
+
+    /**
      * Add dotfile or folder to repository
      */
     async handleAdd(parsed) {
@@ -442,6 +487,10 @@ export class DotCommand extends BaseCommand {
             }
 
             await this.saveDotfilesIndex(index);
+
+            if (await this.promptYesNo('Commit & sync changes now? (y/N) ')) {
+                await this.handleSync({ ...parsed, args: ['sync', address.full] });
+            }
             return 0;
 
         } catch (error) {
@@ -849,6 +898,78 @@ export class DotCommand extends BaseCommand {
     }
 
     /**
+     * Sync repository (clone if missing, push local commits, pull remote)
+     */
+    async handleSync(parsed) {
+        const addressStr = parsed.args[1];
+        if (!addressStr) {
+            throw new Error('Address is required: dot sync user@remote:workspace');
+        }
+        const address = await this.parseAddress(addressStr);
+        const localDir = this.getLocalDotfilesDir(address);
+
+        // Clone if directory does not exist
+        if (!existsSync(localDir)) {
+            console.log(chalk.blue('Local repository not found – cloning...'));
+            // Reuse clone logic
+            return await this.handleClone({ ...parsed, args: ['clone', addressStr] });
+        }
+        // Commit any local changes
+        await this.handleCommit({ ...parsed, args: ['commit', addressStr, 'Sync local changes'] });
+        // Push and pull
+        await this.handlePush({ ...parsed, args: ['push', addressStr] });
+        await this.handlePull({ ...parsed, args: ['pull', addressStr] });
+        return 0;
+    }
+
+    /**
+     * Restore original file/folder from backup created during activation
+     */
+    async handleRestore(parsed) {
+        const targetSpec = parsed.args[1];
+        if (!targetSpec) {
+            throw new Error('Target is required: dot restore user@remote:workspace/file or dot restore user@remote:workspace');
+        }
+        const address = await this.parseAddress(targetSpec);
+        const index = await this.loadDotfilesIndex();
+        const key = `${address.userIdentifier}@${address.remote}:${address.resource}`;
+        const config = index[key];
+        if (!config) {
+            throw new Error(`Dotfiles not found for ${key}`);
+        }
+        const localDir = this.getLocalDotfilesDir(address);
+
+        const restoreEntry = async (fileEntry) => {
+            const srcPath = fileEntry.src.replace(/^~/, os.homedir());
+            const backups = [
+                `${srcPath}.backup`,
+                ... (await fs.readdir(path.dirname(srcPath))).filter(f=>f.startsWith(path.basename(srcPath)+'.backup'))
+            ];
+            if (backups.length === 0) {
+                console.log(chalk.gray(`No backup found for ${srcPath}`));
+                return;
+            }
+            const latestBackup = backups.sort().pop();
+            await this.execCommand('mv', [path.join(path.dirname(srcPath), latestBackup), srcPath]);
+            console.log(chalk.green(`✓ Restored ${srcPath} from backup`));
+        };
+
+        if (address.path) {
+            const targetFile = address.path.startsWith('/') ? address.path.slice(1) : address.path;
+            const fileEntry = config.files.find(f => f.dst === targetFile);
+            if (!fileEntry) {
+                throw new Error(`File not found in index: ${targetFile}`);
+            }
+            await restoreEntry(fileEntry);
+        } else {
+            for (const fileEntry of config.files) {
+                await restoreEntry(fileEntry);
+            }
+        }
+        return 0;
+    }
+
+    /**
      * Show help for the dot command
      */
     showHelp() {
@@ -860,14 +981,14 @@ export class DotCommand extends BaseCommand {
         console.log(chalk.underline('Commands:'));
         console.log('  list                                 List all dotfiles');
         console.log('  init <user@remote:workspace>         Initialize remote repository');
-        console.log('  clone <user@remote:workspace>        Clone repository locally');
+        console.log('  sync <user@remote:workspace>         Sync repository (clone if missing, push & pull otherwise)');
         console.log('  add <src> <workspace/dest>           Add dotfile or folder to repository');
         console.log('  commit <workspace> [message]         Commit changes');
         console.log('  push <workspace>                     Push changes to remote');
         console.log('  pull <workspace>                     Pull changes from remote');
         console.log('  status <workspace>                   Show repository status');
         console.log('  activate <workspace>[/file]          Activate dotfiles (create symlinks)');
-        console.log('  deactivate <workspace>[/file]        Deactivate dotfiles (remove symlinks)');
+        console.log('  deactivate <workspace>[/file]        Deactivate dotfiles (remove symlinks)\n  restore <workspace>[/file]           Restore backup of original file/folder');
         console.log('  cd <workspace>                       Get dotfiles directory path');
         console.log('');
         console.log(chalk.underline('Address Formats:'));
