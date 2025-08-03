@@ -152,8 +152,8 @@ export class WorkspaceFormatter extends BaseFormatter {
 
                 table.push([
                     workspace.address || workspace.remote || 'N/A',
-                    workspace.label || workspace.name || 'N/A',
-                    this.truncate(workspace.ownerEmail || workspace.owner, 20),
+                    this.formatWorkspaceName(workspace),
+                    this.truncate(workspace.ownerEmail || workspace.owner || 'N/A', 20),
                     this.formatColor(workspace.color),
                     this.truncate(workspace.description, 25),
                     this.formatDate(workspace.created || workspace.createdAt),
@@ -239,6 +239,19 @@ export class WorkspaceFormatter extends BaseFormatter {
         }
 
         return status;
+    }
+
+    /**
+   * Format workspace name with optional label
+   */
+    formatWorkspaceName(workspace) {
+        const name = workspace.name || 'N/A';
+        const label = workspace.label;
+        
+        if (label && label !== name) {
+            return `${name} (${label})`;
+        }
+        return name;
     }
 
     /**
