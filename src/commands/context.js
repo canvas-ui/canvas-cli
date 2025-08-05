@@ -232,7 +232,9 @@ export class ContextCommand extends BaseCommand {
                     await this.apiClient.remoteStore.removeContext(key);
                     console.log(chalk.yellow('Local cache entry removed for missing context'));
                     return 0;
-                } catch (_cleanupErr) {}
+                } catch (_cleanupErr) {
+                    console.log(chalk.red('Failed to remove context from local cache: ', _cleanupErr.message));
+                }
             }
             throw new Error(`Failed to destroy context: ${error.message}`);
         }
