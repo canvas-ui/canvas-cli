@@ -228,6 +228,25 @@ export class DotCommand extends BaseCommand {
     async handleList(parsed) {
         const index = await this.loadDotfilesIndex();
 
+        // Resolve context path filter (defaults to current context)
+        let contextPath = '/';
+        try {
+            if (this.options?.context) {
+                contextPath = this.options.context;
+            } else {
+                const contextAddress = await this.getCurrentContext(this.options);
+                const ctxResp = await this.apiClient.getContext(contextAddress);
+                let ctx = ctxResp.payload || ctxResp.data || ctxResp;
+                if (ctx && ctx.context) ctx = ctx.context;
+                contextPath = ctx?.path || '/';
+            }
+        } catch (_) {
+            contextPath = '/';
+        }
+
+        const normalizedPath =
+            contextPath === '/' ? '' : contextPath.replace(/^\/+/, '').replace(/\/+$/, '');
+
         if (Object.keys(index).length === 0) {
             console.log(chalk.gray('No dotfiles configured'));
             return 0;
@@ -235,20 +254,22 @@ export class DotCommand extends BaseCommand {
 
         console.log(chalk.bold('Dotfiles:'));
         for (const [key, config] of Object.entries(index)) {
-            const status =
-        config.status === 'active' ? chalk.green('●') : chalk.gray('○');
+            // Filter files by context path
+            const files = normalizedPath
+                ? (config.files || []).filter((f) => f.dst.startsWith(normalizedPath))
+                : config.files || [];
+
+            if (files.length === 0) continue;
+
+            const status = config.status === 'active' ? chalk.green('●') : chalk.gray('○');
             console.log(`${status} ${chalk.cyan(key)}`);
 
-            if (config.files && config.files.length > 0) {
-                for (const file of config.files) {
-                    const fileStatus = file.active
-                        ? chalk.green('  ●')
-                        : chalk.gray('  ○');
-                    if (file.type === 'folder') {
-                        console.log(`${fileStatus} 📁 ${file.src} → ${file.dst}`);
-                    } else {
-                        console.log(`${fileStatus} ${file.src} → ${file.dst}`);
-                    }
+            for (const file of files) {
+                const fileStatus = file.active ? chalk.green('  ●') : chalk.gray('  ○');
+                if (file.type === 'folder') {
+                    console.log(`${fileStatus} 📁 ${file.src} → ${file.dst}`);
+                } else {
+                    console.log(`${fileStatus} ${file.src} → ${file.dst}`);
                 }
             }
         }
@@ -481,6 +502,47 @@ export class DotCommand extends BaseCommand {
             }
 
             await this.saveDotfilesIndex(index);
+
+            // Create a dotfile document inside the current / specified context
+            try {
+                // Determine context address and path
+                let contextAddress = await this.getCurrentContext(this.options);
+                let contextPathInput = this.options?.context || null;
+
+                let contextPath = '/';
+                if (contextPathInput) {
+                    contextPath = contextPathInput;
+                } else {
+                    // Fetch current context details to derive path
+                    const ctxResp = await this.apiClient.getContext(contextAddress);
+                    let ctx = ctxResp.payload || ctxResp.data || ctxResp;
+                    if (ctx && ctx.context) ctx = ctx.context;
+                    contextPath = ctx?.path || '/';
+                }
+
+                const normPath =
+                    contextPath === '/' ? '' : contextPath.replace(/^\/+/, '').replace(/\/+$/, '');
+
+                const remotePath = `${address.userIdentifier}@${address.remote}:${address.resource}/${normPath ? normPath + '/' : ''}${destPath}`;
+
+                const docData = {
+                    schema: 'data/abstraction/dotfile',
+                    data: {
+                        localPath: srcPath,
+                        remotePath: remotePath,
+                        priority: 0,
+                    },
+                };
+
+                await this.apiClient.createDocument(
+                    contextAddress,
+                    docData,
+                    'context',
+                    ['data/abstraction/dotfile'],
+                );
+            } catch (err) {
+                this.debug('Failed to create dotfile document:', err.message);
+            }
 
             if (await this.promptYesNo('Commit & sync changes now? (y/N) ')) {
                 await this.handleSync({ ...parsed, args: ['sync', address.full] });
