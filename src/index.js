@@ -96,6 +96,7 @@ export async function main(argv = process.argv.slice(2)) {
                 'quiet',
                 'show-prompt',
                 'show-prompt-only',
+                'update-dotfiles',
             ],
             alias: {
                 h: 'help',
@@ -108,6 +109,7 @@ export async function main(argv = process.argv.slice(2)) {
                 r: 'raw',
                 d: 'debug',
                 q: 'quiet',
+                u: 'update-dotfiles',
             },
         });
 

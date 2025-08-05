@@ -534,11 +534,13 @@ export class DotCommand extends BaseCommand {
                     },
                 };
 
+                const workspaceAddress = `${address.userIdentifier}@${address.remote}:${address.resource}`;
                 await this.apiClient.createDocument(
-                    contextAddress,
+                    workspaceAddress,
                     docData,
-                    'context',
+                    'workspace',
                     ['data/abstraction/dotfile'],
+                    contextPath,
                 );
             } catch (err) {
                 this.debug('Failed to create dotfile document:', err.message);

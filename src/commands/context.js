@@ -2,6 +2,7 @@
 
 import chalk from 'chalk';
 import BaseCommand from './base.js';
+import DotCommand from './dot.js';
 
 /**
  * Context command
@@ -262,6 +263,25 @@ export class ContextCommand extends BaseCommand {
             } else {
                 console.log(chalk.green(`✓ Switched to context '${resolvedAddress}'`));
             }
+
+            if (parsed.options && (parsed.options['update-dotfiles'] || parsed.options.u)) {
+                try {
+                    const ctxResp = await this.apiClient.getContext(resolvedAddress);
+                    let ctx = ctxResp.payload || ctxResp.data || ctxResp;
+                    if (ctx && ctx.context) ctx = ctx.context;
+                    const contextPath = ctx.path || '/';
+                    const workspaceName = ctx.workspaceName || (ctx.url ? ctx.url.split('://')[0] : 'universe');
+                    const remoteId = await this.apiClient.getCurrentRemote();
+                    if (remoteId) {
+                        const workspaceAddress = `${remoteId}:${workspaceName}`;
+                        const dot = new DotCommand(this.config);
+                        await dot.handleActivate({ args: ['activate', workspaceAddress], options: { context: contextPath } });
+                        console.log(chalk.green('✓ Dotfiles updated'));
+                    }
+                } catch (dotErr) {
+                    this.debug('Failed to update dotfiles:', dotErr.message);
+                }
+            }
             return 0;
         } catch (error) {
             throw new Error(`Failed to bind context: ${error.message}`);
@@ -285,6 +305,28 @@ export class ContextCommand extends BaseCommand {
             // Handle ResponseObject format
             const result = response.payload || response.data || response;
             console.log(chalk.green(`✓ Context URL set to '${result.url}'`));
+
+            // Auto update dotfiles if flag provided
+            if (parsed.options && (parsed.options['update-dotfiles'] || parsed.options.u)) {
+                try {
+                    // Fetch updated context details
+                    const ctxResp = await this.apiClient.getContext(contextId);
+                    let ctx = ctxResp.payload || ctxResp.data || ctxResp;
+                    if (ctx && ctx.context) ctx = ctx.context;
+
+                    const contextPath = ctx.path || '/';
+                    const workspaceName = ctx.workspaceName || (ctx.url ? ctx.url.split('://')[0] : 'universe');
+                    const remoteId = await this.apiClient.getCurrentRemote();
+                    if (remoteId) {
+                        const workspaceAddress = `${remoteId}:${workspaceName}`;
+                        const dot = new DotCommand(this.config);
+                        await dot.handleActivate({ args: ['activate', workspaceAddress], options: { context: contextPath } });
+                        console.log(chalk.green('✓ Dotfiles updated'));
+                    }
+                } catch (dotErr) {
+                    this.debug('Failed to update dotfiles:', dotErr.message);
+                }
+            }
             return 0;
         } catch (error) {
             throw new Error(`Failed to set context URL: ${error.message}`);

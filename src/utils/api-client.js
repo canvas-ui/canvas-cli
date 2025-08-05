@@ -273,6 +273,7 @@ class BaseCanvasApiClient {
         documentData,
         containerType = 'context',
         featureArray = [],
+        contextSpec = null,
     ) {
         const baseUrl =
       containerType === 'context'
@@ -289,6 +290,9 @@ class BaseCanvasApiClient {
             documents: Array.isArray(documentData) ? documentData : [documentData],
             featureArray: enhancedFeatureArray,
         };
+        if (contextSpec !== null && containerType === 'workspace') {
+            payload.contextSpec = contextSpec;
+        }
         const response = await this.client.post(`${baseUrl}/documents`, payload);
         return response.data;
     }
@@ -786,6 +790,7 @@ export class CanvasApiClient {
         documentData,
         containerType = 'context',
         featureArray = [],
+        contextSpec = null,
     ) {
         const { apiClient, resourceId } =
       await this.resolveResource(containerAddressOrId);
@@ -794,6 +799,7 @@ export class CanvasApiClient {
             documentData,
             containerType,
             featureArray,
+            contextSpec,
         );
     }
 
