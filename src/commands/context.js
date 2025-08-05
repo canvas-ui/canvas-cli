@@ -224,6 +224,16 @@ export class ContextCommand extends BaseCommand {
             }
             return 0;
         } catch (error) {
+            if (error.message && error.message.includes('404')) {
+                // Remove local cache for this context
+                try {
+                    const remoteId = await this.apiClient.getCurrentRemote();
+                    const key = `${remoteId}:${contextAddress.includes(':') ? contextAddress.split(':').pop() : contextAddress}`;
+                    await this.apiClient.remoteStore.removeContext(key);
+                    console.log(chalk.yellow('Local cache entry removed for missing context'));
+                    return 0;
+                } catch (_cleanupErr) {}
+            }
             throw new Error(`Failed to destroy context: ${error.message}`);
         }
     }
@@ -405,20 +415,22 @@ export class ContextCommand extends BaseCommand {
    * Get all available context paths
    */
     async handlePaths(parsed) {
+        const contextId =
+            parsed.args[1] || (await this.getCurrentContext(parsed.options));
+
         try {
-            const response = await this.apiClient.getContexts();
+            const response = await this.apiClient.getContextPathArray(contextId);
 
             // Handle ResponseObject format
-            const contexts = response.payload || response.data || response;
+            const data = response.payload || response.data || response;
+            const paths = data.pathArray || data;
 
-            if (Array.isArray(contexts)) {
-                contexts.forEach((context) => {
-                    if (context.url && context.url.includes('://')) {
-                        const path = context.url.split('://')[1];
-                        console.log(path);
-                    }
-                });
+            if (Array.isArray(paths)) {
+                paths.forEach((p) => console.log(p));
+            } else if (paths) {
+                console.log(paths);
             }
+
             return 0;
         } catch (error) {
             throw new Error(`Failed to get context paths: ${error.message}`);

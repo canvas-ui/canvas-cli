@@ -466,9 +466,18 @@ export class RemoteCommand extends BaseCommand {
         workspacesResponse;
 
             if (Array.isArray(workspaces)) {
+                const fetchedKeys = new Set();
                 for (const workspace of workspaces) {
                     const workspaceKey = `${remoteId}:${workspace.id || workspace.name}`;
+                    fetchedKeys.add(workspaceKey);
                     await this.remoteStore.updateWorkspace(workspaceKey, workspace);
+                }
+                // Remove stale local workspaces for this remote
+                const localWorkspaces = await this.remoteStore.getWorkspaces();
+                for (const key of Object.keys(localWorkspaces)) {
+                    if (key.startsWith(`${remoteId}:`) && !fetchedKeys.has(key)) {
+                        await this.remoteStore.removeWorkspace(key);
+                    }
                 }
                 console.log(
                     chalk.green(`    ✓ Synced ${workspaces.length} workspaces`),
@@ -482,9 +491,18 @@ export class RemoteCommand extends BaseCommand {
         contextsResponse.payload || contextsResponse.data || contextsResponse;
 
             if (Array.isArray(contexts)) {
+                const fetchedContextKeys = new Set();
                 for (const context of contexts) {
                     const contextKey = `${remoteId}:${context.id}`;
+                    fetchedContextKeys.add(contextKey);
                     await this.remoteStore.updateContext(contextKey, context);
+                }
+                // Remove stale local contexts for this remote
+                const localContexts = await this.remoteStore.getContexts();
+                for (const key of Object.keys(localContexts)) {
+                    if (key.startsWith(`${remoteId}:`) && !fetchedContextKeys.has(key)) {
+                        await this.remoteStore.removeContext(key);
+                    }
                 }
                 console.log(chalk.green(`    ✓ Synced ${contexts.length} contexts`));
             }

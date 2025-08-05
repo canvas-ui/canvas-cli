@@ -155,12 +155,12 @@ export class BaseCommand {
         if (options.context) {
             contextAddress = options.context;
         } else {
-            // Get from session-cli.json
+            // Get from session
             const session = await this.apiClient.remoteStore.getSession();
             if (session.boundContext) {
                 contextAddress = session.boundContext;
             } else {
-                // Fallback to 'default' on current remote
+                // Fallback to default context on current remote
                 const currentRemote = await this.apiClient.getCurrentRemote();
                 if (currentRemote) {
                     contextAddress = `${currentRemote}:default`;
@@ -173,8 +173,40 @@ export class BaseCommand {
         }
 
         // Resolve alias if needed
-        const resolvedAddress =
-      await this.apiClient.remoteStore.resolveAlias(contextAddress);
+        let resolvedAddress = await this.apiClient.remoteStore.resolveAlias(
+            contextAddress,
+        );
+
+        // If the address is only an ID (no colon) attach current remote automatically
+        if (!resolvedAddress.includes(':')) {
+            const currentRemote = await this.apiClient.getCurrentRemote();
+            if (currentRemote) {
+                resolvedAddress = `${currentRemote}:${resolvedAddress}`;
+            }
+        }
+
+        // Validate that the context actually exists. If not, fall back to default.
+        try {
+            await this.apiClient.getContext(resolvedAddress);
+        } catch (err) {
+            // If not found (404) or bad request, fall back to default context
+            try {
+                const currentRemote = await this.apiClient.getCurrentRemote();
+                if (!currentRemote) throw err;
+                const fallbackAddress = `${currentRemote}:default`;
+                await this.apiClient.getContext(fallbackAddress);
+                resolvedAddress = fallbackAddress;
+
+                // Update session so we don\'t keep bad address around
+                await this.apiClient.remoteStore.updateSession({
+                    boundContext: resolvedAddress,
+                });
+            } catch (_) {
+                // Re-throw original error if fallback also fails
+                throw err;
+            }
+        }
+
         return resolvedAddress;
     }
 
