@@ -9,13 +9,13 @@ import readline from 'readline';
 import { spawn } from 'child_process';
 import BaseCommand from './base.js';
 import { parseResourceAddress } from '../utils/address-parser.js';
+import { CANVAS_DIR_CONFIG } from '../utils/config.js';
+import { DATA_TYPES, getWorkspaceDataDir } from '../utils/workspace-data.js';
 
 /**
  * Constants
  */
-const CANVAS_HOME =
-  process.env.CANVAS_USER_HOME || path.join(os.homedir(), '.canvas');
-const DOTFILES_CONFIG_FILE = path.join(CANVAS_HOME, 'config', 'dotfiles.json');
+const DOTFILES_CONFIG_FILE = path.join(CANVAS_DIR_CONFIG, 'dotfiles.json');
 
 /**
  * Dotfile manager command
@@ -103,8 +103,7 @@ export class DotCommand extends BaseCommand {
    * Get local dotfiles directory for an address
    */
     getLocalDotfilesDir(address) {
-        const remoteKey = `${address.userIdentifier}@${address.remote}`;
-        return path.join(CANVAS_HOME, remoteKey, address.resource, 'dotfiles');
+        return getWorkspaceDataDir(address, DATA_TYPES.DOTFILES);
     }
 
     /**
