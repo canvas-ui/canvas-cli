@@ -226,55 +226,146 @@ export class DotCommand extends BaseCommand {
    * List all dotfiles
    */
     async handleList(parsed) {
-        const index = await this.loadDotfilesIndex();
-
-        // Resolve context path filter (defaults to current context)
-        let contextPath = '/';
         try {
-            if (this.options?.context) {
-                contextPath = this.options.context;
-            } else {
-                const contextAddress = await this.getCurrentContext(this.options);
+            // Load local index for activation status
+            const localIndex = await this.loadDotfilesIndex();
+
+            // Resolve context path filter (defaults to current context)
+            let contextPath = '/';
+            let contextId = null;
+            let workspaceId = null;
+
+            try {
+                if (this.options?.context) {
+                    contextPath = this.options.context;
+                }
+
+                // Get current context to determine workspace
+                const contextAddress = await this.getCurrentContext();
+                contextId = contextAddress;
                 const ctxResp = await this.apiClient.getContext(contextAddress);
                 let ctx = ctxResp.payload || ctxResp.data || ctxResp;
                 if (ctx && ctx.context) ctx = ctx.context;
-                contextPath = ctx?.path || '/';
+                workspaceId = ctx?.workspaceId;
+
+                // If no context path specified, use current context path
+                if (!this.options?.context) {
+                    contextPath = ctx?.path || '/';
+                }
+            } catch (err) {
+                console.log(chalk.yellow('Warning: Could not determine current context, showing all local dotfiles only'));
+                contextPath = '/';
             }
-        } catch (_) {
-            contextPath = '/';
-        }
 
-        const normalizedPath =
-            contextPath === '/' ? '' : contextPath.replace(/^\/+/, '').replace(/\/+$/, '');
+                        // Query dotfiles from database
+            let databaseDotfiles = [];
+            try {
+                await this.checkConnection();
+                if (contextId) {
+                    // Get dotfiles for current context (which filters by context automatically)
+                    const response = await this.apiClient.getDotfilesByContext(contextId);
+                    const result = response.payload || response.data || response;
+                    databaseDotfiles = Array.isArray(result) ? result : [];
+                }
+            } catch (err) {
+                console.log(chalk.yellow('Warning: Could not fetch dotfiles from database, showing local index only'));
+                this.debug('Database query error:', err.message);
+            }
 
-        if (Object.keys(index).length === 0) {
-            console.log(chalk.gray('No dotfiles configured'));
-            return 0;
-        }
+            const normalizedPath = contextPath === '/' ? '' : contextPath.replace(/^\/+/, '').replace(/\/+$/, '');
 
-        console.log(chalk.bold('Dotfiles:'));
-        for (const [key, config] of Object.entries(index)) {
-            // Filter files by context path
-            const files = normalizedPath
-                ? (config.files || []).filter((f) => f.dst.startsWith(normalizedPath))
-                : config.files || [];
+            // Combine database and local information
+            const dotfileMap = new Map();
 
-            if (files.length === 0) continue;
+            // Add database dotfiles
+            for (const doc of databaseDotfiles) {
+                const dotfileData = doc.data || doc;
+                const localPath = dotfileData.localPath;
+                const remotePath = dotfileData.remotePath;
+                const docId = doc.id;
 
-            const status = config.status === 'active' ? chalk.green('●') : chalk.gray('○');
-            console.log(`${status} ${chalk.cyan(key)}`);
+                // Filter by context path if specified
+                if (normalizedPath && !remotePath.includes(`/${normalizedPath}/`) && !remotePath.endsWith(`/${normalizedPath}`)) {
+                    continue;
+                }
 
-            for (const file of files) {
-                const fileStatus = file.active ? chalk.green('  ●') : chalk.gray('  ○');
-                if (file.type === 'folder') {
-                    console.log(`${fileStatus} 📁 ${file.src} → ${file.dst}`);
-                } else {
-                    console.log(`${fileStatus} ${file.src} → ${file.dst}`);
+                const key = `${localPath} → ${remotePath}`;
+                dotfileMap.set(key, {
+                    localPath,
+                    remotePath,
+                    docId,
+                    priority: dotfileData.priority || 0,
+                    backupPath: dotfileData.backupPath,
+                    source: 'database',
+                    active: false, // Will be updated from local index
+                });
+            }
+
+            // Add/update with local index information
+            for (const [indexKey, config] of Object.entries(localIndex)) {
+                for (const file of config.files || []) {
+                    // Filter by context path
+                    if (normalizedPath && !file.dst.startsWith(normalizedPath)) {
+                        continue;
+                    }
+
+                    const key = `${file.src} → ${file.dst}`;
+                    const existing = dotfileMap.get(key);
+                    if (existing) {
+                        // Update activation status from local index
+                        existing.active = file.active || false;
+                        existing.localIndexEntry = file;
+                    } else {
+                        // Add local-only entry
+                        dotfileMap.set(key, {
+                            localPath: file.src,
+                            remotePath: file.dst,
+                            docId: null,
+                            priority: 0,
+                            source: 'local-only',
+                            active: file.active || false,
+                            localIndexEntry: file,
+                            type: file.type
+                        });
+                    }
                 }
             }
-        }
 
-        return 0;
+            if (dotfileMap.size === 0) {
+                console.log(chalk.gray('No dotfiles found'));
+                return 0;
+            }
+
+            console.log(chalk.bold('Dotfiles:'));
+
+            // Sort by priority and local path
+            const sortedDotfiles = Array.from(dotfileMap.entries()).sort(([, a], [, b]) => {
+                if (a.priority !== b.priority) return b.priority - a.priority;
+                return a.localPath.localeCompare(b.localPath);
+            });
+
+            for (const [key, dotfile] of sortedDotfiles) {
+                const status = dotfile.active ? chalk.green('●') : chalk.gray('○');
+                const sourceIndicator = dotfile.source === 'database' ? '' : chalk.yellow(' (local only)');
+                const priorityStr = dotfile.priority !== 0 ? chalk.gray(` [${dotfile.priority}]`) : '';
+                const docIdStr = dotfile.docId ? chalk.gray(` #${dotfile.docId}`) : '';
+
+                let displayPath = dotfile.localPath;
+                if (dotfile.type === 'folder' || (dotfile.localIndexEntry && dotfile.localIndexEntry.type === 'folder')) {
+                    displayPath = `📁 ${displayPath}`;
+                }
+
+                console.log(`${status} ${displayPath} → ${dotfile.remotePath}${priorityStr}${docIdStr}${sourceIndicator}`);
+
+                if (dotfile.backupPath) {
+                    console.log(chalk.gray(`    backup: ${dotfile.backupPath}`));
+                }
+            }
+
+            return 0;
+        } catch (error) {
+            throw new Error(`Failed to list dotfiles: ${error.message}`);
+        }
     }
 
     /**
@@ -523,7 +614,8 @@ export class DotCommand extends BaseCommand {
                 const normPath =
                     contextPath === '/' ? '' : contextPath.replace(/^\/+/, '').replace(/\/+$/, '');
 
-                const remotePath = `${address.userIdentifier}@${address.remote}:${address.resource}/${normPath ? normPath + '/' : ''}${destPath}`;
+                // Build remotePath WITHOUT duplicating the context path – context linkage is via contextSpec
+                const remotePath = `${address.userIdentifier}@${address.remote}:${address.resource}/${destPath}`;
 
                 const docData = {
                     schema: 'data/abstraction/dotfile',
@@ -774,6 +866,190 @@ export class DotCommand extends BaseCommand {
     }
 
     /**
+   * Activate dotfiles for a specific context (used by context set -u)
+   */
+    async handleActivateForContext(workspaceAddress, contextPath) {
+        try {
+            console.log(chalk.blue(`Updating dotfiles for context: ${contextPath}`));
+
+            // Parse workspace address
+            const address = await this.parseAddress(workspaceAddress);
+
+                                    // Get dotfiles for the target context path
+            let contextDotfiles = [];
+            try {
+                await this.checkConnection();
+
+                // Get current context address
+                const currentContextAddress = await this.getCurrentContext();
+
+                // If we're switching to a different context path, we need to find/create the target context
+                // For now, get all dotfiles from current context and filter by path
+                // TODO: In the future, we should properly resolve context addresses for different paths
+                const response = await this.apiClient.getDotfilesByContext(currentContextAddress);
+                const result = response.payload || response.data || response;
+                const allDotfiles = Array.isArray(result) ? result : [];
+
+                // Filter dotfiles by context path
+                const normalizedContextPath = contextPath === '/' ? '' : contextPath.replace(/^\/+/, '').replace(/\/+$/, '');
+                if (normalizedContextPath) {
+                    contextDotfiles = allDotfiles.filter(doc => {
+                        const dotfileData = doc.data || doc;
+                        const remotePath = dotfileData.remotePath;
+
+                        // Check if dotfile belongs to this context path
+                        return remotePath.includes(`/${normalizedContextPath}/`) ||
+                               remotePath.endsWith(`/${normalizedContextPath}`);
+                    });
+                } else {
+                    // Root context - include all dotfiles
+                    contextDotfiles = allDotfiles;
+                }
+
+            } catch (err) {
+                this.debug('Could not fetch context dotfiles:', err.message);
+                console.log(chalk.yellow('Warning: Could not fetch dotfiles from database'));
+                return 0;
+            }
+
+            if (contextDotfiles.length === 0) {
+                console.log(chalk.gray(`No dotfiles found for context: ${contextPath}`));
+                return 0;
+            }
+
+            // Load local index and workspace config
+            const localIndex = await this.loadDotfilesIndex();
+            const key = `${address.userIdentifier}@${address.remote}:${address.resource}`;
+            const localDir = this.getLocalDotfilesDir(address);
+
+            if (!existsSync(localDir)) {
+                console.log(chalk.yellow(`Local dotfiles directory not found: ${localDir}`));
+                console.log(chalk.blue(`Run: canvas dot clone ${workspaceAddress}`));
+                return 0;
+            }
+
+            // Ensure workspace entry exists in local index
+            if (!localIndex[key]) {
+                localIndex[key] = {
+                    path: localDir,
+                    status: 'inactive',
+                    files: []
+                };
+            }
+
+            // Deactivate conflicting dotfiles from other contexts first
+            const allActivatedFiles = new Set();
+            for (const config of Object.values(localIndex)) {
+                for (const file of config.files || []) {
+                    if (file.active) {
+                        allActivatedFiles.add(file.src);
+                    }
+                }
+            }
+
+            // Build map of context dotfiles
+            const contextFileMap = new Map();
+            for (const doc of contextDotfiles) {
+                const dotfileData = doc.data || doc;
+                const localPath = dotfileData.localPath;
+                const remotePath = dotfileData.remotePath;
+                const docId = doc.id;
+
+                // Extract relative path from remotePath (remove workspace prefix)
+                const workspacePrefix = `${address.userIdentifier}@${address.remote}:${address.resource}/`;
+                let relativePath = remotePath;
+                if (remotePath.startsWith(workspacePrefix)) {
+                    relativePath = remotePath.substring(workspacePrefix.length);
+                }
+                // Handle accidental duplicated context path segments (e.g., work/wipro/work/wipro/file)
+
+
+                contextFileMap.set(localPath, {
+                    src: localPath,
+                    dst: relativePath,
+                    docId,
+                    priority: dotfileData.priority || 0,
+                    remotePath,
+                    type: 'file' // We'll determine this when activating
+                });
+            }
+
+            // Deactivate any currently active files that conflict with context files
+            let deactivatedCount = 0;
+            for (const [config_key, config] of Object.entries(localIndex)) {
+                for (const file of config.files || []) {
+                    if (file.active && contextFileMap.has(file.src)) {
+                        // Deactivate this file as it will be replaced by context version
+                        try {
+                            await this.deactivateFile(file, path.dirname(this.getLocalDotfilesDir(await this.parseAddress(config_key))));
+                            file.active = false;
+                            deactivatedCount++;
+                        } catch (err) {
+                            this.debug(`Failed to deactivate ${file.src}:`, err.message);
+                        }
+                    }
+                }
+            }
+
+            if (deactivatedCount > 0) {
+                console.log(chalk.yellow(`Deactivated ${deactivatedCount} conflicting dotfiles`));
+            }
+
+            // Activate context dotfiles
+            let activatedCount = 0;
+            const contextFiles = Array.from(contextFileMap.values()).sort((a, b) => b.priority - a.priority);
+
+            for (const fileData of contextFiles) {
+                try {
+                    // Check if file exists in local dotfiles repo
+                    const dotfilePath = path.join(localDir, fileData.dst);
+                    if (!existsSync(dotfilePath)) {
+                        console.log(chalk.yellow(`Skipping ${fileData.src}: dotfile not found at ${dotfilePath}`));
+                        continue;
+                    }
+
+                    // Determine file type
+                    try {
+                        const stats = await fs.stat(dotfilePath);
+                        fileData.type = stats.isDirectory() ? 'folder' : 'file';
+                    } catch (err) {
+                        fileData.type = 'file';
+                    }
+
+                    // Activate the file
+                    await this.activateFile(fileData, localDir, fileData.docId);
+                    fileData.active = true;
+                    fileData.addedAt = new Date().toISOString();
+                    activatedCount++;
+
+                    // Add to local index if not already there
+                    const existingFile = localIndex[key].files.find(f => f.src === fileData.src);
+                    if (existingFile) {
+                        Object.assign(existingFile, fileData);
+                    } else {
+                        localIndex[key].files.push(fileData);
+                    }
+
+                } catch (err) {
+                    console.log(chalk.red(`Failed to activate ${fileData.src}: ${err.message}`));
+                }
+            }
+
+            // Update local index
+            if (activatedCount > 0) {
+                localIndex[key].status = 'active';
+            }
+            await this.saveDotfilesIndex(localIndex);
+
+            console.log(chalk.green(`✓ Activated ${activatedCount} dotfiles for context: ${contextPath}`));
+            return 0;
+
+        } catch (error) {
+            throw new Error(`Failed to activate dotfiles for context: ${error.message}`);
+        }
+    }
+
+    /**
    * Activate dotfiles (create symlinks)
    */
     async handleActivate(parsed) {
@@ -801,6 +1077,36 @@ export class DotCommand extends BaseCommand {
         }
 
         try {
+            // Fetch dotfiles from database to get document IDs
+            let databaseDotfiles = [];
+            let docIdMap = new Map(); // Map from localPath to docId
+
+            try {
+                await this.checkConnection();
+                // Get current context to determine workspace
+                const contextAddress = await this.getCurrentContext(this.options);
+                const ctxResp = await this.apiClient.getContext(contextAddress);
+                let ctx = ctxResp.payload || ctxResp.data || ctxResp;
+                if (ctx && ctx.context) ctx = ctx.context;
+                const workspaceId = ctx?.workspaceId;
+
+                if (workspaceId) {
+                    const response = await this.apiClient.getDotfilesByWorkspace(workspaceId);
+                    const result = response.payload || response.data || response;
+                    databaseDotfiles = Array.isArray(result) ? result : [];
+
+                    // Build map from localPath to docId
+                    for (const doc of databaseDotfiles) {
+                        const dotfileData = doc.data || doc;
+                        const localPath = dotfileData.localPath;
+                        const docId = doc.id;
+                        docIdMap.set(localPath, docId);
+                    }
+                }
+            } catch (err) {
+                this.debug('Could not fetch dotfiles from database:', err.message);
+            }
+
             if (address.path) {
                 // Activate specific file
                 const targetFile = address.path.startsWith('/')
@@ -812,18 +1118,26 @@ export class DotCommand extends BaseCommand {
                     throw new Error(`File not found in index: ${targetFile}`);
                 }
 
-                await this.activateFile(fileEntry, localDir);
+                const docId = docIdMap.get(fileEntry.src);
+                await this.activateFile(fileEntry, localDir, docId);
 
                 // Update index
                 fileEntry.active = true;
+                if (docId) {
+                    fileEntry.docId = docId;
+                }
                 await this.saveDotfilesIndex(index);
 
                 console.log(chalk.green(`✓ Activated ${fileEntry.src}`));
             } else {
                 // Activate all files
                 for (const fileEntry of config.files) {
-                    await this.activateFile(fileEntry, localDir);
+                    const docId = docIdMap.get(fileEntry.src);
+                    await this.activateFile(fileEntry, localDir, docId);
                     fileEntry.active = true;
+                    if (docId) {
+                        fileEntry.docId = docId;
+                    }
                 }
 
                 config.status = 'active';
@@ -928,7 +1242,7 @@ export class DotCommand extends BaseCommand {
     /**
    * Activate a single dotfile or folder (create symlink)
    */
-    async activateFile(fileEntry, localDir) {
+    async activateFile(fileEntry, localDir, docId = null) {
         const srcPath = fileEntry.src.replace(/^~/, os.homedir());
         const dotfilePath = path.join(localDir, fileEntry.dst);
 
@@ -938,11 +1252,25 @@ export class DotCommand extends BaseCommand {
 
         // Check if target already exists
         if (existsSync(srcPath)) {
-            // Create backup
-            const backupPath = `${srcPath}.backup.${Date.now()}`;
+            // Create backup with document ID if available, otherwise fallback to timestamp
+            const backupSuffix = docId ? `backup.${docId}` : `backup.${Date.now()}`;
+            const backupPath = `${srcPath}.${backupSuffix}`;
+
+            // If backup already exists with this docId, remove it first
+            if (existsSync(backupPath)) {
+                await fs.rm(backupPath, { recursive: true, force: true });
+            }
+
             await this.execCommand('mv', [srcPath, backupPath]);
             const type = fileEntry.type === 'folder' ? 'folder' : 'file';
             console.log(chalk.yellow(`Backed up existing ${type} to: ${backupPath}`));
+
+            // Update file entry with backup info
+            fileEntry.backupPath = backupPath;
+            fileEntry.backupCreatedAt = new Date().toISOString();
+            if (docId) {
+                fileEntry.docId = docId;
+            }
         }
 
         // Create symlink (works for both files and directories)

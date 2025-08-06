@@ -313,6 +313,7 @@ function showHelp() {
     console.log('  canvas context switch my-project');
     console.log('  canvas context switch prod          # Using alias');
     console.log('  canvas context documents');
+    console.log('  canvas context dotfiles');
     console.log('  canvas context tabs');
     console.log('  canvas context notes                # List notes');
     console.log(

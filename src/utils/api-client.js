@@ -370,6 +370,42 @@ class BaseCanvasApiClient {
         return response.data;
     }
 
+    // Dotfile-specific API methods
+    async getDotfiles(containerId, containerType = 'context', options = {}) {
+        const params = new URLSearchParams();
+
+        // Always include dotfile feature
+        const featureArray = ['data/abstraction/dotfile', ...(options.featureArray || [])];
+        featureArray.forEach((feature) => params.append('featureArray', feature));
+
+        if (options.filterArray && Array.isArray(options.filterArray)) {
+            options.filterArray.forEach((filter) =>
+                params.append('filterArray', filter),
+            );
+        }
+        if (options.includeServerContext)
+            params.append('includeServerContext', 'true');
+        if (options.includeClientContext)
+            params.append('includeClientContext', 'true');
+        if (options.limit) params.append('limit', options.limit);
+
+        const baseUrl =
+            containerType === 'context'
+                ? `/contexts/${containerId}`
+                : `/workspaces/${containerId}`;
+        const url = `${baseUrl}/documents${params.toString() ? '?' + params.toString() : ''}`;
+        const response = await this.client.get(url);
+        return response.data;
+    }
+
+    async getDotfilesByWorkspace(workspaceId, options = {}) {
+        return this.getDotfiles(workspaceId, 'workspace', options);
+    }
+
+    async getDotfilesByContext(contextId, options = {}) {
+        return this.getDotfiles(contextId, 'context', options);
+    }
+
     // Schema API methods
     async getSchemas() {
         const response = await this.client.get('/schemas');
@@ -431,6 +467,42 @@ class BaseCanvasApiClient {
     async ping() {
         const response = await this.client.get('/ping');
         return response.data;
+    }
+
+    // Dotfile-specific API methods
+    async getDotfiles(containerId, containerType = 'context', options = {}) {
+        const params = new URLSearchParams();
+
+        // Always include dotfile feature
+        const featureArray = ['data/abstraction/dotfile', ...(options.featureArray || [])];
+        featureArray.forEach((feature) => params.append('featureArray', feature));
+
+        if (options.filterArray && Array.isArray(options.filterArray)) {
+            options.filterArray.forEach((filter) =>
+                params.append('filterArray', filter),
+            );
+        }
+        if (options.includeServerContext)
+            params.append('includeServerContext', 'true');
+        if (options.includeClientContext)
+            params.append('includeClientContext', 'true');
+        if (options.limit) params.append('limit', options.limit);
+
+        const baseUrl =
+            containerType === 'context'
+                ? `/contexts/${containerId}`
+                : `/workspaces/${containerId}`;
+        const url = `${baseUrl}/documents${params.toString() ? '?' + params.toString() : ''}`;
+        const response = await this.client.get(url);
+        return response.data;
+    }
+
+    async getDotfilesByWorkspace(workspaceId, options = {}) {
+        return this.getDotfiles(workspaceId, 'workspace', options);
+    }
+
+    async getDotfilesByContext(contextId, options = {}) {
+        return this.getDotfiles(contextId, 'context', options);
     }
 }
 
@@ -1070,6 +1142,22 @@ export class CanvasApiClient {
     clearCache() {
         this.apiClients.clear();
         debug('Cleared API client cache');
+    }
+
+    // Dotfile-specific API methods that delegate to appropriate remote client
+    async getDotfiles(containerAddressOrId, containerType = 'context', options = {}) {
+        const { apiClient, resourceId } = await this.resolveResource(containerAddressOrId);
+        return apiClient.getDotfiles(resourceId, containerType, options);
+    }
+
+    async getDotfilesByWorkspace(workspaceAddressOrId, options = {}) {
+        const { apiClient, resourceId } = await this.resolveResource(workspaceAddressOrId);
+        return apiClient.getDotfilesByWorkspace(resourceId, options);
+    }
+
+    async getDotfilesByContext(contextAddressOrId, options = {}) {
+        const { apiClient, resourceId } = await this.resolveResource(contextAddressOrId);
+        return apiClient.getDotfilesByContext(resourceId, options);
     }
 }
 

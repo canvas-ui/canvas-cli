@@ -287,8 +287,7 @@ export class ContextCommand extends BaseCommand {
                     if (remoteId) {
                         const workspaceAddress = `${remoteId}:${workspaceName}`;
                         const dot = new DotCommand(this.config);
-                        await dot.handleActivate({ args: ['activate', workspaceAddress], options: { context: contextPath } });
-                        console.log(chalk.green('✓ Dotfiles updated'));
+                        await dot.handleActivateForContext(workspaceAddress, contextPath);
                     }
                 } catch (dotErr) {
                     this.debug('Failed to update dotfiles:', dotErr.message);
@@ -332,8 +331,7 @@ export class ContextCommand extends BaseCommand {
                     if (remoteId) {
                         const workspaceAddress = `${remoteId}:${workspaceName}`;
                         const dot = new DotCommand(this.config);
-                        await dot.handleActivate({ args: ['activate', workspaceAddress], options: { context: contextPath } });
-                        console.log(chalk.green('✓ Dotfiles updated'));
+                        await dot.handleActivateForContext(workspaceAddress, contextPath);
                     }
                 } catch (dotErr) {
                     this.debug('Failed to update dotfiles:', dotErr.message);
@@ -625,6 +623,30 @@ export class ContextCommand extends BaseCommand {
             return 0;
         } catch (error) {
             throw new Error(`Failed to list documents: ${error.message}`);
+        }
+    }
+
+        /**
+   * Handle dotfile commands (alias for handleDotfiles)
+   */
+    async handleDot(parsed) {
+        return await this.handleDotfiles(parsed);
+    }
+
+    /**
+   * List dotfiles in current context
+   */
+    async handleDotfiles(parsed) {
+        const contextAddress = parsed.args[1] || (await this.getCurrentContext(parsed.options));
+
+        try {
+            const response = await this.apiClient.getDotfilesByContext(contextAddress);
+            const dotfiles = response.payload || response.data || response;
+
+            await this.output(dotfiles, 'dotfile');
+            return 0;
+        } catch (error) {
+            throw new Error(`Failed to list dotfiles: ${error.message}`);
         }
     }
 
@@ -1232,6 +1254,7 @@ export class ContextCommand extends BaseCommand {
         console.log();
         console.log(chalk.bold('Document Examples:'));
         console.log('  canvas context documents');
+        console.log('  canvas context dotfiles');
         console.log('  canvas context tabs');
         console.log(
             '  canvas context tab add https://example.com --title "Example Site"',
