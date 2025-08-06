@@ -63,7 +63,7 @@ class BaseCanvasApiClient {
 
                 // Handle ResponseObject format
                 if (response.data && typeof response.data === 'object') {
-                    const { status, statusCode, message, payload, count } = response.data;
+                    const { status, statusCode, message } = response.data;
 
                     // If it's a ResponseObject, return it as-is for CLI to handle
                     if (status && statusCode && message !== undefined) {
@@ -467,42 +467,6 @@ class BaseCanvasApiClient {
     async ping() {
         const response = await this.client.get('/ping');
         return response.data;
-    }
-
-    // Dotfile-specific API methods
-    async getDotfiles(containerId, containerType = 'context', options = {}) {
-        const params = new URLSearchParams();
-
-        // Always include dotfile feature
-        const featureArray = ['data/abstraction/dotfile', ...(options.featureArray || [])];
-        featureArray.forEach((feature) => params.append('featureArray', feature));
-
-        if (options.filterArray && Array.isArray(options.filterArray)) {
-            options.filterArray.forEach((filter) =>
-                params.append('filterArray', filter),
-            );
-        }
-        if (options.includeServerContext)
-            params.append('includeServerContext', 'true');
-        if (options.includeClientContext)
-            params.append('includeClientContext', 'true');
-        if (options.limit) params.append('limit', options.limit);
-
-        const baseUrl =
-            containerType === 'context'
-                ? `/contexts/${containerId}`
-                : `/workspaces/${containerId}`;
-        const url = `${baseUrl}/documents${params.toString() ? '?' + params.toString() : ''}`;
-        const response = await this.client.get(url);
-        return response.data;
-    }
-
-    async getDotfilesByWorkspace(workspaceId, options = {}) {
-        return this.getDotfiles(workspaceId, 'workspace', options);
-    }
-
-    async getDotfilesByContext(contextId, options = {}) {
-        return this.getDotfiles(contextId, 'context', options);
     }
 }
 

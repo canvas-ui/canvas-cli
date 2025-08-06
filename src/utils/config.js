@@ -35,13 +35,23 @@ function getUserHome() {
 
 const CANVAS_USER_HOME = process.env.CANVAS_USER_HOME || getUserHome();
 
-// CLI config files in config directory
-const CLI_CONFIG_DIR = path.join(CANVAS_USER_HOME, 'config');
-const REMOTES_FILE = path.join(CLI_CONFIG_DIR, 'remotes.json');
-const CONTEXTS_FILE = path.join(CLI_CONFIG_DIR, 'contexts.index.json');
-const WORKSPACES_FILE = path.join(CLI_CONFIG_DIR, 'workspaces.index.json');
-const ALIASES_FILE = path.join(CLI_CONFIG_DIR, 'cli-aliases.json');
-const SESSION_CLI_FILE = path.join(CLI_CONFIG_DIR, 'cli-session.json');
+// Main directories
+const CANVAS_DIR_DB = path.join(CANVAS_USER_HOME, 'db');
+const CANVAS_DIR_CONFIG = path.join(CANVAS_USER_HOME, 'config');
+const CANVAS_DIR_DATA = path.join(CANVAS_USER_HOME, 'data');
+const CANVAS_DIR_CACHE = path.join(CANVAS_USER_HOME, 'cache');
+const CANVAS_DIR_VAR = path.join(CANVAS_USER_HOME, 'var');
+
+// Config files in CANVAS_DIR_CONFIG
+const REMOTES_FILE = path.join(CANVAS_DIR_CONFIG, 'remotes.json');
+const ALIASES_FILE = path.join(CANVAS_DIR_CONFIG, 'cli-aliases.json');
+const SESSION_CLI_FILE = path.join(CANVAS_DIR_CONFIG, 'cli-session.json');
+
+// Index files in CANVAS_DIR_DB
+const CONTEXTS_FILE = path.join(CANVAS_DIR_DB, 'contexts.json');
+const WORKSPACES_FILE = path.join(CANVAS_DIR_DB, 'workspaces.json');
+const AGENTS_FILE = path.join(CANVAS_DIR_DB, 'agents.json');
+const DOTFILES_FILE = path.join(CANVAS_DIR_DB, 'dotfiles.json');
 
 // Default configuration for main config (simplified for resource address schema)
 const DEFAULT_CONFIG = {
@@ -109,7 +119,7 @@ const EXIT_CODES = {
 const config = new Conf({
     projectName: 'canvas',
     configName: 'cli',
-    cwd: CLI_CONFIG_DIR,
+    cwd: CANVAS_DIR_CONFIG,
     defaults: DEFAULT_CONFIG,
     configFileMode: 0o600, // Secure file permissions
 });
@@ -122,31 +132,45 @@ class RemoteStore {
         this.remotesFile = REMOTES_FILE;
         this.contextsFile = CONTEXTS_FILE;
         this.workspacesFile = WORKSPACES_FILE;
+        this.agentsFile = AGENTS_FILE;
+        this.dotfilesFile = DOTFILES_FILE;
         this.aliasesFile = ALIASES_FILE;
         this.sessionFile = SESSION_CLI_FILE;
         this.ensureFiles();
     }
 
     async ensureFiles() {
-    // Ensure directories exist
+        // Ensure directories exist
         await fs.mkdir(CANVAS_USER_HOME, { recursive: true });
-        await fs.mkdir(CLI_CONFIG_DIR, { recursive: true });
+        await fs.mkdir(CANVAS_DIR_CONFIG, { recursive: true });
+        await fs.mkdir(CANVAS_DIR_DB, { recursive: true });
+        await fs.mkdir(CANVAS_DIR_DATA, { recursive: true });
+        await fs.mkdir(CANVAS_DIR_CACHE, { recursive: true });
+        await fs.mkdir(CANVAS_DIR_VAR, { recursive: true });
 
-        // Initialize files if they don't exist
+        // Initialize config files if they don't exist
         if (!existsSync(this.remotesFile)) {
             await this.writeFile(this.remotesFile, DEFAULT_REMOTE_CONFIG);
-        }
-        if (!existsSync(this.contextsFile)) {
-            await this.writeFile(this.contextsFile, {});
-        }
-        if (!existsSync(this.workspacesFile)) {
-            await this.writeFile(this.workspacesFile, {});
         }
         if (!existsSync(this.aliasesFile)) {
             await this.writeFile(this.aliasesFile, DEFAULT_ALIASES_CONFIG);
         }
         if (!existsSync(this.sessionFile)) {
             await this.writeFile(this.sessionFile, DEFAULT_SESSION_CONFIG);
+        }
+
+        // Initialize index files if they don't exist
+        if (!existsSync(this.contextsFile)) {
+            await this.writeFile(this.contextsFile, {});
+        }
+        if (!existsSync(this.workspacesFile)) {
+            await this.writeFile(this.workspacesFile, {});
+        }
+        if (!existsSync(this.agentsFile)) {
+            await this.writeFile(this.agentsFile, {});
+        }
+        if (!existsSync(this.dotfilesFile)) {
+            await this.writeFile(this.dotfilesFile, {});
         }
     }
 
@@ -257,6 +281,56 @@ class RemoteStore {
         await this.writeFile(this.workspacesFile, workspaces);
     }
 
+    // Agents management
+    async getAgents() {
+        return this.readFile(this.agentsFile);
+    }
+
+    async getAgent(agentKey) {
+        const agents = await this.getAgents();
+        return agents[agentKey] || null;
+    }
+
+    async updateAgent(agentKey, agentData) {
+        const agents = await this.getAgents();
+        agents[agentKey] = {
+            ...agentData,
+            lastSynced: new Date().toISOString(),
+        };
+        await this.writeFile(this.agentsFile, agents);
+    }
+
+    async removeAgent(agentKey) {
+        const agents = await this.getAgents();
+        delete agents[agentKey];
+        await this.writeFile(this.agentsFile, agents);
+    }
+
+    // Dotfiles management
+    async getDotfiles() {
+        return this.readFile(this.dotfilesFile);
+    }
+
+    async getDotfile(dotfileKey) {
+        const dotfiles = await this.getDotfiles();
+        return dotfiles[dotfileKey] || null;
+    }
+
+    async updateDotfile(dotfileKey, dotfileData) {
+        const dotfiles = await this.getDotfiles();
+        dotfiles[dotfileKey] = {
+            ...dotfileData,
+            lastSynced: new Date().toISOString(),
+        };
+        await this.writeFile(this.dotfilesFile, dotfiles);
+    }
+
+    async removeDotfile(dotfileKey) {
+        const dotfiles = await this.getDotfiles();
+        delete dotfiles[dotfileKey];
+        await this.writeFile(this.dotfilesFile, dotfiles);
+    }
+
     // Session management
     async getSession() {
         return this.readFile(this.sessionFile);
@@ -346,13 +420,20 @@ export default config;
 export {
     MACHINE_ID,
     APP_ID,
-    CLI_CONFIG_DIR,
+    CANVAS_USER_HOME,
+    CANVAS_DIR_DB,
+    CANVAS_DIR_CONFIG,
+    CANVAS_DIR_DATA,
+    CANVAS_DIR_CACHE,
+    CANVAS_DIR_VAR,
     CLIENT_CONTEXT_ARRAY,
     EXIT_CODES,
     remoteStore,
     REMOTES_FILE,
     CONTEXTS_FILE,
     WORKSPACES_FILE,
+    AGENTS_FILE,
+    DOTFILES_FILE,
     ALIASES_FILE,
     SESSION_CLI_FILE,
 };
