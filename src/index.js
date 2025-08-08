@@ -32,6 +32,7 @@ import RemoteCommand from './commands/remote.js';
 import AliasCommand from './commands/alias.js';
 import DiagnosticCommand from './commands/diagnostic.js';
 import DotCommand from './commands/dot.js';
+import HiCommand from './commands/hi.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -64,6 +65,8 @@ const COMMANDS = {
     diagnostic: DiagnosticCommand, // diagnostic tools
     diag: DiagnosticCommand, // alias
     dot: DotCommand, // dotfile manager
+    agent: HiCommand, // agent placeholder
+    hi: HiCommand, // alias
     help: null, // handled separately
     version: null, // handled separately
 };
@@ -274,6 +277,7 @@ function showHelp() {
     console.log('  q                 AI assistant (context-aware)');
     console.log('  diagnostic, diag  Platform diagnostic tools');
     console.log('  dot               Dotfile manager');
+    console.log('  agent, hi         Agent (placeholder)');
     console.log();
 
     console.log(chalk.bold('Global Options:'));

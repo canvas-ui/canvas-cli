@@ -196,6 +196,69 @@ install_canvas() {
     fi
 }
 
+# Create simple bash wrappers for subcommands
+create_alias_wrappers() {
+    # Only for Unix-like systems
+    case "$(uname -s)" in
+        CYGWIN*|MINGW*|MSYS*)
+            warning "Alias wrappers are not supported on Windows in this script"
+            return 0
+            ;;
+    esac
+
+    local -a names=("ws" "ctx" "dot" "q" "agent")
+    local created=()
+
+    mkdir -p "$INSTALL_DIR" || error "Failed to create directory: $INSTALL_DIR"
+
+    for name in "${names[@]}"; do
+        local target="$INSTALL_DIR/$name"
+        local cmd
+        case "$name" in
+            ws) cmd="workspace" ;;
+            ctx) cmd="context" ;;
+            dot) cmd="dot" ;;
+            q) cmd="q" ;;
+            agent) cmd="agent" ;;
+            *) cmd="$name" ;;
+        esac
+
+        # Write a tiny wrapper script
+        cat > "$target" <<EOF
+#!/usr/bin/env bash
+exec "$INSTALL_DIR/$BINARY_NAME" $cmd "${1+"$@"}"
+EOF
+        chmod +x "$target" || warning "Failed to make $target executable"
+        created+=("$target")
+    done
+
+    success "Created alias wrappers: ${created[*]}"
+}
+
+# Prompt helper (Y/n)
+prompt_yes_no() {
+    local prompt="$1"
+    local default_answer="$2" # "Y" or "N"
+    local answer
+    local default_hint
+
+    if [[ "$default_answer" == "Y" ]]; then
+        default_hint="Y/n"
+    else
+        default_hint="y/N"
+    fi
+
+    read -r -p "${prompt} [${default_hint}] " answer || true
+    if [[ -z "$answer" ]]; then
+        answer="$default_answer"
+    fi
+
+    case "${answer}" in
+        Y|y|yes|YES) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 # Show usage help
 show_help() {
     cat << EOF
@@ -240,6 +303,13 @@ check_dependencies
 
 # Install Canvas CLI
 install_canvas
+
+# Ask to create alias wrappers (dot, ws, ctx, agent, q)
+if prompt_yes_no "Create alias wrappers (dot, ws, ctx, agent, q) in $INSTALL_DIR?" "Y"; then
+    create_alias_wrappers
+else
+    log "Skipping alias wrapper creation"
+fi
 
 # Show PATH setup information if needed
 if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
