@@ -280,18 +280,24 @@ export class DotCommand extends BaseCommand {
             for (const doc of databaseDotfiles) {
                 const dotfileData = doc.data || doc;
                 const localPath = dotfileData.localPath;
-                const remotePath = dotfileData.remotePath;
+                const displayRemote = dotfileData.repoPath;
                 const docId = doc.id;
 
                 // Filter by context path if specified
-                if (normalizedPath && !remotePath.includes(`/${normalizedPath}/`) && !remotePath.endsWith(`/${normalizedPath}`)) {
+                if (
+                    normalizedPath &&
+                    (!displayRemote || (
+                        !displayRemote.includes(`/${normalizedPath}/`) &&
+                        !displayRemote.endsWith(`/${normalizedPath}`)
+                    ))
+                ) {
                     continue;
                 }
 
-                const key = `${localPath} → ${remotePath}`;
+                const key = `${localPath} → ${displayRemote}`;
                 dotfileMap.set(key, {
                     localPath,
-                    remotePath,
+                    remotePath: displayRemote,
                     docId,
                     priority: dotfileData.priority || 0,
                     backupPath: dotfileData.backupPath,
@@ -613,14 +619,16 @@ export class DotCommand extends BaseCommand {
                 const normPath =
                     contextPath === '/' ? '' : contextPath.replace(/^\/+/, '').replace(/\/+$/, '');
 
-                // Build remotePath WITHOUT duplicating the context path – context linkage is via contextSpec
-                const remotePath = `${address.userIdentifier}@${address.remote}:${address.resource}/${destPath}`;
+                // Build full repo URL and repoPath.
+                const repoUrl = (await this.buildGitUrl(address)).replace(/\/$/, '');
+                const repoPath = destPath;
 
                 const docData = {
                     schema: 'data/abstraction/dotfile',
                     data: {
                         localPath: srcPath,
-                        remotePath: remotePath,
+                        repoUrl: repoUrl,
+                        repoPath: repoPath,
                         priority: 0,
                     },
                 };
@@ -894,11 +902,11 @@ export class DotCommand extends BaseCommand {
                 if (normalizedContextPath) {
                     contextDotfiles = allDotfiles.filter(doc => {
                         const dotfileData = doc.data || doc;
-                        const remotePath = dotfileData.remotePath;
+                        const repoPath = dotfileData.repoPath;
 
                         // Check if dotfile belongs to this context path
-                        return remotePath.includes(`/${normalizedContextPath}/`) ||
-                               remotePath.endsWith(`/${normalizedContextPath}`);
+                        return repoPath && (repoPath.includes(`/${normalizedContextPath}/`) ||
+                               repoPath.endsWith(`/${normalizedContextPath}`));
                     });
                 } else {
                     // Root context - include all dotfiles
@@ -951,15 +959,11 @@ export class DotCommand extends BaseCommand {
             for (const doc of contextDotfiles) {
                 const dotfileData = doc.data || doc;
                 const localPath = dotfileData.localPath;
-                const remotePath = dotfileData.remotePath;
+                const displayRemote = dotfileData.repoPath;
                 const docId = doc.id;
 
-                // Extract relative path from remotePath (remove workspace prefix)
-                const workspacePrefix = `${address.userIdentifier}@${address.remote}:${address.resource}/`;
-                let relativePath = remotePath;
-                if (remotePath.startsWith(workspacePrefix)) {
-                    relativePath = remotePath.substring(workspacePrefix.length);
-                }
+                // Extract relative path from repository
+                const relativePath = dotfileData.repoPath;
                 // Handle accidental duplicated context path segments (e.g., work/wipro/work/wipro/file)
 
 
@@ -968,7 +972,7 @@ export class DotCommand extends BaseCommand {
                     dst: relativePath,
                     docId,
                     priority: dotfileData.priority || 0,
-                    remotePath,
+                    remotePath: displayRemote,
                     type: 'file' // We'll determine this when activating
                 });
             }
