@@ -206,7 +206,7 @@ create_alias_wrappers() {
             ;;
     esac
 
-    local -a names=("ws" "ctx" "dot" "q" "agent")
+    local -a names=("ws" "ctx" "dot" "q")
     local created=()
 
     mkdir -p "$INSTALL_DIR" || error "Failed to create directory: $INSTALL_DIR"
@@ -219,17 +219,23 @@ create_alias_wrappers() {
             ctx) cmd="context" ;;
             dot) cmd="dot" ;;
             q) cmd="q" ;;
-            agent) cmd="agent" ;;
             *) cmd="$name" ;;
         esac
 
-        # Write a tiny wrapper script
-        cat > "$target" <<EOF
+        # Ask for confirmation
+        local confirm
+        read -p "Create alias wrapper for '$name' at $target? (y/n) " confirm
+        if [[ $confirm =~ ^[Yy]$ ]]; then
+            # Write a tiny wrapper script
+            cat > "$target" <<EOF
 #!/usr/bin/env bash
 exec "$INSTALL_DIR/$BINARY_NAME" $cmd "${1+"$@"}"
 EOF
-        chmod +x "$target" || warning "Failed to make $target executable"
-        created+=("$target")
+            chmod +x "$target" || warning "Failed to make $target executable"
+            created+=("$target")
+        else
+            warning "Skipped creating $target"
+        fi
     done
 
     success "Created alias wrappers: ${created[*]}"
