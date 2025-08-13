@@ -213,14 +213,6 @@ create_alias_wrappers() {
 
     for name in "${names[@]}"; do
         local target="$INSTALL_DIR/$name"
-        local cmd
-        case "$name" in
-            ws) cmd="workspace" ;;
-            ctx) cmd="context" ;;
-            dot) cmd="dot" ;;
-            q) cmd="q" ;;
-            *) cmd="$name" ;;
-        esac
 
         # Ask for confirmation
         local confirm
@@ -229,7 +221,7 @@ create_alias_wrappers() {
             # Write a tiny wrapper script
             cat > "$target" <<EOF
 #!/usr/bin/env bash
-exec "$INSTALL_DIR/$BINARY_NAME" $cmd "${1+"$@"}"
+exec "$INSTALL_DIR/$BINARY_NAME" "$name" "${1+"$@"}"
 EOF
             chmod +x "$target" || warning "Failed to make $target executable"
             created+=("$target")
