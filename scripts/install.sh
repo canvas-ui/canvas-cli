@@ -218,8 +218,8 @@ create_alias_wrappers() {
 #!/usr/bin/env bash
 exec "$INSTALL_DIR/$BINARY_NAME" "$name" "${1+"$@"}"
 EOF
-            chmod +x "$target" || warning "Failed to make $target executable"
-            created+=("$target")
+        chmod +x "$target" || warning "Failed to make $target executable"
+        created+=("$target")
     done
 
     success "Created alias wrappers: ${created[*]}"
@@ -294,12 +294,8 @@ check_dependencies
 # Install Canvas CLI
 install_canvas
 
-# Ask to create alias wrappers (dot, ws, ctx, agent, q)
-if prompt_yes_no "Create alias wrappers (dot, ws, ctx, agent, q) in $INSTALL_DIR?" "Y"; then
-    create_alias_wrappers
-else
-    log "Skipping alias wrapper creation"
-fi
+# Create alias wrappers for dot, ws, ctx, q
+create_alias_wrappers
 
 # Show PATH setup information if needed
 if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
