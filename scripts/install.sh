@@ -213,21 +213,13 @@ create_alias_wrappers() {
 
     for name in "${names[@]}"; do
         local target="$INSTALL_DIR/$name"
-
-        # Ask for confirmation
-        local confirm
-        read -p "Create alias wrapper for '$name' at $target? (y/n) " confirm
-        if [[ $confirm =~ ^[Yy]$ ]]; then
-            # Write a tiny wrapper script
-            cat > "$target" <<EOF
+        # Write a tiny wrapper script
+        cat > "$target" <<EOF
 #!/usr/bin/env bash
 exec "$INSTALL_DIR/$BINARY_NAME" "$name" "${1+"$@"}"
 EOF
             chmod +x "$target" || warning "Failed to make $target executable"
             created+=("$target")
-        else
-            warning "Skipped creating $target"
-        fi
     done
 
     success "Created alias wrappers: ${created[*]}"
