@@ -216,7 +216,7 @@ create_alias_wrappers() {
         # Write a tiny wrapper script
         cat > "$target" <<EOF
 #!/usr/bin/env bash
-exec "$INSTALL_DIR/$BINARY_NAME" "$name" "${1+"$@"}"
+exec "$INSTALL_DIR/$BINARY_NAME" "$name" ${@}
 EOF
         chmod +x "$target" || warning "Failed to make $target executable"
         created+=("$target")
