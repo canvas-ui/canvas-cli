@@ -57,7 +57,27 @@ export class ContextCommand extends BaseCommand {
    */
     async handleList(parsed) {
         try {
-            // Use cached contexts from local storage instead of API call
+            // Try to fetch from remote first while updating local index
+            let remoteUpdateSuccess = false;
+            try {
+                const remoteId = await this.apiClient.getCurrentRemote();
+                if (remoteId && await this.apiClient.isRemoteReachable(remoteId)) {
+                    this.debug('Remote is reachable, updating local index...');
+                    remoteUpdateSuccess = await this.apiClient.syncRemoteAndUpdateIndex(remoteId, { 
+                        contexts: true, 
+                        workspaces: false, 
+                        silent: true 
+                    });
+                    if (remoteUpdateSuccess) {
+                        this.debug('Local index updated successfully');
+                    }
+                }
+            } catch (remoteError) {
+                this.debug('Failed to update from remote:', remoteError.message);
+                // Continue with local cache fallback
+            }
+
+            // Use cached contexts from local storage (which may have been just updated)
             const cachedContexts = await this.apiClient.getCachedContexts();
 
             // Transform cached data to include remote information
@@ -316,6 +336,23 @@ export class ContextCommand extends BaseCommand {
             // Handle ResponseObject format
             const result = response.payload || response.data || response;
             console.log(chalk.green(`✓ Context URL set to '${result.url}'`));
+
+            // Trigger local index update if remote is reachable
+            try {
+                const remoteId = await this.apiClient.getCurrentRemote();
+                if (remoteId && await this.apiClient.isRemoteReachable(remoteId)) {
+                    this.debug('Remote is reachable, updating local index...');
+                    await this.apiClient.syncRemoteAndUpdateIndex(remoteId, { 
+                        contexts: true, 
+                        workspaces: false, 
+                        silent: true 
+                    });
+                    this.debug('Local index updated successfully');
+                }
+            } catch (indexUpdateError) {
+                this.debug('Failed to update local index:', indexUpdateError.message);
+                // Don't fail the main operation if index update fails
+            }
 
             // Auto update dotfiles if flag provided
             if (parsed.options && (parsed.options['update-dotfiles'] || parsed.options.u)) {

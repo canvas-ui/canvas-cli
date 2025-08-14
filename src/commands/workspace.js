@@ -102,7 +102,27 @@ export class WorkspaceCommand extends BaseCommand {
    */
     async handleList(parsed) {
         try {
-            // Use cached workspaces from local storage instead of API call
+            // Try to fetch from remote first while updating local index
+            let remoteUpdateSuccess = false;
+            try {
+                const remoteId = await this.apiClient.getCurrentRemote();
+                if (remoteId && await this.apiClient.isRemoteReachable(remoteId)) {
+                    this.debug('Remote is reachable, updating local index...');
+                    remoteUpdateSuccess = await this.apiClient.syncRemoteAndUpdateIndex(remoteId, { 
+                        contexts: false, 
+                        workspaces: true, 
+                        silent: true 
+                    });
+                    if (remoteUpdateSuccess) {
+                        this.debug('Local index updated successfully');
+                    }
+                }
+            } catch (remoteError) {
+                this.debug('Failed to update from remote:', remoteError.message);
+                // Continue with local cache fallback
+            }
+
+            // Use cached workspaces from local storage (which may have been just updated)
             const cachedWorkspaces = await this.apiClient.getCachedWorkspaces();
 
             // Transform cached data to include remote information
