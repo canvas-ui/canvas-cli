@@ -959,6 +959,21 @@ export class CanvasApiClient {
     }
 
     /**
+     * Check if a remote is reachable
+     * @param {string} remoteId - Remote identifier, if null uses current remote
+     * @returns {Promise<boolean>} True if remote is reachable, false otherwise
+     */
+    async isRemoteReachable(remoteId = null) {
+        try {
+            await this.ping(remoteId);
+            return true;
+        } catch (error) {
+            debug(`Remote '${remoteId || 'current'}' is not reachable:`, error.message);
+            return false;
+        }
+    }
+
+    /**
    * Check if remote needs syncing and perform auto-sync if enabled
    * @param {string} remoteId - Remote identifier
    * @returns {Promise<boolean>} True if sync was performed
@@ -1101,8 +1116,125 @@ export class CanvasApiClient {
     }
 
     /**
-   * Clear API client cache (useful after remote configuration changes)
-   */
+     * Sync remote data and update local index for a specific remote
+     * @param {string} remoteId - Remote identifier, if null uses current remote
+     * @param {Object} options - Sync options
+     * @param {boolean} options.contexts - Whether to sync contexts (default: true)
+     * @param {boolean} options.workspaces - Whether to sync workspaces (default: true)
+     * @param {boolean} options.silent - Whether to suppress output (default: true)
+     * @returns {Promise<boolean>} True if sync was successful
+     */
+    async syncRemoteAndUpdateIndex(remoteId = null, options = {}) {
+        const {
+            contexts = true,
+            workspaces = true,
+            silent = true
+        } = options;
+
+        try {
+            if (!remoteId) {
+                remoteId = await this.getCurrentRemote();
+                if (!remoteId) {
+                    debug('No default remote bound for sync');
+                    return false;
+                }
+            }
+
+            // Check if remote is reachable first
+            if (!(await this.isRemoteReachable(remoteId))) {
+                debug(`Remote '${remoteId}' is not reachable for sync`);
+                return false;
+            }
+
+            const apiClient = await this.getApiClient(remoteId);
+
+            if (!silent) {
+                console.log(`Updating local index from remote '${remoteId}'...`);
+            }
+
+            let syncSuccess = true;
+
+            // Sync workspaces if requested
+            if (workspaces) {
+                try {
+                    const workspacesResponse = await apiClient.getWorkspaces();
+                    const workspaceData = workspacesResponse.payload || workspacesResponse.data || workspacesResponse;
+                    
+                    if (Array.isArray(workspaceData)) {
+                        const fetchedKeys = new Set();
+                        for (const workspace of workspaceData) {
+                            const workspaceKey = `${remoteId}:${workspace.id || workspace.name}`;
+                            fetchedKeys.add(workspaceKey);
+                            await this.remoteStore.updateWorkspace(workspaceKey, workspace);
+                        }
+                        
+                        // Remove stale local workspaces for this remote
+                        const localWorkspaces = await this.remoteStore.getWorkspaces();
+                        for (const key of Object.keys(localWorkspaces)) {
+                            if (key.startsWith(`${remoteId}:`) && !fetchedKeys.has(key)) {
+                                await this.remoteStore.removeWorkspace(key);
+                            }
+                        }
+                        
+                        debug(`Synced ${workspaceData.length} workspaces for remote '${remoteId}'`);
+                    }
+                } catch (error) {
+                    debug(`Failed to sync workspaces for remote '${remoteId}':`, error.message);
+                    syncSuccess = false;
+                }
+            }
+
+            // Sync contexts if requested
+            if (contexts) {
+                try {
+                    const contextsResponse = await apiClient.getContexts();
+                    const contextData = contextsResponse.payload || contextsResponse.data || contextsResponse;
+                    
+                    if (Array.isArray(contextData)) {
+                        const fetchedContextKeys = new Set();
+                        for (const context of contextData) {
+                            const contextKey = `${remoteId}:${context.id}`;
+                            fetchedContextKeys.add(contextKey);
+                            await this.remoteStore.updateContext(contextKey, context);
+                        }
+                        
+                        // Remove stale local contexts for this remote
+                        const localContexts = await this.remoteStore.getContexts();
+                        for (const key of Object.keys(localContexts)) {
+                            if (key.startsWith(`${remoteId}:`) && !fetchedContextKeys.has(key)) {
+                                await this.remoteStore.removeContext(key);
+                            }
+                        }
+                        
+                        debug(`Synced ${contextData.length} contexts for remote '${remoteId}'`);
+                    }
+                } catch (error) {
+                    debug(`Failed to sync contexts for remote '${remoteId}':`, error.message);
+                    syncSuccess = false;
+                }
+            }
+
+            // Update last synced timestamp if any sync was successful
+            if (syncSuccess) {
+                await this.remoteStore.updateRemote(remoteId, {
+                    lastSynced: new Date().toISOString()
+                });
+            }
+
+            if (!silent && syncSuccess) {
+                console.log(`✓ Local index updated from remote '${remoteId}'`);
+            }
+
+            return syncSuccess;
+        } catch (error) {
+            debug(`Failed to sync remote '${remoteId}':`, error.message);
+            return false;
+        }
+    }
+
+    /**
+     * Clear API client cache (useful after remote configuration changes)
+     */
     clearCache() {
         this.apiClients.clear();
         debug('Cleared API client cache');
