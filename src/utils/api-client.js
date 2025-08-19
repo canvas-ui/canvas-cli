@@ -343,7 +343,7 @@ class BaseCanvasApiClient {
         return response.data;
     }
 
-    async removeDocument(containerId, documentId, containerType = 'context') {
+    async removeDocument(containerId, documentId, containerType = 'context', contextSpec = null) {
         const baseUrl =
       containerType === 'workspace'
           ? `/workspaces/${containerId}`
@@ -351,22 +351,26 @@ class BaseCanvasApiClient {
         const endpoint = `${baseUrl}/documents/remove`;
         const documentIdArray = [documentId];
 
-        const response = await this.client.delete(endpoint, {
-            data: documentIdArray,
-        });
+        const config = { data: documentIdArray };
+        if (contextSpec) {
+            config.params = { contextSpec };
+        }
+        const response = await this.client.delete(endpoint, config);
         return response.data;
     }
 
-    async removeDocuments(containerId, documentIds, containerType = 'context') {
+    async removeDocuments(containerId, documentIds, containerType = 'context', contextSpec = null) {
         const baseUrl =
       containerType === 'workspace'
           ? `/workspaces/${containerId}`
           : `/contexts/${containerId}`;
         const endpoint = `${baseUrl}/documents/remove`;
 
-        const response = await this.client.delete(endpoint, {
-            data: documentIds,
-        });
+        const config = { data: documentIds };
+        if (contextSpec) {
+            config.params = { contextSpec };
+        }
+        const response = await this.client.delete(endpoint, config);
         return response.data;
     }
 
@@ -1159,7 +1163,7 @@ export class CanvasApiClient {
                 try {
                     const workspacesResponse = await apiClient.getWorkspaces();
                     const workspaceData = workspacesResponse.payload || workspacesResponse.data || workspacesResponse;
-                    
+
                     if (Array.isArray(workspaceData)) {
                         const fetchedKeys = new Set();
                         for (const workspace of workspaceData) {
@@ -1167,7 +1171,7 @@ export class CanvasApiClient {
                             fetchedKeys.add(workspaceKey);
                             await this.remoteStore.updateWorkspace(workspaceKey, workspace);
                         }
-                        
+
                         // Remove stale local workspaces for this remote
                         const localWorkspaces = await this.remoteStore.getWorkspaces();
                         for (const key of Object.keys(localWorkspaces)) {
@@ -1175,7 +1179,7 @@ export class CanvasApiClient {
                                 await this.remoteStore.removeWorkspace(key);
                             }
                         }
-                        
+
                         debug(`Synced ${workspaceData.length} workspaces for remote '${remoteId}'`);
                     }
                 } catch (error) {
@@ -1189,7 +1193,7 @@ export class CanvasApiClient {
                 try {
                     const contextsResponse = await apiClient.getContexts();
                     const contextData = contextsResponse.payload || contextsResponse.data || contextsResponse;
-                    
+
                     if (Array.isArray(contextData)) {
                         const fetchedContextKeys = new Set();
                         for (const context of contextData) {
@@ -1197,7 +1201,7 @@ export class CanvasApiClient {
                             fetchedContextKeys.add(contextKey);
                             await this.remoteStore.updateContext(contextKey, context);
                         }
-                        
+
                         // Remove stale local contexts for this remote
                         const localContexts = await this.remoteStore.getContexts();
                         for (const key of Object.keys(localContexts)) {
@@ -1205,7 +1209,7 @@ export class CanvasApiClient {
                                 await this.remoteStore.removeContext(key);
                             }
                         }
-                        
+
                         debug(`Synced ${contextData.length} contexts for remote '${remoteId}'`);
                     }
                 } catch (error) {
