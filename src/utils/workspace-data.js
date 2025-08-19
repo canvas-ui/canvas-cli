@@ -21,7 +21,7 @@ export const DATA_TYPES = {
  */
 export function getWorkspaceDataDir(address, dataType) {
     const remoteKey = `${address.userIdentifier}@${address.remote}`;
-    return path.join(CANVAS_DIR_DATA, remoteKey, address.resource, dataType);
+    return path.join(CANVAS_DIR_DATA, remoteKey, 'workspaces', address.resource, dataType);
 }
 
 /**
@@ -44,7 +44,7 @@ export function getWorkspaceDataDirs(address) {
  */
 export function getWorkspaceBaseDir(address) {
     const remoteKey = `${address.userIdentifier}@${address.remote}`;
-    return path.join(CANVAS_DIR_DATA, remoteKey, address.resource);
+    return path.join(CANVAS_DIR_DATA, remoteKey, 'workspaces', address.resource);
 }
 
 /**
@@ -54,5 +54,5 @@ export function getWorkspaceBaseDir(address) {
  */
 export function getRemoteBaseDir(address) {
     const remoteKey = `${address.userIdentifier}@${address.remote}`;
-    return path.join(CANVAS_DIR_DATA, remoteKey);
+    return path.join(CANVAS_DIR_DATA, remoteKey, 'workspaces');
 }

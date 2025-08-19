@@ -39,7 +39,12 @@ export class DotCommand extends BaseCommand {
             }
 
             const action = parsed.args[0];
-            const methodName = `handle${action.charAt(0).toUpperCase() + action.slice(1)}`;
+            // Support kebab-case commands like install-hooks
+            const methodSuffix = action
+                .split('-')
+                .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+                .join('');
+            const methodName = `handle${methodSuffix}`;
 
             if (typeof this[methodName] === 'function') {
                 return await this[methodName](parsed);
@@ -448,6 +453,10 @@ export class DotCommand extends BaseCommand {
 
             console.log(chalk.green(`✓ Cloned to ${localDir}`));
 
+            // Tip for installing hooks
+            console.log(chalk.gray('Tip: install hooks for encryption/decryption automation → run:'));
+            console.log(chalk.gray(`  canvas dot install-hooks ${address.full}`));
+
             // Update index
             await this.updateIndexEntry(address, {
                 status: 'cloned',
@@ -514,7 +523,7 @@ export class DotCommand extends BaseCommand {
    * Add dotfile or folder to repository
    */
     async handleAdd(parsed) {
-        const srcPath = parsed.args[1];
+        let srcPath = parsed.args[1];
         const targetSpec = parsed.args[2];
 
         if (!srcPath || !targetSpec) {
@@ -540,7 +549,13 @@ export class DotCommand extends BaseCommand {
             throw new Error('Destination path is required');
         }
 
-        const expandedSrcPath = srcPath.replace(/^~/, os.homedir());
+        // Normalize local path to canonical ({{HOME}}/...) but use absolute for FS
+        const canonicalSrc = this.normalizeLocalPathInput(srcPath);
+        srcPath = canonicalSrc;
+        const expandedSrcPath = canonicalSrc
+            .replace(/^\{\{\s*HOME\s*\}\}/, os.homedir())
+            .replace(/^\$HOME/, os.homedir())
+            .replace(/^~/, os.homedir());
         const destFilePath = path.join(localDir, destPath);
 
         if (!existsSync(expandedSrcPath)) {
@@ -599,6 +614,17 @@ export class DotCommand extends BaseCommand {
 
             await this.saveDotfilesIndex(index);
 
+            // If --encrypt flag is provided, mark the destination path in encrypted index and ignore decrypted file
+            if (this.options && (this.options.encrypt === true || this.options.e === true)) {
+                try {
+                    await this.ensureEncryptedIndexEntry(localDir, destPath);
+                    await this.ensureGitignoreIgnores(localDir, destPath);
+                    console.log(chalk.green(`✓ Marked for encryption: ${destPath}`));
+                } catch (e) {
+                    console.log(chalk.yellow(`Warning: could not update encryption index: ${e.message}`));
+                }
+            }
+
             // Create a dotfile document inside the current / specified context
             try {
                 // Determine context address and path
@@ -623,23 +649,27 @@ export class DotCommand extends BaseCommand {
                 const repoUrl = (await this.buildGitUrl(address)).replace(/\/$/, '');
                 const repoPath = destPath;
 
+                // Determine mapping type based on source stats
+                const isDirectory = (await fs.stat(expandedSrcPath)).isDirectory();
                 const docData = {
                     schema: 'data/abstraction/dotfile',
                     data: {
-                        localPath: srcPath,
-                        repoUrl: repoUrl,
+                        localPath: canonicalSrc,
                         repoPath: repoPath,
+                        type: isDirectory ? 'folder' : 'file',
                         priority: 0,
                     },
                 };
 
                 const workspaceAddress = `${address.userIdentifier}@${address.remote}:${address.resource}`;
+                // Allow explicit --context to bind immediately
+                const useContextPath = this.options?.context || contextPath;
                 await this.apiClient.createDocument(
                     workspaceAddress,
                     docData,
                     'workspace',
                     ['data/abstraction/dotfile'],
-                    contextPath,
+                    useContextPath,
                 );
             } catch (err) {
                 this.debug('Failed to create dotfile document:', err.message);
@@ -1241,6 +1271,51 @@ export class DotCommand extends BaseCommand {
     }
 
     // Helper methods
+    normalizeLocalPathInput(inputPath) {
+        if (!inputPath) return inputPath;
+        const home = os.homedir();
+        let abs = inputPath;
+        // Expand common home placeholders to absolute for checks
+        abs = abs.replace(/^~(?=\/?|$)/, home);
+        abs = abs.replace(/^\$HOME(?=\/?|$)/, home);
+        abs = abs.replace(/^\{\{\s*HOME\s*\}\}(?=\/?|$)/, home);
+        // Canonical store: if under home, use {{HOME}} prefix
+        if (abs.startsWith(home + path.sep) || abs === home) {
+            const rel = abs.slice(home.length).replace(/^\//, '');
+            return rel ? `{{HOME}}/${rel}` : `{{HOME}}`;
+        }
+        return abs;
+    }
+    async ensureEncryptedIndexEntry(localDir, relPath) {
+        const idxPath = path.join(localDir, '.dot', 'encrypted.index');
+        await fs.mkdir(path.dirname(idxPath), { recursive: true });
+        let content = '';
+        try { content = await fs.readFile(idxPath, 'utf8'); } catch (_) {}
+        const lines = content.split('\n').map((s) => s.trim()).filter(Boolean);
+        if (!lines.includes(relPath)) {
+            lines.push(relPath);
+            await fs.writeFile(idxPath, lines.join('\n') + '\n');
+        }
+    }
+
+    async removeEncryptedIndexEntry(localDir, relPath) {
+        const idxPath = path.join(localDir, '.dot', 'encrypted.index');
+        try {
+            const content = await fs.readFile(idxPath, 'utf8');
+            const lines = content.split('\n').map((s) => s.trim()).filter(Boolean);
+            const filtered = lines.filter((l) => l !== relPath);
+            await fs.writeFile(idxPath, filtered.join('\n') + (filtered.length ? '\n' : ''));
+        } catch (_) {}
+    }
+
+    async ensureGitignoreIgnores(localDir, relPath) {
+        const gi = path.join(localDir, '.gitignore');
+        let content = '';
+        try { content = await fs.readFile(gi, 'utf8'); } catch (_) {}
+        const set = new Set(content.split('\n').map((s) => s.trim()).filter(Boolean));
+        if (!set.has(relPath)) set.add(relPath);
+        await fs.writeFile(gi, Array.from(set).join('\n') + '\n');
+    }
 
     /**
    * Activate a single dotfile or folder (create symlink)
@@ -1403,6 +1478,156 @@ export class DotCommand extends BaseCommand {
     }
 
     /**
+    * Remove a dotfile document from a specific context (unlink only)
+    * Usage: dot remove <workspace/repoPath> --context context/path
+    */
+    async handleRemove(parsed) {
+        const targetSpec = parsed.args[1];
+        const contextPathOpt = this.options?.context;
+        if (!targetSpec) {
+            throw new Error('Target is required: dot remove user@remote:workspace/path --context context/path');
+        }
+        if (!contextPathOpt) {
+            throw new Error('Context is required: use --context context/path');
+        }
+
+        const address = await this.parseAddress(targetSpec);
+        const repoPath = address.path.startsWith('/') ? address.path.slice(1) : address.path;
+        if (!repoPath) throw new Error('Repository path is required in target');
+
+        // Build context address from workspace + context path
+        const normalizedContextPath = contextPathOpt.replace(/^\/+/, '').replace(/\/+$/, '');
+        const contextAddress = `${address.userIdentifier}@${address.remote}:${address.resource}/${normalizedContextPath}`;
+
+        // Find the document in that context by repoPath
+        const response = await this.apiClient.getDotfilesByContext(contextAddress);
+        const docs = response.payload || response.data || response;
+        const match = (Array.isArray(docs) ? docs : []).find((doc) => {
+            const d = doc.data || doc;
+            return d.repoPath === repoPath;
+        });
+        if (!match) {
+            throw new Error(`Dotfile not found in context '${normalizedContextPath}': ${repoPath}`);
+        }
+
+        await this.apiClient.removeDocument(contextAddress, match.id, 'context');
+        console.log(chalk.green(`✓ Removed from context ${normalizedContextPath}: ${repoPath}`));
+        return 0;
+    }
+
+    /**
+    * Delete a dotfile from the repository and delete its document from the workspace
+    */
+    async handleDelete(parsed) {
+        const targetSpec = parsed.args[1];
+        if (!targetSpec) {
+            throw new Error('Target is required: dot delete user@remote:workspace/path');
+        }
+        const address = await this.parseAddress(targetSpec);
+        const repoPath = address.path.startsWith('/') ? address.path.slice(1) : address.path;
+        if (!repoPath) throw new Error('Repository path is required in target');
+
+        // Find document by repoPath in workspace
+        const workspaceAddress = `${address.userIdentifier}@${address.remote}:${address.resource}`;
+        const resp = await this.apiClient.getDotfilesByWorkspace(workspaceAddress);
+        const docs = resp.payload || resp.data || resp;
+        const match = (Array.isArray(docs) ? docs : []).find((doc) => {
+            const d = doc.data || doc;
+            return d.repoPath === repoPath;
+        });
+        if (!match) {
+            throw new Error(`Dotfile document not found in workspace: ${repoPath}`);
+        }
+
+        // Delete from local repository if present
+        const localDir = this.getLocalDotfilesDir(address);
+        if (existsSync(localDir)) {
+            const targetPath = path.join(localDir, repoPath);
+            try {
+                await fs.rm(targetPath, { recursive: true, force: true });
+                // Update encryption index
+                await this.removeEncryptedIndexEntry(localDir, repoPath);
+                // Commit & push
+                await this.execGit(['add', '-A'], localDir);
+                await this.execGit(['commit', '-m', `Remove dotfile ${repoPath}`], localDir);
+                await this.handlePush({ ...parsed, args: ['push', workspaceAddress] });
+            } catch (e) {
+                console.log(chalk.yellow(`Warning: could not update repository: ${e.message}`));
+            }
+        } else {
+            console.log(chalk.gray('Local repository not found; deleting document only'));
+        }
+
+        // Delete document from workspace
+        await this.apiClient.deleteDocument(workspaceAddress, match.id, 'workspace');
+        console.log(chalk.green(`✓ Deleted dotfile and document: ${repoPath}`));
+        return 0;
+    }
+
+    /**
+    * Install repository hooks (.dot/install-hooks.sh)
+    */
+    async handleInstallHooks(parsed) {
+        const addressStr = parsed.args[1];
+        if (!addressStr) {
+            throw new Error('Address is required: dot install-hooks user@remote:workspace');
+        }
+        const address = await this.parseAddress(addressStr);
+        const localDir = this.getLocalDotfilesDir(address);
+        if (!existsSync(localDir)) {
+            throw new Error(`Local dotfiles directory not found: ${localDir}. Run: dot clone ${address.full}`);
+        }
+        const args = ['.dot/install-hooks.sh'];
+        if (this.options && (this.options.force === true || this.options.f === true)) {
+            args.push('--force');
+        }
+        await this.execCommand('bash', args, localDir);
+        console.log(chalk.green('✓ Hooks installed'));
+        return 0;
+    }
+
+    /**
+    * Mark a file for encryption (update .dot/encrypted.index and .gitignore)
+    */
+    async handleEncrypt(parsed) {
+        const targetSpec = parsed.args[1];
+        if (!targetSpec) {
+            throw new Error('Target is required: dot encrypt user@remote:workspace/path');
+        }
+        const address = await this.parseAddress(targetSpec);
+        const localDir = this.getLocalDotfilesDir(address);
+        if (!existsSync(localDir)) {
+            throw new Error(`Local dotfiles directory not found: ${localDir}`);
+        }
+        const relPath = address.path.startsWith('/') ? address.path.slice(1) : address.path;
+        if (!relPath) throw new Error('Path is required');
+        await this.ensureEncryptedIndexEntry(localDir, relPath);
+        await this.ensureGitignoreIgnores(localDir, relPath);
+        console.log(chalk.green(`✓ Marked for encryption: ${relPath}`));
+        return 0;
+    }
+
+    /**
+    * Unmark a file from encryption (update .dot/encrypted.index). Keeps .gitignore rule.
+    */
+    async handleDecrypt(parsed) {
+        const targetSpec = parsed.args[1];
+        if (!targetSpec) {
+            throw new Error('Target is required: dot decrypt user@remote:workspace/path');
+        }
+        const address = await this.parseAddress(targetSpec);
+        const localDir = this.getLocalDotfilesDir(address);
+        if (!existsSync(localDir)) {
+            throw new Error(`Local dotfiles directory not found: ${localDir}`);
+        }
+        const relPath = address.path.startsWith('/') ? address.path.slice(1) : address.path;
+        if (!relPath) throw new Error('Path is required');
+        await this.removeEncryptedIndexEntry(localDir, relPath);
+        console.log(chalk.green(`✓ Unmarked for encryption: ${relPath}`));
+        return 0;
+    }
+
+    /**
    * Show help for the dot command
    */
     showHelp() {
@@ -1420,7 +1645,7 @@ export class DotCommand extends BaseCommand {
             '  sync <user@remote:workspace>         Sync repository (clone if missing, push & pull otherwise)',
         );
         console.log(
-            '  add <src> <workspace/dest>           Add dotfile or folder to repository',
+            '  add <src> <workspace/dest> [--context path] [--encrypt]  Add dotfile/folder; bind to context; mark for encryption',
         );
         console.log('  commit <workspace> [message]         Commit changes');
         console.log(
@@ -1438,6 +1663,11 @@ export class DotCommand extends BaseCommand {
         console.log(
             '  deactivate <workspace>[/file]        Deactivate dotfiles (remove symlinks)\n  restore <workspace>[/file]           Restore backup of original file/folder',
         );
+        console.log('  encrypt <workspace/path>             Mark a path for encryption');
+        console.log('  decrypt <workspace/path>             Unmark a path for encryption');
+        console.log('  remove <workspace/path> --context p  Remove dotfile document from a context');
+        console.log('  delete <workspace/path>              Delete from repo and remove document');
+        console.log('  install-hooks <workspace>            Install local git hooks for encryption/decryption');
         console.log(
             '  cd <workspace>                       Get dotfiles directory path',
         );
