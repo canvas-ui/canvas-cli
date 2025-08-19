@@ -247,7 +247,7 @@ export class WorkspaceFormatter extends BaseFormatter {
     formatWorkspaceName(workspace) {
         const name = workspace.name || 'N/A';
         const label = workspace.label;
-        
+
         if (label && label !== name) {
             return `${name} (${label})`;
         }

@@ -4,7 +4,7 @@ import chalk from 'chalk';
 import path from 'path';
 import os from 'os';
 import fs from 'fs/promises';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync } from 'fs';
 import readline from 'readline';
 import { spawn } from 'child_process';
 import BaseCommand from './base.js';
@@ -261,7 +261,7 @@ export class DotCommand extends BaseCommand {
                 contextPath = '/';
             }
 
-                        // Query dotfiles from database
+            // Query dotfiles from database
             let databaseDotfiles = [];
             try {
                 await this.checkConnection();
@@ -628,8 +628,8 @@ export class DotCommand extends BaseCommand {
             // Create a dotfile document inside the current / specified context
             try {
                 // Determine context address and path
-                let contextAddress = await this.getCurrentContext(this.options);
-                let contextPathInput = this.options?.context || null;
+                const contextAddress = await this.getCurrentContext(this.options);
+                const contextPathInput = this.options?.context || null;
 
                 let contextPath = '/';
                 if (contextPathInput) {
@@ -912,7 +912,7 @@ export class DotCommand extends BaseCommand {
             // Parse workspace address
             const address = await this.parseAddress(workspaceAddress);
 
-                                    // Get dotfiles for the target context path
+            // Get dotfiles for the target context path
             let contextDotfiles = [];
             try {
                 await this.checkConnection();
@@ -1112,7 +1112,7 @@ export class DotCommand extends BaseCommand {
         try {
             // Fetch dotfiles from database to get document IDs
             let databaseDotfiles = [];
-            let docIdMap = new Map(); // Map from localPath to docId
+            const docIdMap = new Map(); // Map from localPath to docId
 
             try {
                 await this.checkConnection();
@@ -1290,7 +1290,7 @@ export class DotCommand extends BaseCommand {
         const idxPath = path.join(localDir, '.dot', 'encrypted.index');
         await fs.mkdir(path.dirname(idxPath), { recursive: true });
         let content = '';
-        try { content = await fs.readFile(idxPath, 'utf8'); } catch (_) {}
+        try { content = await fs.readFile(idxPath, 'utf8'); } catch (e) { content = ''; }
         const lines = content.split('\n').map((s) => s.trim()).filter(Boolean);
         if (!lines.includes(relPath)) {
             lines.push(relPath);
@@ -1305,13 +1305,13 @@ export class DotCommand extends BaseCommand {
             const lines = content.split('\n').map((s) => s.trim()).filter(Boolean);
             const filtered = lines.filter((l) => l !== relPath);
             await fs.writeFile(idxPath, filtered.join('\n') + (filtered.length ? '\n' : ''));
-        } catch (_) {}
+        } catch (e) { return; }
     }
 
     async ensureGitignoreIgnores(localDir, relPath) {
         const gi = path.join(localDir, '.gitignore');
         let content = '';
-        try { content = await fs.readFile(gi, 'utf8'); } catch (_) {}
+        try { content = await fs.readFile(gi, 'utf8'); } catch (e) { content = ''; }
         const set = new Set(content.split('\n').map((s) => s.trim()).filter(Boolean));
         if (!set.has(relPath)) set.add(relPath);
         await fs.writeFile(gi, Array.from(set).join('\n') + '\n');

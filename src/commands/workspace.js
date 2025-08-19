@@ -108,10 +108,10 @@ export class WorkspaceCommand extends BaseCommand {
                 const remoteId = await this.apiClient.getCurrentRemote();
                 if (remoteId && await this.apiClient.isRemoteReachable(remoteId)) {
                     this.debug('Remote is reachable, updating local index...');
-                    remoteUpdateSuccess = await this.apiClient.syncRemoteAndUpdateIndex(remoteId, { 
-                        contexts: false, 
-                        workspaces: true, 
-                        silent: true 
+                    remoteUpdateSuccess = await this.apiClient.syncRemoteAndUpdateIndex(remoteId, {
+                        contexts: false,
+                        workspaces: true,
+                        silent: true
                     });
                     if (remoteUpdateSuccess) {
                         this.debug('Local index updated successfully');

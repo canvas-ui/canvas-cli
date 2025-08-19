@@ -7,8 +7,8 @@ const args = process.argv.slice(2);
 const ctxArgs = ['context', ...args];
 
 main(ctxArgs)
-  .then(process.exit)
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
+    .then(process.exit)
+    .catch((error) => {
+        console.error(error);
+        process.exit(1);
+    });

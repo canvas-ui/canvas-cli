@@ -7,8 +7,8 @@ const args = process.argv.slice(2);
 const agentArgs = ['agent', ...args];
 
 main(agentArgs)
-  .then(process.exit)
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
+    .then(process.exit)
+    .catch((error) => {
+        console.error(error);
+        process.exit(1);
+    });

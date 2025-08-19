@@ -63,10 +63,10 @@ export class ContextCommand extends BaseCommand {
                 const remoteId = await this.apiClient.getCurrentRemote();
                 if (remoteId && await this.apiClient.isRemoteReachable(remoteId)) {
                     this.debug('Remote is reachable, updating local index...');
-                    remoteUpdateSuccess = await this.apiClient.syncRemoteAndUpdateIndex(remoteId, { 
-                        contexts: true, 
-                        workspaces: false, 
-                        silent: true 
+                    remoteUpdateSuccess = await this.apiClient.syncRemoteAndUpdateIndex(remoteId, {
+                        contexts: true,
+                        workspaces: false,
+                        silent: true
                     });
                     if (remoteUpdateSuccess) {
                         this.debug('Local index updated successfully');
@@ -342,10 +342,10 @@ export class ContextCommand extends BaseCommand {
                 const remoteId = await this.apiClient.getCurrentRemote();
                 if (remoteId && await this.apiClient.isRemoteReachable(remoteId)) {
                     this.debug('Remote is reachable, updating local index...');
-                    await this.apiClient.syncRemoteAndUpdateIndex(remoteId, { 
-                        contexts: true, 
-                        workspaces: false, 
-                        silent: true 
+                    await this.apiClient.syncRemoteAndUpdateIndex(remoteId, {
+                        contexts: true,
+                        workspaces: false,
+                        silent: true
                     });
                     this.debug('Local index updated successfully');
                 }
@@ -663,7 +663,7 @@ export class ContextCommand extends BaseCommand {
         }
     }
 
-        /**
+    /**
    * Handle dotfile commands (alias for handleDotfiles)
    */
     async handleDot(parsed) {
