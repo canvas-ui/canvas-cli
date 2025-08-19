@@ -1497,10 +1497,9 @@ export class DotCommand extends BaseCommand {
 
         // Build context address from workspace + context path
         const normalizedContextPath = contextPathOpt.replace(/^\/+/, '').replace(/\/+$/, '');
-        const contextAddress = `${address.userIdentifier}@${address.remote}:${address.resource}/${normalizedContextPath}`;
-
+        const workspaceAddress = `${address.userIdentifier}@${address.remote}:${address.resource}`;
         // Find the document in that context by repoPath
-        const response = await this.apiClient.getDotfilesByContext(contextAddress);
+        const response = await this.apiClient.getDotfilesByContext(`${workspaceAddress}/${normalizedContextPath}`);
         const docs = response.payload || response.data || response;
         const match = (Array.isArray(docs) ? docs : []).find((doc) => {
             const d = doc.data || doc;
@@ -1510,7 +1509,8 @@ export class DotCommand extends BaseCommand {
             throw new Error(`Dotfile not found in context '${normalizedContextPath}': ${repoPath}`);
         }
 
-        await this.apiClient.removeDocument(contextAddress, match.id, 'context');
+        // Remove via workspace route with contextSpec
+        await this.apiClient.removeDocument(workspaceAddress, match.id, 'workspace', `/${normalizedContextPath}`);
         console.log(chalk.green(`✓ Removed from context ${normalizedContextPath}: ${repoPath}`));
         return 0;
     }
