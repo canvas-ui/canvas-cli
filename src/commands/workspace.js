@@ -48,6 +48,7 @@ export class WorkspaceCommand extends BaseCommand {
                 'status',
                 'documents',
                 'document',
+                'dotfiles',
                 'tabs',
                 'notes',
                 'tree',
@@ -474,12 +475,53 @@ export class WorkspaceCommand extends BaseCommand {
             );
 
             // Handle ResponseObject format
-            const documents = response.payload || response.data || response;
+            let documents = response.payload || response.data || response;
+
+            // Handle SynapsD response structure {data: [...], count: number, error: string}
+            if (documents && typeof documents === 'object' && documents.data && Array.isArray(documents.data)) {
+                documents = documents.data;
+            }
 
             await this.output(documents, 'document');
             return 0;
         } catch (error) {
             throw new Error(`Failed to list documents: ${error.message}`);
+        }
+    }
+
+    /**
+   * List dotfiles in workspace
+   */
+    async handleDotfiles(parsed) {
+        const workspaceAddress = parsed.args[1];
+        if (!workspaceAddress) {
+            throw new Error(
+                'Workspace address is required (format: user@remote:workspace or just workspace if default remote is bound)',
+            );
+        }
+
+        try {
+            const options = {
+                featureArray: ['data/abstraction/dotfile'],
+            };
+            const response = await this.apiClient.getDocuments(
+                workspaceAddress,
+                'workspace',
+                options,
+            );
+
+            // Handle ResponseObject format
+            let dotfiles = response.payload || response.data || response;
+
+            // Handle SynapsD response structure {data: [...], count: number, error: string}
+            if (dotfiles && typeof dotfiles === 'object' && dotfiles.data && Array.isArray(dotfiles.data)) {
+                dotfiles = dotfiles.data;
+            }
+
+            await this.output(dotfiles, 'document', 'dotfile');
+            return 0;
+        } catch (error) {
+            throw new Error(`Failed to list dotfiles: ${error.message}`);
         }
     }
 

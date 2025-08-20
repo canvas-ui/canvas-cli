@@ -677,10 +677,17 @@ export class ContextCommand extends BaseCommand {
         const contextAddress = parsed.args[1] || (await this.getCurrentContext(parsed.options));
 
         try {
-            const response = await this.apiClient.getDotfilesByContext(contextAddress);
+            const options = {
+                featureArray: ['data/abstraction/dotfile'],
+            };
+            const response = await this.apiClient.getDocuments(
+                contextAddress,
+                'context',
+                options,
+            );
             const dotfiles = response.payload || response.data || response;
 
-            await this.output(dotfiles, 'dotfile');
+            await this.output(dotfiles, 'document', 'dotfile');
             return 0;
         } catch (error) {
             throw new Error(`Failed to list dotfiles: ${error.message}`);

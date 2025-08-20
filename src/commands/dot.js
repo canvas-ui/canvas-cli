@@ -337,36 +337,86 @@ export class DotCommand extends BaseCommand {
                 return 0;
             }
 
-            console.log(chalk.bold('Dotfiles:'));
-
-            // Sort by priority and local path
-            const sortedDotfiles = Array.from(dotfileMap.entries()).sort(([, a], [, b]) => {
-                if (a.priority !== b.priority) return b.priority - a.priority;
-                return a.localPath.localeCompare(b.localPath);
-            });
-
-            for (const [key, dotfile] of sortedDotfiles) {
-                const status = dotfile.active ? chalk.green('●') : chalk.gray('○');
-                const sourceIndicator = dotfile.source === 'database' ? '' : chalk.yellow(' (local only)');
-                const priorityStr = dotfile.priority !== 0 ? chalk.gray(` [${dotfile.priority}]`) : '';
-                const docIdStr = dotfile.docId ? chalk.gray(` #${dotfile.docId}`) : '';
-
-                let displayPath = dotfile.localPath;
-                if (dotfile.type === 'folder' || (dotfile.localIndexEntry && dotfile.localIndexEntry.type === 'folder')) {
-                    displayPath = `📁 ${displayPath}`;
-                }
-
-                const remoteDisplay = dotfile.remoteFull || dotfile.remotePath;
-                console.log(`${status} ${displayPath} → ${remoteDisplay}${priorityStr}${docIdStr}${sourceIndicator}`);
-
-                if (dotfile.backupPath) {
-                    console.log(chalk.gray(`    backup: ${dotfile.backupPath}`));
-                }
-            }
+            this.displayDotfilesHierarchically(dotfileMap);
 
             return 0;
         } catch (error) {
             throw new Error(`Failed to list dotfiles: ${error.message}`);
+        }
+    }
+
+    /**
+     * Display dotfiles in hierarchical format: user@remote -> workspace -> dotfiles
+     */
+    displayDotfilesHierarchically(dotfileMap) {
+        // Group dotfiles by remote and workspace
+        const grouped = {};
+
+        for (const [key, dotfile] of dotfileMap.entries()) {
+            // Extract remote and workspace from remoteFull (e.g., "user@remote:workspace/path")
+            let remoteKey = 'local';
+            let workspaceName = 'default';
+
+            if (dotfile.remoteFull) {
+                const match = dotfile.remoteFull.match(/^([^@]+@[^:]+):([^/]+)/);
+                if (match) {
+                    remoteKey = match[1];
+                    workspaceName = match[2];
+                } else {
+                    // If no @ symbol, treat as workspace name only
+                    const parts = dotfile.remoteFull.split('/');
+                    if (parts.length > 0) {
+                        workspaceName = parts[0];
+                    }
+                }
+            }
+
+            if (!grouped[remoteKey]) {
+                grouped[remoteKey] = {};
+            }
+            if (!grouped[remoteKey][workspaceName]) {
+                grouped[remoteKey][workspaceName] = [];
+            }
+
+            grouped[remoteKey][workspaceName].push(dotfile);
+        }
+
+        console.log(chalk.bold('Dotfiles:'));
+        console.log('');
+
+        // Display grouped dotfiles
+        for (const [remoteKey, workspaces] of Object.entries(grouped)) {
+            console.log(chalk.bold.blue(remoteKey));
+
+            for (const [workspaceName, dotfiles] of Object.entries(workspaces)) {
+                console.log(`  ${chalk.cyan(workspaceName)}`);
+
+                // Sort by priority and local path
+                dotfiles.sort((a, b) => {
+                    if (a.priority !== b.priority) return b.priority - a.priority;
+                    return a.localPath.localeCompare(b.localPath);
+                });
+
+                for (const dotfile of dotfiles) {
+                    const status = dotfile.active ? chalk.green('●') : chalk.gray('○');
+                    const sourceIndicator = dotfile.source === 'database' ? '' : chalk.yellow(' (local only)');
+                    const priorityStr = dotfile.priority !== 0 ? chalk.gray(` [${dotfile.priority}]`) : '';
+                    const docIdStr = dotfile.docId ? chalk.gray(` #${dotfile.docId}`) : '';
+
+                    let displayPath = dotfile.localPath;
+                    if (dotfile.type === 'folder' || (dotfile.localIndexEntry && dotfile.localIndexEntry.type === 'folder')) {
+                        displayPath = `📁 ${displayPath}`;
+                    }
+
+                    const remotePath = dotfile.remotePath || dotfile.remoteFull;
+                    console.log(`    ${status} ${displayPath} → ${remotePath}${priorityStr}${docIdStr}${sourceIndicator}`);
+
+                    if (dotfile.backupPath) {
+                        console.log(chalk.gray(`      backup: ${dotfile.backupPath}`));
+                    }
+                }
+                console.log('');
+            }
         }
     }
 

@@ -519,7 +519,23 @@ export class ContextFormatter extends BaseFormatter {
  * Document formatter
  */
 export class DocumentFormatter extends BaseFormatter {
-    formatTable(data, session = null, schema = null) {
+    format(data, session = null, schema = null) {
+        if (this.options.raw) {
+            return JSON.stringify(data, null, 2);
+        }
+
+        switch (this.options.format) {
+            case 'json':
+                return JSON.stringify(data, null, 2);
+            case 'csv':
+                return this.formatCsv(data);
+            case 'table':
+            default:
+                return this.formatTable(data, session, schema);
+        }
+    }
+
+        formatTable(data, session = null, schema = null) {
         if (
             !data ||
       (Array.isArray(data) && data.length === 0) ||
@@ -558,15 +574,20 @@ export class DocumentFormatter extends BaseFormatter {
             // Determine document type from multiple sources
             let docType = 'document';
 
-            // 1. Check if schema parameter was explicitly passed
+                        // 1. Check if schema parameter was explicitly passed
             if (schema && typeof schema === 'string') {
                 docType = schema.toLowerCase();
             }
-            // 2. Check document's type field
+            // 2. If no schema was explicitly passed, use generic document format
+            // This ensures that generic document commands show the standard id/schema/data/created/updated format
+            else if (schema === null || schema === undefined) {
+                docType = 'document';
+            }
+            // 3. Check document's type field
             else if (firstItem.type) {
                 docType = firstItem.type.toLowerCase();
             }
-            // 3. Extract type from document's schema field (e.g., "data/abstraction/tab" -> "tab")
+            // 4. Extract type from document's schema field (e.g., "data/abstraction/tab" -> "tab")
             else if (firstItem.schema && typeof firstItem.schema === 'string') {
                 const schemaParts = firstItem.schema.split('/');
                 if (schemaParts.length > 0) {
@@ -590,6 +611,9 @@ export class DocumentFormatter extends BaseFormatter {
                 case 'tab':
                     table = this.formatTabTable(tableData);
                     break;
+                case 'dotfile':
+                    table = this.formatDotfileTable(tableData);
+                    break;
                 default:
                     table = this.formatGenericDocumentTable(tableData);
             }
@@ -606,9 +630,8 @@ export class DocumentFormatter extends BaseFormatter {
                 chalk.cyan('ID'),
                 chalk.cyan('Schema'),
                 chalk.cyan('Data'),
-                chalk.cyan('Metadata'),
                 chalk.cyan('Created'),
-                chalk.cyan('Version'),
+                chalk.cyan('Updated'),
             ],
             style: { head: [], border: [] },
         });
@@ -617,10 +640,9 @@ export class DocumentFormatter extends BaseFormatter {
             table.push([
                 doc.id || 'N/A',
                 doc.schema || 'N/A',
-                doc.data ? this.truncate(JSON.stringify(doc.data), 40) : 'N/A',
-                doc.metadata ? this.truncate(JSON.stringify(doc.metadata), 30) : 'N/A',
+                doc.data ? this.truncate(JSON.stringify(doc.data), 50) : 'N/A',
                 doc.createdAt ? this.formatDate(doc.createdAt) : 'N/A',
-                doc.versionNumber || 'N/A',
+                doc.updatedAt ? this.formatDate(doc.updatedAt) : 'N/A',
             ]);
         });
 
@@ -773,6 +795,38 @@ export class DocumentFormatter extends BaseFormatter {
 
         return table.toString();
     }
+
+    formatDotfileTable(data) {
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            return chalk.gray('No dotfiles found.');
+        }
+
+        const table = new Table({
+            head: [
+                chalk.cyan('ID'),
+                chalk.cyan('Schema'),
+                chalk.cyan('Local Path'),
+                chalk.cyan('Repo Path'),
+                chalk.cyan('Type'),
+            ],
+            style: { head: [], border: [] },
+        });
+
+        data.forEach((doc) => {
+            const dotfileData = doc.data || {};
+            table.push([
+                doc.id || 'N/A',
+                doc.schema || 'N/A',
+                dotfileData.localPath || 'N/A',
+                dotfileData.repoPath || 'N/A',
+                dotfileData.type || 'file',
+            ]);
+        });
+
+        return table.toString();
+    }
+
+
 
     formatFileSize(bytes) {
         const sizes = ['B', 'KB', 'MB', 'GB'];
