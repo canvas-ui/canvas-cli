@@ -315,10 +315,12 @@ export class DotCommand extends BaseCommand {
                     if (existing) {
                         existing.active = file.active || false;
                         existing.localIndexEntry = file;
+                        if (!existing.remoteFull) existing.remoteFull = `${indexKey}/${file.dst}`;
                     } else {
                         dotfileMap.set(key, {
                             localPath: file.src,
                             remotePath: file.dst,
+                            remoteFull: `${indexKey}/${file.dst}`,
                             docId: null,
                             priority: 0,
                             source: 'local-only',
@@ -354,7 +356,8 @@ export class DotCommand extends BaseCommand {
                     displayPath = `📁 ${displayPath}`;
                 }
 
-                console.log(`${status} ${displayPath} → ${dotfile.remotePath}${priorityStr}${docIdStr}${sourceIndicator}`);
+                const remoteDisplay = dotfile.remoteFull || dotfile.remotePath;
+                console.log(`${status} ${displayPath} → ${remoteDisplay}${priorityStr}${docIdStr}${sourceIndicator}`);
 
                 if (dotfile.backupPath) {
                     console.log(chalk.gray(`    backup: ${dotfile.backupPath}`));
@@ -538,7 +541,7 @@ export class DotCommand extends BaseCommand {
             throw new Error('Destination path is required');
         }
 
-        // Normalize local path to canonical ({{HOME}}/...) but use absolute for FS
+        // Normalize local path to canonical ($HOME/...) but use absolute for FS
         const canonicalSrc = this.normalizeLocalPathInput(srcPath);
         srcPath = canonicalSrc;
         const expandedSrcPath = canonicalSrc
@@ -1268,10 +1271,10 @@ export class DotCommand extends BaseCommand {
         abs = abs.replace(/^~(?=\/?|$)/, home);
         abs = abs.replace(/^\$HOME(?=\/?|$)/, home);
         abs = abs.replace(/^\{\{\s*HOME\s*\}\}(?=\/?|$)/, home);
-        // Canonical store: if under home, use {{HOME}} prefix
+        // Canonical store: if under home, use $HOME prefix (nix-focused)
         if (abs.startsWith(home + path.sep) || abs === home) {
             const rel = abs.slice(home.length).replace(/^\//, '');
-            return rel ? `{{HOME}}/${rel}` : `{{HOME}}`;
+            return rel ? `$HOME/${rel}` : `$HOME`;
         }
         return abs;
     }
@@ -1310,7 +1313,10 @@ export class DotCommand extends BaseCommand {
    * Activate a single dotfile or folder (create symlink)
    */
     async activateFile(fileEntry, localDir, docId = null) {
-        const srcPath = fileEntry.src.replace(/^~/, os.homedir());
+        const srcPath = fileEntry.src
+            .replace(/^\$HOME(?=\/|$)/, os.homedir())
+            .replace(/^\{\{\s*HOME\s*\}\}(?=\/|$)/, os.homedir())
+            .replace(/^~/, os.homedir());
         const dotfilePath = path.join(localDir, fileEntry.dst);
 
         if (!existsSync(dotfilePath)) {
@@ -1348,7 +1354,10 @@ export class DotCommand extends BaseCommand {
    * Deactivate a single dotfile or folder (remove symlink)
    */
     async deactivateFile(fileEntry, localDir) {
-        const srcPath = fileEntry.src.replace(/^~/, os.homedir());
+        const srcPath = fileEntry.src
+            .replace(/^\$HOME(?=\/|$)/, os.homedir())
+            .replace(/^\{\{\s*HOME\s*\}\}(?=\/|$)/, os.homedir())
+            .replace(/^~/, os.homedir());
         const dotfilePath = path.join(localDir, fileEntry.dst);
 
         if (!existsSync(srcPath)) {
@@ -1430,7 +1439,10 @@ export class DotCommand extends BaseCommand {
         const localDir = this.getLocalDotfilesDir(address);
 
         const restoreEntry = async (fileEntry) => {
-            const srcPath = fileEntry.src.replace(/^~/, os.homedir());
+            const srcPath = fileEntry.src
+                .replace(/^\$HOME(?=\/|$)/, os.homedir())
+                .replace(/^\{\{\s*HOME\s*\}\}(?=\/|$)/, os.homedir())
+                .replace(/^~/, os.homedir());
             const backups = [
                 `${srcPath}.backup`,
                 ...(await fs.readdir(path.dirname(srcPath))).filter((f) =>
