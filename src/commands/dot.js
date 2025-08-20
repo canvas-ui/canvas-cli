@@ -9,13 +9,14 @@ import readline from 'readline';
 import { spawn } from 'child_process';
 import BaseCommand from './base.js';
 import { parseResourceAddress } from '../utils/address-parser.js';
-import { CANVAS_DIR_CONFIG } from '../utils/config.js';
+import { CANVAS_DIR_CONFIG, DOTFILES_FILE } from '../utils/config.js';
 import { DATA_TYPES, getWorkspaceDataDir } from '../utils/workspace-data.js';
 
 /**
  * Constants
  */
-const DOTFILES_CONFIG_FILE = path.join(CANVAS_DIR_CONFIG, 'dotfiles.json');
+// Use shared DOTFILES_FILE path (\~/.canvas/db/dotfiles.json)
+const DOTFILES_CONFIG_FILE = DOTFILES_FILE;
 
 /**
  * Dotfile manager command
@@ -234,87 +235,77 @@ export class DotCommand extends BaseCommand {
             // Load local index for activation status
             const localIndex = await this.loadDotfilesIndex();
 
-            // Resolve context path filter (defaults to current context)
-            let contextPath = '/';
+            // Determine whether to filter by context
+            const hasContextFilter = Boolean(this.options?.context);
+            let contextPath = hasContextFilter ? this.options.context : '/';
             let contextId = null;
-            let workspaceId = null;
 
-            try {
-                if (this.options?.context) {
-                    contextPath = this.options.context;
+            if (hasContextFilter) {
+                try {
+                    // Get current context address for DB query scope
+                    const currentContextAddress = await this.getCurrentContext();
+                    contextId = currentContextAddress;
+                } catch (err) {
+                    // If we cannot resolve context, we will show local index only
+                    console.log(chalk.yellow('Warning: Could not resolve current context; showing local index only'));
                 }
-
-                // Get current context to determine workspace
-                const contextAddress = await this.getCurrentContext();
-                contextId = contextAddress;
-                const ctxResp = await this.apiClient.getContext(contextAddress);
-                let ctx = ctxResp.payload || ctxResp.data || ctxResp;
-                if (ctx && ctx.context) ctx = ctx.context;
-                workspaceId = ctx?.workspaceId;
-
-                // If no context path specified, use current context path
-                if (!this.options?.context) {
-                    contextPath = ctx?.path || '/';
-                }
-            } catch (err) {
-                console.log(chalk.yellow('Warning: Could not determine current context, showing all local dotfiles only'));
-                contextPath = '/';
             }
 
-            // Query dotfiles from database
+            // Query dotfiles from database only when filtering by context
             let databaseDotfiles = [];
-            try {
-                await this.checkConnection();
-                if (contextId) {
-                    // Get dotfiles for current context (which filters by context automatically)
+            if (hasContextFilter && contextId) {
+                try {
+                    await this.checkConnection();
                     const response = await this.apiClient.getDotfilesByContext(contextId);
                     const result = response.payload || response.data || response;
                     databaseDotfiles = Array.isArray(result) ? result : [];
+                } catch (err) {
+                    console.log(chalk.yellow('Warning: Could not fetch dotfiles from database; showing local index'));
+                    this.debug('Database query error:', err.message);
                 }
-            } catch (err) {
-                console.log(chalk.yellow('Warning: Could not fetch dotfiles from database, showing local index only'));
-                this.debug('Database query error:', err.message);
             }
 
-            const normalizedPath = contextPath === '/' ? '' : contextPath.replace(/^\/+/, '').replace(/\/+$/, '');
+            const normalizedPath = hasContextFilter && contextPath !== '/'
+                ? contextPath.replace(/^\/+/, '').replace(/\/+$/, '')
+                : '';
 
             // Combine database and local information
             const dotfileMap = new Map();
 
-            // Add database dotfiles
-            for (const doc of databaseDotfiles) {
-                const dotfileData = doc.data || doc;
-                const localPath = dotfileData.localPath;
-                const displayRemote = dotfileData.repoPath;
-                const docId = doc.id;
+            // Add database dotfiles (only when we have a filter)
+            if (databaseDotfiles.length > 0) {
+                for (const doc of databaseDotfiles) {
+                    const dotfileData = doc.data || doc;
+                    const localPath = dotfileData.localPath;
+                    const displayRemote = dotfileData.repoPath;
+                    const docId = doc.id;
 
-                // Filter by context path if specified
-                if (
-                    normalizedPath &&
-                    (!displayRemote || (
-                        !displayRemote.includes(`/${normalizedPath}/`) &&
-                        !displayRemote.endsWith(`/${normalizedPath}`)
-                    ))
-                ) {
-                    continue;
+                    if (
+                        normalizedPath &&
+                        (!displayRemote || (
+                            !displayRemote.includes(`/${normalizedPath}/`) &&
+                            !displayRemote.endsWith(`/${normalizedPath}`)
+                        ))
+                    ) {
+                        continue;
+                    }
+
+                    const key = `${localPath} → ${displayRemote}`;
+                    dotfileMap.set(key, {
+                        localPath,
+                        remotePath: displayRemote,
+                        docId,
+                        priority: dotfileData.priority || 0,
+                        backupPath: dotfileData.backupPath,
+                        source: 'database',
+                        active: false, // Will be updated from local index
+                    });
                 }
-
-                const key = `${localPath} → ${displayRemote}`;
-                dotfileMap.set(key, {
-                    localPath,
-                    remotePath: displayRemote,
-                    docId,
-                    priority: dotfileData.priority || 0,
-                    backupPath: dotfileData.backupPath,
-                    source: 'database',
-                    active: false, // Will be updated from local index
-                });
             }
 
-            // Add/update with local index information
+            // Add/update with local index information (always shown; filter only if explicitly requested)
             for (const [indexKey, config] of Object.entries(localIndex)) {
                 for (const file of config.files || []) {
-                    // Filter by context path
                     if (normalizedPath && !file.dst.startsWith(normalizedPath)) {
                         continue;
                     }
@@ -322,11 +313,9 @@ export class DotCommand extends BaseCommand {
                     const key = `${file.src} → ${file.dst}`;
                     const existing = dotfileMap.get(key);
                     if (existing) {
-                        // Update activation status from local index
                         existing.active = file.active || false;
                         existing.localIndexEntry = file;
                     } else {
-                        // Add local-only entry
                         dotfileMap.set(key, {
                             localPath: file.src,
                             remotePath: file.dst,
