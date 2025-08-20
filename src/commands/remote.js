@@ -86,14 +86,32 @@ export class RemoteCommand extends BaseCommand {
             const isFirstRemote = Object.keys(existingRemotes).length === 0;
 
             // Create remote configuration - initially without version
+            let token = parsed.options.token;
+
+            // If --token flag is provided but empty, prompt for token interactively
+            if (parsed.options.token === '' || (parsed.options.token === true)) {
+                try {
+                    token = await this.promptForPassword('Enter API token: ');
+                } catch (error) {
+                    throw new Error(
+                        'Token is required for authentication. Use --token with a value or provide when prompted.',
+                    );
+                }
+                if (!token) {
+                    throw new Error(
+                        'Token is required. Please provide a valid API token.',
+                    );
+                }
+            }
+
             const remoteConfig = {
                 url: url,
                 apiBase: parsed.options.apiBase || '/rest/v2',
                 version: null, // Will be fetched from server
                 auth: {
-                    method: parsed.options.token ? 'token' : 'password',
+                    method: token ? 'token' : 'password',
                     tokenType: 'jwt',
-                    token: parsed.options.token || '',
+                    token: token || '',
                 },
             };
 
@@ -170,7 +188,7 @@ export class RemoteCommand extends BaseCommand {
                 console.log(`  Server Version: ${remoteConfig.version}`);
             }
 
-            if (parsed.options.token) {
+            if (token) {
                 console.log(chalk.yellow('  Authentication: Token-based'));
             } else {
                 console.log(
@@ -180,11 +198,11 @@ export class RemoteCommand extends BaseCommand {
 
             // Always try to login after adding a remote
             console.log();
-            if (parsed.options.token) {
+            if (token) {
                 // Token-based authentication - login automatically
                 console.log(chalk.blue('Logging in with provided token...'));
                 try {
-                    await this.performLogin(remoteId, { token: parsed.options.token });
+                    await this.performLogin(remoteId, { token: token });
                 } catch (loginError) {
                     console.log(chalk.yellow(`⚠ Login failed: ${loginError.message}`));
                     console.log(

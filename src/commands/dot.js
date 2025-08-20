@@ -495,6 +495,23 @@ export class DotCommand extends BaseCommand {
 
             console.log(chalk.green(`✓ Cloned to ${localDir}`));
 
+            // Always switch to main branch
+            console.log(chalk.blue('Switching to main branch...'));
+            try {
+                await this.execGit(['checkout', 'main'], localDir);
+                console.log(chalk.green('✓ Switched to main branch'));
+            } catch (error) {
+                // If main branch doesn't exist, try master
+                try {
+                    console.log(chalk.yellow('Main branch not found, trying master...'));
+                    await this.execGit(['checkout', 'master'], localDir);
+                    console.log(chalk.green('✓ Switched to master branch'));
+                } catch (masterError) {
+                    console.log(chalk.yellow(`⚠ Could not switch to main or master branch: ${masterError.message}`));
+                    console.log(chalk.yellow('  Repository may be on a different default branch'));
+                }
+            }
+
             // Tip for installing hooks
             console.log(chalk.gray('Tip: install hooks for encryption/decryption automation → run:'));
             console.log(chalk.gray(`  canvas dot install-hooks ${address.full}`));
