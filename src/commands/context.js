@@ -280,9 +280,44 @@ export class ContextCommand extends BaseCommand {
             const resolvedAddress =
         await this.apiClient.remoteStore.resolveAlias(contextAddress);
 
-            // Update session with bound context
+            // Get context details and remote status for session
+            let contextUrl = null;
+            let contextId = null;
+            let remoteStatus = 'disconnected';
+
+            try {
+                // Extract context ID from resolved address
+                const addressParts = resolvedAddress.split(':');
+                if (addressParts.length >= 2) {
+                    contextId = addressParts[addressParts.length - 1];
+                }
+
+                // Try to get context details and check remote connectivity
+                const ctxResp = await this.apiClient.getContext(resolvedAddress);
+                let ctx = ctxResp.payload || ctxResp.data || ctxResp;
+                if (ctx && ctx.context) ctx = ctx.context;
+
+                if (ctx) {
+                    contextUrl = ctx.url;
+                    contextId = ctx.id || contextId;
+                }
+
+                // Check remote connectivity
+                const remoteId = addressParts.length >= 2 ? addressParts.slice(0, -1).join(':') : await this.apiClient.getCurrentRemote();
+                if (remoteId && await this.apiClient.isRemoteReachable(remoteId)) {
+                    remoteStatus = 'connected';
+                }
+            } catch (error) {
+                // If we can't get context details or check connectivity, keep defaults
+                this.debug('Failed to get context details or check connectivity:', error.message);
+            }
+
+            // Update session with bound context and new fields
             await this.apiClient.remoteStore.updateSession({
                 boundContext: resolvedAddress,
+                boundContextUrl: contextUrl,
+                boundContextId: contextId,
+                boundRemoteStatus: remoteStatus,
                 boundAt: new Date().toISOString(),
             });
 

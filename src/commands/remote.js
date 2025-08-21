@@ -602,8 +602,13 @@ export class RemoteCommand extends BaseCommand {
                 throw new Error(`Remote '${remoteId}' not found`);
             }
 
+            // Check remote connectivity status
+            let remoteStatus = 'disconnected';
+            let syncSuccess = false;
+
             await this.remoteStore.updateSession({
                 boundRemote: remoteId,
+                boundRemoteStatus: remoteStatus, // Will be updated after connection test
                 boundAt: new Date().toISOString(),
             });
 
@@ -621,6 +626,7 @@ export class RemoteCommand extends BaseCommand {
 
                 // Test connection
                 await apiClient.ping();
+                remoteStatus = 'connected';
                 console.log(chalk.green('  ✓ Connection verified'));
 
                 // Sync workspaces
@@ -661,6 +667,7 @@ export class RemoteCommand extends BaseCommand {
                 });
 
                 console.log(chalk.green(`✓ Sync completed for remote '${remoteId}'`));
+                syncSuccess = true;
             } catch (syncError) {
                 console.log(chalk.yellow(`⚠ Sync failed: ${syncError.message}`));
                 console.log(
@@ -670,6 +677,11 @@ export class RemoteCommand extends BaseCommand {
                 );
                 console.log(`  canvas remote sync ${remoteId}`);
             }
+
+            // Update session with final remote status
+            await this.remoteStore.updateSession({
+                boundRemoteStatus: remoteStatus,
+            });
 
             return 0;
         } catch (error) {

@@ -102,8 +102,11 @@ const DEFAULT_ALIASES_CONFIG = {};
 // Default session configuration
 const DEFAULT_SESSION_CONFIG = {
     boundRemote: null,
+    boundRemoteStatus: 'disconnected',
     defaultWorkspace: null,
     boundContext: null,
+    boundContextUrl: null,
+    boundContextId: null,
     boundAt: null,
 };
 
