@@ -1,7 +1,14 @@
 #!/bin/bash
 
-# Add this script to your ~/.bashrc or ~/.zshrc to update the prompt dynamically
-# based on the current CLI context
+# This script will update the prompt dynamically based on the current CLI context
+# and the status of the Canvas server.
+
+# Install this script into ~/.canvas/scripts/update-prompt.sh
+# and add the following line to your ~/.bashrc or ~/.zshrc:
+# source ~/.canvas/scripts/update-prompt.sh or
+# if [ -f ~/.canvas/scripts/update-prompt.sh ]; then
+#     source ~/.canvas/scripts/update-prompt.sh
+# fi
 
 ## Settings
 
@@ -37,10 +44,9 @@ fi
 # Functions                     #
 #################################
 
-
 canvas_connected() {
     local server_status
-    server_status=$(get_value "$CANVAS_SESSION" "server_status")
+    server_status=$(cat $CANVAS_SESSION | jq -r '.boundRemoteStatus')
     if [ "$server_status" == "connected" ]; then
         return 0
     fi
@@ -59,11 +65,8 @@ canvas_update_prompt() {
         # Session status is "connected", so try to fetch the current context URL to verify
         local context_id
         local context_url
-        context_id=$(get_value "$CANVAS_SESSION" "context_id")
-
-        # Attempt to get context URL. Suppress stderr from canvas_http_get itself during prompt update.
-        # canvas_http_get will use the updated parseStatusCode which handles disconnection state.
-        context_url=$(canvas_http_get "/contexts/$context_id/url" "" "true" 2>/dev/null | jq -r '.payload.url // ""')
+        context_id=$(cat $CANVAS_SESSION | jq -r '.boundContextId')
+        context_url=$(cat $CANVAS_SESSION | jq -r '.boundContextUrl')
 
         # Re-check connection status, as canvas_http_get might have updated it if the call failed
         if [ -n "$context_url" ] && canvas_connected; then

@@ -372,6 +372,27 @@ export class ContextCommand extends BaseCommand {
             const result = response.payload || response.data || response;
             console.log(chalk.green(`✓ Context URL set to '${result.url}'`));
 
+            // Update session file with new context URL if this is the currently bound context
+            try {
+                const session = await this.apiClient.remoteStore.getSession();
+                if (session.boundContext) {
+                    // Compare both the full address and just the context ID part
+                    const boundContextMatches = session.boundContext === contextId ||
+                        (session.boundContextId && session.boundContextId === contextId.split(':').pop()) ||
+                        contextId.endsWith(`:${session.boundContextId}`);
+
+                    if (boundContextMatches) {
+                        await this.apiClient.remoteStore.updateSession({
+                            boundContextUrl: result.url || url,
+                        });
+                        this.debug('Session updated with new context URL:', result.url || url);
+                    }
+                }
+            } catch (sessionUpdateError) {
+                this.debug('Failed to update session with new context URL:', sessionUpdateError.message);
+                // Don't fail the main operation if session update fails
+            }
+
             // Trigger local index update if remote is reachable
             try {
                 const remoteId = await this.apiClient.getCurrentRemote();
