@@ -169,3 +169,7 @@ Configuration is stored in `~/.canvas/config/canvas-cli.json`:
     }
 }
 ```
+
+## License
+
+Licensed under AGPL-3.0-or-later. See main project LICENSE file. 
