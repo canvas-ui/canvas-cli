@@ -1,14 +1,17 @@
 {
   "name": "canvas-cli",
-  "version": "1.3.5",
+  "version": "1.3.6",
   "description": "Canvas CLI",
   "author": "me@idnc.sk",
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "bin": {
+    "canvas": "bin/canvas",
     "context": "bin/context",
-    "ws": "bin/ws",
-    "canvas": "bin/canvas"
+    "ctx": "bin/context",
+    "dot": "bin/dot",
+    "q": "bin/q",
+    "ws": "bin/ws"
   },
   "scripts": {
     "lint": "eslint \"**/*.js\"",
@@ -17,7 +20,7 @@
     "format:js": "prettier --write \"**/*.js\"",
     "format:md": "prettier --write \"**/*.md\"",
     "build": "npm run build:all",
-    "build:all": "npm run build:linux && npm run build:macos && npm run build:windows",
+    "build:all": "npm run build:linux && npm run build:macos",
     "build:linux": "bun build --compile --target=bun-linux-x64 --minify --icon=assets/icons/canvas.png --outfile=dist/canvas-linux ./src/index.js",
     "build:linux-arm": "bun build --compile --target=bun-linux-arm64 --minify --icon=assets/icons/canvas.png --outfile=dist/canvas-linux-arm ./src/index.js",
     "build:macos": "bun build --compile --target=bun-darwin-x64 --minify --icon=assets/icons/canvas.png --outfile=dist/canvas-macos ./src/index.js",
@@ -25,8 +28,7 @@
     "build:windows": "bun build --compile --target=bun-windows-x64 --minify --icon=assets/icons/canvas.ico --outfile=dist/canvas-windows.exe ./src/index.js",
     "build:dev": "bun build --compile --outfile=dist/canvas-dev ./src/index.js",
     "generate:icons": "scripts/generate-icons.sh",
-    "clean": "rm -rf dist",
-    "clean:icons": "rm -rf assets/icons"
+    "clean": "rm -rf dist"
   },
   "repository": {
     "type": "git",
@@ -78,11 +80,10 @@
     "outputPath": "bin",
     "targets": [
       "linux",
-      "macos",
-      "win"
+      "macos"
     ],
     "engines": {
-      "node": ">=20.0.0 <21.0.0"
+      "node": ">=20.0.0"
     },
     "assets": [
       "./node_modules/axios/dist/node/axios.cjs"
