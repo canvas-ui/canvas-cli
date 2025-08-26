@@ -1073,7 +1073,9 @@ export class DotCommand extends BaseCommand {
                     if (file.active && contextFileMap.has(file.src)) {
                         // Deactivate this file as it will be replaced by context version
                         try {
-                            await this.deactivateFile(file, path.dirname(this.getLocalDotfilesDir(await this.parseAddress(config_key))));
+                            const addr = await this.parseAddress(config_key);
+                            const cfgLocalDir = this.getLocalDotfilesDir(addr);
+                            await this.deactivateFile(file, cfgLocalDir);
                             file.active = false;
                             deactivatedCount++;
                         } catch (err) {
@@ -1156,50 +1158,45 @@ export class DotCommand extends BaseCommand {
         const address = await this.parseAddress(targetSpec);
         const index = await this.loadDotfilesIndex();
         const key = `${address.userIdentifier}@${address.remote}:${address.resource}`;
-
-        if (!index[key]) {
-            throw new Error(`Dotfiles not found for ${key}. Run: dot clone ${key}`);
-        }
-
-        const config = index[key];
         const localDir = this.getLocalDotfilesDir(address);
 
+        // Ensure local repo exists; auto-clone for convenience
         if (!existsSync(localDir)) {
-            throw new Error(`Local dotfiles directory not found: ${localDir}`);
+            console.log(chalk.blue('Local repository not found – cloning...'));
+            await this.handleClone({ ...parsed, args: ['clone', `${address.userIdentifier}@${address.remote}:${address.resource}`] });
         }
 
         try {
-            // Fetch dotfiles from database to get document IDs
+            // Fetch dotfiles from database for this workspace and build interactive list
             let databaseDotfiles = [];
             const docIdMap = new Map(); // Map from localPath to docId
+            const workspaceAddress = `${address.userIdentifier}@${address.remote}:${address.resource}`;
 
             try {
                 await this.checkConnection();
-                // Get current context to determine workspace
-                const contextAddress = await this.getCurrentContext(this.options);
-                const ctxResp = await this.apiClient.getContext(contextAddress);
-                let ctx = ctxResp.payload || ctxResp.data || ctxResp;
-                if (ctx && ctx.context) ctx = ctx.context;
-                const workspaceId = ctx?.workspaceId;
+                // Prefer querying by explicit workspace address
+                const response = await this.apiClient.getDotfilesByWorkspace(workspaceAddress);
+                const result = response.payload || response.data || response;
+                databaseDotfiles = Array.isArray(result) ? result : [];
 
-                if (workspaceId) {
-                    const response = await this.apiClient.getDotfilesByWorkspace(workspaceId);
-                    const result = response.payload || response.data || response;
-                    databaseDotfiles = Array.isArray(result) ? result : [];
-
-                    // Build map from localPath to docId
-                    for (const doc of databaseDotfiles) {
-                        const dotfileData = doc.data || doc;
-                        const localPath = dotfileData.localPath;
-                        const docId = doc.id;
-                        docIdMap.set(localPath, docId);
-                    }
+                // Build map from localPath to docId
+                for (const doc of databaseDotfiles) {
+                    const dotfileData = doc.data || doc;
+                    const localPath = dotfileData.localPath;
+                    const docId = doc.id;
+                    if (localPath) docIdMap.set(localPath, docId);
                 }
             } catch (err) {
                 this.debug('Could not fetch dotfiles from database:', err.message);
             }
 
+            // If specific file path provided, keep the existing non-interactive behavior
             if (address.path) {
+                // Ensure workspace entry exists in index
+                if (!index[key]) {
+                    index[key] = { path: localDir, status: 'inactive', files: [] };
+                }
+                const config = index[key];
                 // Activate specific file
                 const targetFile = address.path.startsWith('/')
                     ? address.path.slice(1)
@@ -1222,20 +1219,94 @@ export class DotCommand extends BaseCommand {
 
                 console.log(chalk.green(`✓ Activated ${fileEntry.src}`));
             } else {
-                // Activate all files
-                for (const fileEntry of config.files) {
-                    const docId = docIdMap.get(fileEntry.src);
-                    await this.activateFile(fileEntry, localDir, docId);
-                    fileEntry.active = true;
-                    if (docId) {
-                        fileEntry.docId = docId;
+                // Interactive activation for all workspace dotfiles (DB is authoritative source)
+                // Ensure workspace entry exists in index
+                if (!index[key]) {
+                    index[key] = { path: localDir, status: 'inactive', files: [] };
+                }
+                const config = index[key];
+
+                // Build candidate list from database; fallback to local index if DB empty
+                const candidates = [];
+                if (databaseDotfiles.length > 0) {
+                    for (const doc of databaseDotfiles) {
+                        const d = doc.data || doc;
+                        if (!d.localPath || !d.repoPath) continue;
+                        candidates.push({
+                            src: d.localPath,
+                            dst: d.repoPath,
+                            type: d.type || 'file',
+                            priority: d.priority || 0,
+                            docId: doc.id,
+                        });
+                    }
+                } else if (config.files?.length) {
+                    // Fallback to local index entries
+                    for (const f of config.files) {
+                        candidates.push({ ...f });
                     }
                 }
 
-                config.status = 'active';
+                if (candidates.length === 0) {
+                    console.log(chalk.gray('No dotfiles found for this workspace'));
+                    return 0;
+                }
+
+                // Sort by priority (desc), then src
+                candidates.sort((a, b) => (b.priority || 0) - (a.priority || 0) || a.src.localeCompare(b.src));
+
+                let activatedCount = 0;
+                let skippedCount = 0;
+
+                for (const fileData of candidates) {
+                    // Verify the dotfile exists in local repo
+                    const dotfilePath = path.join(localDir, fileData.dst);
+                    if (!existsSync(dotfilePath)) {
+                        console.log(chalk.yellow(`Skipping ${fileData.src}: dotfile not found at ${dotfilePath}`));
+                        continue;
+                    }
+
+                    // Determine file type from FS if possible (overrides metadata)
+                    try {
+                        const stats = await fs.stat(dotfilePath);
+                        fileData.type = stats.isDirectory() ? 'folder' : 'file';
+                    } catch (_) { /* keep existing type */ }
+
+                    const answer = await this.promptYesNo(`Activate ${fileData.src} → ${fileData.dst}? (y/N) `);
+                    if (!answer) {
+                        // Ensure entry exists in index with active=false
+                        const existing = config.files.find((f) => f.src === fileData.src);
+                        if (existing) {
+                            Object.assign(existing, { ...fileData, active: false });
+                        } else {
+                            config.files.push({ ...fileData, active: false });
+                        }
+                        skippedCount++;
+                        continue;
+                    }
+
+                    try {
+                        const docId = fileData.docId || docIdMap.get(fileData.src) || null;
+                        await this.activateFile(fileData, localDir, docId);
+                        // Update or add to index with active=true
+                        const existing = config.files.find((f) => f.src === fileData.src);
+                        const toStore = { ...fileData, active: true };
+                        if (docId) toStore.docId = docId;
+                        if (existing) Object.assign(existing, toStore);
+                        else config.files.push(toStore);
+                        activatedCount++;
+                        await this.saveDotfilesIndex(index);
+                        console.log(chalk.green(`✓ Activated ${fileData.src}`));
+                    } catch (err) {
+                        console.log(chalk.red(`Failed to activate ${fileData.src}: ${err.message}`));
+                    }
+                }
+
+                // Update workspace status
+                if (activatedCount > 0) config.status = 'active';
                 await this.saveDotfilesIndex(index);
 
-                console.log(chalk.green(`✓ Activated all dotfiles for ${key}`));
+                console.log(chalk.green(`✓ Activated ${activatedCount} dotfile(s); skipped ${skippedCount}`));
             }
 
             return 0;
