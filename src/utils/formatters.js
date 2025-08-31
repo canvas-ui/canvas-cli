@@ -132,7 +132,6 @@ export class WorkspaceFormatter extends BaseFormatter {
                 chalk.cyan('Owner'),
                 chalk.cyan('Color'),
                 chalk.cyan('Description'),
-                chalk.cyan('Created'),
                 chalk.cyan('Default'),
                 chalk.cyan('Status'),
             ],
@@ -156,7 +155,6 @@ export class WorkspaceFormatter extends BaseFormatter {
                     this.truncate(workspace.ownerEmail || workspace.owner || 'N/A', 20),
                     this.formatColor(workspace.color),
                     this.truncate(workspace.description, 25),
-                    this.formatDate(workspace.created || workspace.createdAt),
                     defaultMark,
                     this.formatWorkspaceStatus(workspace.status),
                 ]);

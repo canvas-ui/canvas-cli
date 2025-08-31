@@ -233,7 +233,13 @@ export class DotCommand extends BaseCommand {
     async handleList(parsed) {
         try {
             // Load local index for activation status
-            const localIndex = await this.loadDotfilesIndex();
+            let localIndex = await this.loadDotfilesIndex();
+
+            // Check if local index is empty and auto-sync if needed
+            if (Object.keys(localIndex).length === 0) {
+                console.log(chalk.blue('No local dotfile index found. Syncing from all remotes...'));
+                localIndex = await this.syncAllRemotes();
+            }
 
             // Determine whether to filter by context
             const hasContextFilter = Boolean(this.options?.context);
@@ -1401,6 +1407,169 @@ export class DotCommand extends BaseCommand {
     }
 
     // Helper methods
+
+    /**
+     * Sync dotfiles from all configured remotes
+     * Clones/pulls remote repos and updates local index from database
+     */
+    async syncAllRemotes() {
+        try {
+            // Get all configured remotes
+            const remotes = await this.apiClient.remoteStore.getRemotes();
+            const remoteKeys = Object.keys(remotes);
+
+            if (remoteKeys.length === 0) {
+                console.log(chalk.yellow('No remotes configured. Add a remote with: canvas remote add user@remote url'));
+                return {};
+            }
+
+            const localIndex = {};
+            let totalSynced = 0;
+
+            for (const remoteKey of remoteKeys) {
+                try {
+                    const remote = remotes[remoteKey];
+                    console.log(chalk.blue(`Syncing remote: ${remoteKey}...`));
+
+                    // Get workspaces for this remote
+                    const apiClient = await this.apiClient.getApiClient(remoteKey);
+                    let workspaces = [];
+
+                    try {
+                        const workspaceResponse = await apiClient.client.get('/workspaces');
+                        const workspaceData = workspaceResponse.data.payload || workspaceResponse.data.data || workspaceResponse.data;
+                        workspaces = Array.isArray(workspaceData) ? workspaceData : [];
+                    } catch (workspaceError) {
+                        console.log(chalk.yellow(`Warning: Could not fetch workspaces from ${remoteKey}: ${workspaceError.message}`));
+                        continue;
+                    }
+
+                    // Sync dotfiles for each workspace
+                    for (const workspace of workspaces) {
+                        try {
+                            const workspaceId = workspace.id || workspace.name;
+                            const workspaceAddress = `${remoteKey}:${workspaceId}`;
+                            const parsed = await this.parseAddress(workspaceAddress);
+
+                            // Clone/pull repository if needed
+                            await this.syncRemoteRepository(parsed);
+
+                            // Update local index from database
+                            const synced = await this.syncWorkspaceDotfiles(parsed);
+                            if (synced > 0) {
+                                totalSynced += synced;
+                                console.log(chalk.green(`✓ Synced ${synced} dotfiles from ${workspaceAddress}`));
+                            }
+                        } catch (wsError) {
+                            this.debug(`Failed to sync workspace ${workspace.id}: ${wsError.message}`);
+                        }
+                    }
+                } catch (remoteError) {
+                    console.log(chalk.yellow(`Warning: Failed to sync remote ${remoteKey}: ${remoteError.message}`));
+                }
+            }
+
+            if (totalSynced > 0) {
+                console.log(chalk.green(`✓ Total synced: ${totalSynced} dotfiles from ${remoteKeys.length} remotes`));
+            } else {
+                console.log(chalk.gray('No dotfiles found in any remote'));
+            }
+
+            return await this.loadDotfilesIndex();
+        } catch (error) {
+            console.log(chalk.red(`Failed to sync remotes: ${error.message}`));
+            return {};
+        }
+    }
+
+    /**
+     * Sync repository for a specific remote (clone or pull)
+     */
+    async syncRemoteRepository(address) {
+        const localDir = this.getLocalDotfilesDir(address);
+
+        if (!existsSync(localDir)) {
+            // Clone repository
+            try {
+                console.log(chalk.blue(`Cloning ${address.full}...`));
+                await this.handleClone({ args: ['clone', address.full] });
+            } catch (cloneError) {
+                this.debug(`Failed to clone ${address.full}: ${cloneError.message}`);
+                throw cloneError;
+            }
+        } else {
+            // Pull latest changes
+            try {
+                await this.handlePull({ args: ['pull', address.full] });
+            } catch (pullError) {
+                this.debug(`Failed to pull ${address.full}: ${pullError.message}`);
+                // Don't throw on pull errors - repository might still be usable
+            }
+        }
+    }
+
+    /**
+     * Sync dotfiles for a specific workspace from database to local index
+     */
+    async syncWorkspaceDotfiles(address) {
+        try {
+            const workspaceAddress = `${address.userIdentifier}@${address.remote}:${address.resource}`;
+
+            // Query dotfiles from database
+            const response = await this.apiClient.getDotfilesByWorkspace(workspaceAddress);
+            const databaseDotfiles = response.payload || response.data || response;
+            const dotfiles = Array.isArray(databaseDotfiles) ? databaseDotfiles : [];
+
+            if (dotfiles.length === 0) {
+                return 0;
+            }
+
+            // Load and update local index
+            const localIndex = await this.loadDotfilesIndex();
+            const key = `${address.userIdentifier}@${address.remote}:${address.resource}`;
+            const localDir = this.getLocalDotfilesDir(address);
+
+            if (!localIndex[key]) {
+                localIndex[key] = {
+                    path: localDir,
+                    status: 'inactive',
+                    files: []
+                };
+            }
+
+            // Clear existing files for this workspace
+            localIndex[key].files = [];
+
+            // Add dotfiles from database to local index
+            for (const doc of dotfiles) {
+                const dotfileData = doc.data || doc;
+                const localPath = dotfileData.localPath;
+                const repoPath = dotfileData.repoPath;
+
+                if (localPath && repoPath) {
+                    localIndex[key].files.push({
+                        src: localPath,
+                        dst: repoPath,
+                        type: dotfileData.type || 'file',
+                        priority: dotfileData.priority || 0,
+                        active: false, // Will be set when activated
+                        docId: doc.id,
+                        syncedAt: new Date().toISOString()
+                    });
+                }
+            }
+
+            // Update last synced timestamp
+            localIndex[key].lastSynced = new Date().toISOString();
+
+            await this.saveDotfilesIndex(localIndex);
+            return dotfiles.length;
+        } catch (error) {
+            this.debug(`Failed to sync workspace dotfiles: ${error.message}`);
+            return 0;
+        }
+    }
+
     normalizeLocalPathInput(inputPath) {
         if (!inputPath) return inputPath;
         const home = os.homedir();
@@ -1531,12 +1700,19 @@ export class DotCommand extends BaseCommand {
 
     /**
    * Sync repository (clone if missing, push local commits, pull remote)
+   * Enhanced to support syncing all remotes or specific workspace
    */
     async handleSync(parsed) {
         const addressStr = parsed.args[1];
+
+        // If no address specified, sync all remotes
         if (!addressStr) {
-            throw new Error('Address is required: dot sync user@remote:workspace');
+            console.log(chalk.blue('Syncing all remotes...'));
+            await this.syncAllRemotes();
+            return 0;
         }
+
+        // Sync specific workspace
         const address = await this.parseAddress(addressStr);
         const localDir = this.getLocalDotfilesDir(address);
 
@@ -1546,14 +1722,21 @@ export class DotCommand extends BaseCommand {
             // Reuse clone logic
             return await this.handleClone({ ...parsed, args: ['clone', addressStr] });
         }
+
         // Commit any local changes
         await this.handleCommit({
             ...parsed,
             args: ['commit', addressStr, 'Sync local changes'],
         });
+
         // Push and pull
         await this.handlePush({ ...parsed, args: ['push', addressStr] });
         await this.handlePull({ ...parsed, args: ['pull', addressStr] });
+
+        // Update local index from database
+        await this.syncWorkspaceDotfiles(address);
+        console.log(chalk.green('✓ Sync completed'));
+
         return 0;
     }
 
@@ -1781,7 +1964,7 @@ export class DotCommand extends BaseCommand {
             '  init <user@remote:workspace>         Initialize remote repository',
         );
         console.log(
-            '  sync <user@remote:workspace>         Sync repository (clone if missing, push & pull otherwise)',
+            '  sync [user@remote:workspace]         Sync repository (sync all remotes if no address, or specific workspace)',
         );
         console.log(
             '  add <src> <workspace/dest> [--context path] [--encrypt]  Add dotfile/folder; bind to context; mark for encryption',
