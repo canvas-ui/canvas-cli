@@ -533,7 +533,7 @@ export class DocumentFormatter extends BaseFormatter {
         }
     }
 
-        formatTable(data, session = null, schema = null) {
+    formatTable(data, session = null, schema = null) {
         if (
             !data ||
       (Array.isArray(data) && data.length === 0) ||
@@ -572,7 +572,7 @@ export class DocumentFormatter extends BaseFormatter {
             // Determine document type from multiple sources
             let docType = 'document';
 
-                        // 1. Check if schema parameter was explicitly passed
+            // 1. Check if schema parameter was explicitly passed
             if (schema && typeof schema === 'string') {
                 docType = schema.toLowerCase();
             }

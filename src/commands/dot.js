@@ -243,7 +243,7 @@ export class DotCommand extends BaseCommand {
 
             // Determine whether to filter by context
             const hasContextFilter = Boolean(this.options?.context);
-            let contextPath = hasContextFilter ? this.options.context : '/';
+            const contextPath = hasContextFilter ? this.options.context : '/';
             let contextId = null;
 
             if (hasContextFilter) {
@@ -2027,7 +2027,7 @@ export class DotCommand extends BaseCommand {
                     repoPath.startsWith(`${normalizedContextPath}/`) ||
                     repoPath === normalizedContextPath ||
                     // Also include parent context dotfiles for inheritance
-                    normalizedContextPath.startsWith(repoPath.replace(/\/[^\/]*$/, ''))
+                    normalizedContextPath.startsWith(repoPath.replace(/\/[^/]*$/, ''))
                 );
             }
 
