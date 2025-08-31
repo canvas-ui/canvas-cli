@@ -1438,9 +1438,9 @@ export class DotCommand extends BaseCommand {
 
                     // Sync dotfiles for each workspace
                     for (const workspace of workspaces) {
+                        const workspaceName = workspace.name || workspace.id;
                         try {
-                            const workspaceId = workspace.id || workspace.name;
-                            const workspaceAddress = `${remoteKey}:${workspaceId}`;
+                            const workspaceAddress = `${remoteKey}:${workspaceName}`;
                             const parsed = await this.parseAddress(workspaceAddress);
 
                             // Clone/pull repository if needed
@@ -1453,7 +1453,7 @@ export class DotCommand extends BaseCommand {
                                 console.log(chalk.green(`✓ Synced ${synced} dotfiles from ${workspaceAddress}`));
                             }
                         } catch (wsError) {
-                            this.debug(`Failed to sync workspace ${workspace.id}: ${wsError.message}`);
+                            this.debug(`Failed to sync workspace ${workspaceName}: ${wsError.message}`);
                         }
                     }
                 } catch (remoteError) {
