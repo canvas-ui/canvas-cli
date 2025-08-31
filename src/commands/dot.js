@@ -411,7 +411,7 @@ export class DotCommand extends BaseCommand {
 
                     let displayPath = dotfile.localPath;
                     if (dotfile.type === 'folder' || (dotfile.localIndexEntry && dotfile.localIndexEntry.type === 'folder')) {
-                        displayPath = `📁 ${displayPath}`;
+                        displayPath = `[DIR] ${displayPath}`;
                     }
 
                     const remotePath = dotfile.remotePath || dotfile.remoteFull;
@@ -629,6 +629,12 @@ export class DotCommand extends BaseCommand {
 
         try {
             const stats = await fs.stat(expandedSrcPath);
+
+            // Check if source is a symlink and skip if it is
+            if (stats.isSymbolicLink()) {
+                throw new Error(`Symlinks are not supported: ${srcPath}`);
+            }
+
             const index = await this.loadDotfilesIndex();
             const key = `${address.userIdentifier}@${address.remote}:${address.resource}`;
 
@@ -1869,6 +1875,15 @@ export class DotCommand extends BaseCommand {
                 await fs.rm(targetPath, { recursive: true, force: true });
                 // Update encryption index
                 await this.removeEncryptedIndexEntry(localDir, repoPath);
+
+                // Update local dotfiles index
+                const index = await this.loadDotfilesIndex();
+                const key = `${address.userIdentifier}@${address.remote}:${address.resource}`;
+                if (index[key] && index[key].files) {
+                    index[key].files = index[key].files.filter(f => f.dst !== repoPath);
+                    await this.saveDotfilesIndex(index);
+                }
+
                 // Commit & push
                 await this.execGit(['add', '-A'], localDir);
                 await this.execGit(['commit', '-m', `Remove dotfile ${repoPath}`], localDir);
