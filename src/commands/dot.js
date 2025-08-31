@@ -722,13 +722,20 @@ export class DotCommand extends BaseCommand {
 
                 // Determine mapping type based on source stats
                 const isDirectory = (await fs.stat(expandedSrcPath)).isDirectory();
+
+                // Get priority from command line options
+                const priority = this.options?.priority ? parseInt(this.options.priority, 10) : 0;
+                if (isNaN(priority) || priority < 0) {
+                    throw new Error('Priority must be a non-negative integer');
+                }
+
                 const docData = {
                     schema: 'data/abstraction/dotfile',
                     data: {
                         localPath: canonicalSrc,
                         repoPath: repoPath,
                         type: isDirectory ? 'folder' : 'file',
-                        priority: 0,
+                        priority: priority,
                     },
                 };
 
@@ -974,7 +981,7 @@ export class DotCommand extends BaseCommand {
     }
 
     /**
-   * Activate dotfiles for a specific context (used by context set -u)
+   * Activate dotfiles for a specific context with priority-based resolution (used by context set -u)
    */
     async handleActivateForContext(workspaceAddress, contextPath) {
         try {
@@ -983,42 +990,21 @@ export class DotCommand extends BaseCommand {
             // Parse workspace address
             const address = await this.parseAddress(workspaceAddress);
 
-            // Get dotfiles for the target context path
-            let contextDotfiles = [];
+            // Get ALL workspace dotfiles (not just context-filtered) for priority resolution
+            let allWorkspaceDotfiles = [];
             try {
                 await this.checkConnection();
-
-                // Get current context address
-                const currentContextAddress = await this.getCurrentContext();
-
-                // If we're switching to a different context path, we need to find/create the target context
-                // For now, get all dotfiles from current context and filter by path
-                // TODO: In the future, we should properly resolve context addresses for different paths
-                const response = await this.apiClient.getDotfilesByContext(currentContextAddress);
+                const response = await this.apiClient.getDotfilesByWorkspace(workspaceAddress);
                 const result = response.payload || response.data || response;
-                const allDotfiles = Array.isArray(result) ? result : [];
-
-                // Filter dotfiles by context path
-                const normalizedContextPath = contextPath === '/' ? '' : contextPath.replace(/^\/+/, '').replace(/\/+$/, '');
-                if (normalizedContextPath) {
-                    contextDotfiles = allDotfiles.filter(doc => {
-                        const dotfileData = doc.data || doc;
-                        const repoPath = dotfileData.repoPath;
-
-                        // Check if dotfile belongs to this context path
-                        return repoPath && (repoPath.includes(`/${normalizedContextPath}/`) ||
-                               repoPath.endsWith(`/${normalizedContextPath}`));
-                    });
-                } else {
-                    // Root context - include all dotfiles
-                    contextDotfiles = allDotfiles;
-                }
-
+                allWorkspaceDotfiles = Array.isArray(result) ? result : [];
             } catch (err) {
-                this.debug('Could not fetch context dotfiles:', err.message);
+                this.debug('Could not fetch workspace dotfiles:', err.message);
                 console.log(chalk.yellow('Warning: Could not fetch dotfiles from database'));
                 return 0;
             }
+
+            // Enhanced priority-based resolution
+            const contextDotfiles = await this.resolveContextDotfilesByPriority(allWorkspaceDotfiles, contextPath);
 
             if (contextDotfiles.length === 0) {
                 console.log(chalk.gray(`No dotfiles found for context: ${contextPath}`));
@@ -1741,6 +1727,10 @@ export class DotCommand extends BaseCommand {
 
         // Update local index from database
         await this.syncWorkspaceDotfiles(address);
+
+        // Handle encrypted files if any exist
+        await this.handleEncryptedFilesDuringSync(localDir);
+
         console.log(chalk.green('✓ Sync completed'));
 
         return 0;
@@ -1965,6 +1955,197 @@ export class DotCommand extends BaseCommand {
     }
 
     /**
+     * Handle encrypted files during sync - prompt for decryption password if needed
+     */
+    async handleEncryptedFilesDuringSync(localDir) {
+        try {
+            const encryptedIndexPath = path.join(localDir, '.dot', 'encrypted.index');
+            if (!existsSync(encryptedIndexPath)) {
+                return; // No encrypted files
+            }
+
+            const content = await fs.readFile(encryptedIndexPath, 'utf8');
+            const encryptedFiles = content.split('\n').map(s => s.trim()).filter(Boolean);
+
+            if (encryptedFiles.length === 0) {
+                return; // No encrypted files
+            }
+
+            console.log(chalk.blue(`Found ${encryptedFiles.length} encrypted file(s)`));
+
+            // Check if decryption script exists
+            const decryptScript = path.join(localDir, '.dot', 'decrypt.sh');
+            if (!existsSync(decryptScript)) {
+                console.log(chalk.yellow('Warning: No decryption script found - encrypted files will remain encrypted'));
+                return;
+            }
+
+            // Prompt for decryption if we're in interactive mode
+            if (process.stdin.isTTY) {
+                const shouldDecrypt = await this.promptYesNo('Decrypt encrypted files during sync? (y/N) ');
+                if (shouldDecrypt) {
+                    try {
+                        // Run decryption script
+                        console.log(chalk.blue('Running decryption...'));
+                        await this.execCommand('bash', ['.dot/decrypt.sh'], localDir);
+                        console.log(chalk.green('✓ Files decrypted successfully'));
+                    } catch (error) {
+                        console.log(chalk.red(`Failed to decrypt files: ${error.message}`));
+                        console.log(chalk.yellow('Continuing with encrypted files...'));
+                    }
+                }
+            }
+        } catch (error) {
+            this.debug(`Error handling encrypted files: ${error.message}`);
+        }
+    }
+
+    /**
+     * Resolve dotfiles for a context with priority-based conflict resolution
+     * This implements the core logic for: ctx set /work/mb --update-dotfiles
+     */
+    async resolveContextDotfilesByPriority(allWorkspaceDotfiles, contextPath) {
+        const normalizedContextPath = contextPath === '/' ? '' : contextPath.replace(/^\/+/, '').replace(/\/+$/, '');
+
+        // Group dotfiles by localPath to detect conflicts
+        const conflictGroups = new Map();
+
+        for (const doc of allWorkspaceDotfiles) {
+            const dotfileData = doc.data || doc;
+            const localPath = dotfileData.localPath;
+            const repoPath = dotfileData.repoPath;
+            const priority = dotfileData.priority || 0;
+
+            // Check if this dotfile is relevant to the context path
+            let isRelevant = false;
+            if (!normalizedContextPath) {
+                // Root context - all dotfiles are potentially relevant
+                isRelevant = true;
+            } else {
+                // Check if dotfile belongs to this context or parent contexts
+                isRelevant = repoPath && (
+                    repoPath.startsWith(`${normalizedContextPath}/`) ||
+                    repoPath === normalizedContextPath ||
+                    // Also include parent context dotfiles for inheritance
+                    normalizedContextPath.startsWith(repoPath.replace(/\/[^\/]*$/, ''))
+                );
+            }
+
+            if (!isRelevant) continue;
+
+            if (!conflictGroups.has(localPath)) {
+                conflictGroups.set(localPath, []);
+            }
+
+            conflictGroups.get(localPath).push({
+                doc,
+                dotfileData,
+                priority,
+                localPath,
+                repoPath,
+                contextRelevance: this.calculateContextRelevance(repoPath, normalizedContextPath)
+            });
+        }
+
+        // Resolve conflicts by priority and context relevance
+        const resolvedDotfiles = [];
+        const conflicts = [];
+
+        for (const [localPath, candidates] of conflictGroups.entries()) {
+            if (candidates.length === 1) {
+                resolvedDotfiles.push(candidates[0].doc);
+            } else {
+                // Sort by priority (desc), then by context relevance (desc)
+                candidates.sort((a, b) => {
+                    if (a.priority !== b.priority) return b.priority - a.priority;
+                    if (a.contextRelevance !== b.contextRelevance) return b.contextRelevance - a.contextRelevance;
+                    return a.repoPath.localeCompare(b.repoPath);
+                });
+
+                const winner = candidates[0];
+                const alternatives = candidates.slice(1);
+
+                // Check if there's a clear winner (higher priority than alternatives)
+                if (winner.priority > alternatives[0]?.priority || alternatives.length === 0) {
+                    resolvedDotfiles.push(winner.doc);
+                } else {
+                    // Ambiguous case - user needs to choose
+                    conflicts.push({
+                        localPath,
+                        candidates: candidates.map(c => ({
+                            repoPath: c.repoPath,
+                            priority: c.priority,
+                            docId: c.doc.id,
+                            contextRelevance: c.contextRelevance
+                        }))
+                    });
+                }
+            }
+        }
+
+        // Handle conflicts by prompting user
+        if (conflicts.length > 0) {
+            await this.handleDotfileConflicts(conflicts, normalizedContextPath);
+            return []; // Return empty to prevent automatic activation
+        }
+
+        return resolvedDotfiles;
+    }
+
+    /**
+     * Calculate how relevant a dotfile's repoPath is to the target context
+     * Higher score = more specific/relevant
+     */
+    calculateContextRelevance(repoPath, targetContextPath) {
+        if (!targetContextPath) return 0; // Root context
+
+        const repoSegments = repoPath.split('/');
+        const contextSegments = targetContextPath.split('/');
+
+        // Count matching segments from start
+        let matchingSegments = 0;
+        for (let i = 0; i < Math.min(repoSegments.length, contextSegments.length); i++) {
+            if (repoSegments[i] === contextSegments[i]) {
+                matchingSegments++;
+            } else {
+                break;
+            }
+        }
+
+        // Exact match gets highest relevance
+        if (repoPath === targetContextPath) return 1000;
+
+        // Parent context match gets high relevance
+        if (targetContextPath.startsWith(repoPath)) return 500 + matchingSegments * 10;
+
+        // Partial match gets lower relevance
+        return matchingSegments * 10;
+    }
+
+    /**
+     * Handle dotfile conflicts by showing candidates and prompting user
+     */
+    async handleDotfileConflicts(conflicts, contextPath) {
+        console.log(chalk.yellow('\n⚠ Dotfile conflicts detected:'));
+        console.log(chalk.gray(`Multiple dotfiles want to manage the same local paths for context: /${contextPath}\n`));
+
+        for (const conflict of conflicts) {
+            console.log(chalk.bold(`${conflict.localPath}:`));
+
+            conflict.candidates.forEach((candidate, idx) => {
+                const priorityStr = candidate.priority > 0 ? chalk.green(`[priority: ${candidate.priority}]`) : '';
+                const relevanceStr = candidate.contextRelevance > 0 ? chalk.blue(`[relevance: ${candidate.contextRelevance}]`) : '';
+                console.log(`  ${idx + 1}. ${candidate.repoPath} ${priorityStr}${relevanceStr}`);
+            });
+            console.log('');
+        }
+
+        console.log(chalk.yellow('Please resolve conflicts manually using:'));
+        console.log(chalk.gray('  canvas dot activate <workspace>/<specific-file>'));
+        console.log(chalk.gray('Or update priorities in your dotfile documents\n'));
+    }
+
+    /**
    * Show help for the dot command
    */
     showHelp() {
@@ -1982,7 +2163,7 @@ export class DotCommand extends BaseCommand {
             '  sync [user@remote:workspace]         Sync repository (sync all remotes if no address, or specific workspace)',
         );
         console.log(
-            '  add <src> <workspace/dest> [--context path] [--encrypt]  Add dotfile/folder; bind to context; mark for encryption',
+            '  add <src> <workspace/dest> [--context path] [--encrypt] [--priority N]  Add dotfile/folder; bind to context; mark for encryption; set priority',
         );
         console.log('  commit <workspace> [message]         Commit changes');
         console.log(

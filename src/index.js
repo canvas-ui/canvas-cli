@@ -88,6 +88,7 @@ export async function main(argv = process.argv.slice(2)) {
                 'model',
                 'template',
                 'max-tokens',
+                'priority',
             ],
             boolean: [
                 'help',
@@ -100,6 +101,8 @@ export async function main(argv = process.argv.slice(2)) {
                 'show-prompt',
                 'show-prompt-only',
                 'update-dotfiles',
+                'encrypt',
+                'force',
             ],
             alias: {
                 h: 'help',
@@ -113,6 +116,8 @@ export async function main(argv = process.argv.slice(2)) {
                 d: 'debug',
                 q: 'quiet',
                 u: 'update-dotfiles',
+                e: 'encrypt',
+                p: 'priority',
             },
         });
 
