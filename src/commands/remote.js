@@ -445,7 +445,8 @@ export class RemoteCommand extends BaseCommand {
         const remoteId = parsed.args[1];
 
         if (!remoteId) {
-            throw new Error('Remote identifier is required');
+            // Sync all remotes when no specific remote is provided
+            return await this.syncAllRemotes();
         }
 
         try {
@@ -534,6 +535,129 @@ export class RemoteCommand extends BaseCommand {
             return 0;
         } catch (error) {
             throw new Error(`Failed to sync remote: ${error.message}`);
+        }
+    }
+
+    /**
+   * Sync all configured remotes
+   */
+    async syncAllRemotes() {
+        try {
+            const remotes = await this.remoteStore.getRemotes();
+
+            if (Object.keys(remotes).length === 0) {
+                console.log(chalk.yellow('No remotes configured'));
+                console.log();
+                console.log(chalk.cyan('Add a remote with:'));
+                console.log('  canvas remote add user@remote-name https://server-url');
+                return 0;
+            }
+
+            console.log(chalk.blue(`Syncing all ${Object.keys(remotes).length} remotes...`));
+            console.log();
+
+            let successCount = 0;
+            let errorCount = 0;
+
+            for (const [remoteId, remote] of Object.entries(remotes)) {
+                try {
+                    console.log(chalk.blue(`Syncing remote '${remoteId}'...`));
+
+                    // Create API client for this remote
+                    const apiClient = await this.createRemoteApiClient(remoteId);
+
+                    // Test connection and fetch server info
+                    const pingResponse = await apiClient.ping();
+                    console.log(chalk.green('  ✓ Connection verified'));
+
+                    // Extract version information from ping response
+                    const serverInfo = pingResponse.payload || pingResponse.data || pingResponse;
+                    if (serverInfo.version) {
+                        console.log(chalk.gray(`    Server version: ${serverInfo.version}`));
+                        // Update remote with version info
+                        await this.remoteStore.updateRemote(remoteId, {
+                            version: serverInfo.version,
+                            appName: serverInfo.appName || 'canvas-server',
+                        });
+                    }
+
+                    // Sync workspaces
+                    console.log('  📦 Syncing workspaces...');
+                    const workspacesResponse = await apiClient.getWorkspaces();
+                    const workspaces = workspacesResponse.payload || workspacesResponse.data || workspacesResponse;
+
+                    if (Array.isArray(workspaces)) {
+                        const fetchedKeys = new Set();
+                        for (const workspace of workspaces) {
+                            const workspaceKey = `${remoteId}:${workspace.id || workspace.name}`;
+                            fetchedKeys.add(workspaceKey);
+                            await this.remoteStore.updateWorkspace(workspaceKey, workspace);
+                        }
+                        // Remove stale local workspaces for this remote
+                        const localWorkspaces = await this.remoteStore.getWorkspaces();
+                        for (const key of Object.keys(localWorkspaces)) {
+                            if (key.startsWith(`${remoteId}:`) && !fetchedKeys.has(key)) {
+                                await this.remoteStore.removeWorkspace(key);
+                            }
+                        }
+                        console.log(chalk.green(`    ✓ Synced ${workspaces.length} workspaces`));
+                    }
+
+                    // Sync contexts
+                    console.log('  📋 Syncing contexts...');
+                    const contextsResponse = await apiClient.getContexts();
+                    const contexts = contextsResponse.payload || contextsResponse.data || contextsResponse;
+
+                    if (Array.isArray(contexts)) {
+                        const fetchedContextKeys = new Set();
+                        for (const context of contexts) {
+                            const contextKey = `${remoteId}:${context.id}`;
+                            fetchedContextKeys.add(contextKey);
+                            await this.remoteStore.updateContext(contextKey, context);
+                        }
+                        // Remove stale local contexts for this remote
+                        const localContexts = await this.remoteStore.getContexts();
+                        for (const key of Object.keys(localContexts)) {
+                            if (key.startsWith(`${remoteId}:`) && !fetchedContextKeys.has(key)) {
+                                await this.remoteStore.removeContext(key);
+                            }
+                        }
+                        console.log(chalk.green(`    ✓ Synced ${contexts.length} contexts`));
+                    }
+
+                    // Update last synced timestamp
+                    await this.remoteStore.updateRemote(remoteId, {
+                        lastSynced: new Date().toISOString(),
+                    });
+
+                    console.log(chalk.green(`✓ Sync completed for remote '${remoteId}'`));
+                    successCount++;
+
+                } catch (error) {
+                    console.log(chalk.red(`✗ Failed to sync remote '${remoteId}': ${error.message}`));
+                    errorCount++;
+                }
+
+                console.log(); // Add spacing between remotes
+            }
+
+            // Summary
+            console.log(chalk.bold('Sync Summary:'));
+            console.log(`  ✓ Successfully synced: ${successCount} remotes`);
+            if (errorCount > 0) {
+                console.log(`  ✗ Failed to sync: ${errorCount} remotes`);
+            }
+
+            if (successCount > 0) {
+                console.log(chalk.green(`✓ Overall sync completed successfully`));
+            } else {
+                console.log(chalk.red(`✗ No remotes were synced successfully`));
+                return 1;
+            }
+
+            return 0;
+        } catch (error) {
+            throw new Error(`Failed to sync all remotes: ${error.message}`);
         }
     }
 
@@ -1123,7 +1247,7 @@ export class RemoteCommand extends BaseCommand {
         console.log('  list                       List all configured remotes');
         console.log('  remove <user@remote>       Remove a remote server');
         console.log(
-            '  sync <user@remote>         Sync workspaces and contexts from remote',
+            '  sync [user@remote]         Sync workspaces and contexts from remote (or all if no remote specified)',
         );
         console.log('  ping <user@remote>         Test connectivity to remote');
         console.log(
@@ -1161,7 +1285,8 @@ export class RemoteCommand extends BaseCommand {
             '  canvas remote add user@work.server https://canvas.company.com --token canvas-abc123',
         );
         console.log('  canvas remote list');
-        console.log('  canvas remote sync admin@canvas.local');
+        console.log('  canvas remote sync                    # Sync all remotes');
+        console.log('  canvas remote sync admin@canvas.local  # Sync specific remote');
         console.log('  canvas remote bind admin@canvas.local');
         console.log(
             '  canvas remote login user@work.server --email user@company.com',
@@ -1194,6 +1319,11 @@ export class RemoteCommand extends BaseCommand {
         console.log(
             chalk.cyan(
                 'Note: After adding a remote, use sync to fetch available workspaces and contexts.',
+            ),
+        );
+        console.log(
+            chalk.cyan(
+                'Use "canvas remote sync" without parameters to sync all configured remotes.',
             ),
         );
         console.log(
