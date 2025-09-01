@@ -405,7 +405,6 @@ export class DotCommand extends BaseCommand {
 
                 for (const dotfile of dotfiles) {
                     const status = dotfile.active ? chalk.green('●') : chalk.gray('○');
-                    const sourceIndicator = dotfile.source === 'database' ? '' : chalk.yellow(' (local only)');
                     const priorityStr = dotfile.priority !== 0 ? chalk.gray(` [${dotfile.priority}]`) : '';
                     const docIdStr = dotfile.docId ? chalk.gray(` #${dotfile.docId}`) : '';
 
@@ -415,10 +414,17 @@ export class DotCommand extends BaseCommand {
                     }
 
                     const remotePath = dotfile.remotePath || dotfile.remoteFull;
-                    console.log(`    ${status} ${displayPath} → ${remotePath}${priorityStr}${docIdStr}${sourceIndicator}`);
+                    console.log(`    ${status} ${displayPath} → ${remotePath}${priorityStr}${docIdStr}`);
 
                     if (dotfile.backupPath) {
                         console.log(chalk.gray(`      backup: ${dotfile.backupPath}`));
+                    }
+
+                    // Show activation timestamp if available
+                    if (dotfile.active && dotfile.activatedAt) {
+                        const activatedDate = new Date(dotfile.activatedAt);
+                        const timeAgo = this.getTimeAgo(activatedDate);
+                        console.log(chalk.gray(`      activated: ${timeAgo}`));
                     }
                 }
                 console.log('');
@@ -658,6 +664,7 @@ export class DotCommand extends BaseCommand {
                     type: 'file',
                     active: false,
                     addedAt: new Date().toISOString(),
+                    activatedAt: null,
                 });
             } else if (stats.isDirectory()) {
                 // Handle directory using cp -r
@@ -678,6 +685,7 @@ export class DotCommand extends BaseCommand {
                     type: 'folder',
                     active: false,
                     addedAt: new Date().toISOString(),
+                    activatedAt: null,
                 });
             } else {
                 throw new Error(`Unsupported file type: ${srcPath}`);
@@ -1075,6 +1083,7 @@ export class DotCommand extends BaseCommand {
                             const cfgLocalDir = this.getLocalDotfilesDir(addr);
                             await this.deactivateFile(file, cfgLocalDir);
                             file.active = false;
+                            file.activatedAt = null; // Clear activation timestamp
                             deactivatedCount++;
                         } catch (err) {
                             this.debug(`Failed to deactivate ${file.src}:`, err.message);
@@ -1111,6 +1120,7 @@ export class DotCommand extends BaseCommand {
                     // Activate the file
                     await this.activateFile(fileData, localDir, fileData.docId);
                     fileData.active = true;
+                    fileData.activatedAt = new Date().toISOString();
                     fileData.addedAt = new Date().toISOString();
                     activatedCount++;
 
@@ -1210,6 +1220,7 @@ export class DotCommand extends BaseCommand {
 
                 // Update index
                 fileEntry.active = true;
+                fileEntry.activatedAt = new Date().toISOString();
                 if (docId) {
                     fileEntry.docId = docId;
                 }
@@ -1275,9 +1286,9 @@ export class DotCommand extends BaseCommand {
                         // Ensure entry exists in index with active=false
                         const existing = config.files.find((f) => f.src === fileData.src);
                         if (existing) {
-                            Object.assign(existing, { ...fileData, active: false });
+                            Object.assign(existing, { ...fileData, active: false, activatedAt: null });
                         } else {
-                            config.files.push({ ...fileData, active: false });
+                            config.files.push({ ...fileData, active: false, activatedAt: null });
                         }
                         skippedCount++;
                         continue;
@@ -1288,7 +1299,7 @@ export class DotCommand extends BaseCommand {
                         await this.activateFile(fileData, localDir, docId);
                         // Update or add to index with active=true
                         const existing = config.files.find((f) => f.src === fileData.src);
-                        const toStore = { ...fileData, active: true };
+                        const toStore = { ...fileData, active: true, activatedAt: new Date().toISOString() };
                         if (docId) toStore.docId = docId;
                         if (existing) Object.assign(existing, toStore);
                         else config.files.push(toStore);
@@ -1352,6 +1363,7 @@ export class DotCommand extends BaseCommand {
 
                 // Update index
                 fileEntry.active = false;
+                fileEntry.activatedAt = null; // Clear activation timestamp
                 await this.saveDotfilesIndex(index);
 
                 console.log(chalk.green(`✓ Deactivated ${fileEntry.src}`));
@@ -1360,6 +1372,7 @@ export class DotCommand extends BaseCommand {
                 for (const fileEntry of config.files) {
                     await this.deactivateFile(fileEntry, localDir);
                     fileEntry.active = false;
+                    fileEntry.activatedAt = null; // Clear activation timestamp
                 }
 
                 config.status = 'inactive';
@@ -1529,24 +1542,31 @@ export class DotCommand extends BaseCommand {
                 };
             }
 
-            // Clear existing files for this workspace
-            localIndex[key].files = [];
+            // Preserve existing active status and timestamps
+            const existingFiles = new Map();
+            for (const file of localIndex[key].files || []) {
+                existingFiles.set(file.src, file);
+            }
 
-            // Add dotfiles from database to local index
+            // Merge database dotfiles with existing local data
+            localIndex[key].files = [];
             for (const doc of dotfiles) {
                 const dotfileData = doc.data || doc;
                 const localPath = dotfileData.localPath;
                 const repoPath = dotfileData.repoPath;
 
                 if (localPath && repoPath) {
+                    const existing = existingFiles.get(localPath);
                     localIndex[key].files.push({
                         src: localPath,
                         dst: repoPath,
                         type: dotfileData.type || 'file',
                         priority: dotfileData.priority || 0,
-                        active: false, // Will be set when activated
+                        active: existing?.active || false, // Preserve active status
                         docId: doc.id,
-                        syncedAt: new Date().toISOString()
+                        syncedAt: new Date().toISOString(),
+                        activatedAt: existing?.activatedAt || null, // Preserve activation timestamp
+                        addedAt: existing?.addedAt || new Date().toISOString()
                     });
                 }
             }
@@ -1647,6 +1667,9 @@ export class DotCommand extends BaseCommand {
 
         // Create symlink (works for both files and directories)
         await fs.symlink(dotfilePath, srcPath);
+
+        // Update activation timestamp
+        fileEntry.activatedAt = new Date().toISOString();
     }
 
     /**
@@ -2143,6 +2166,24 @@ export class DotCommand extends BaseCommand {
         console.log(chalk.yellow('Please resolve conflicts manually using:'));
         console.log(chalk.gray('  canvas dot activate <workspace>/<specific-file>'));
         console.log(chalk.gray('Or update priorities in your dotfile documents\n'));
+    }
+
+    /**
+     * Get human-readable time ago string
+     */
+    getTimeAgo(date) {
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / (1000 * 60));
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+        if (diffMins < 1) return 'just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+
+        return date.toLocaleDateString();
     }
 
     /**
