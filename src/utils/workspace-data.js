@@ -10,7 +10,8 @@ export const DATA_TYPES = {
     DOTFILES: 'dotfiles',
     FILES: 'files',
     AGENTS: 'agents',
-    ROLES: 'roles'
+    ROLES: 'roles',
+    BACKUPS: 'dotfiles.backup'
 };
 
 /**
@@ -55,4 +56,13 @@ export function getWorkspaceBaseDir(address) {
 export function getRemoteBaseDir(address) {
     const remoteKey = `${address.userIdentifier}@${address.remote}`;
     return path.join(CANVAS_DIR_DATA, remoteKey, 'workspaces');
+}
+
+/**
+ * Get local workspace backup directory for dotfiles
+ * @param {Object} address - Parsed resource address
+ * @returns {string} Path to the workspace backup directory
+ */
+export function getWorkspaceBackupDir(address) {
+    return getWorkspaceDataDir(address, DATA_TYPES.BACKUPS);
 }

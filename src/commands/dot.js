@@ -10,7 +10,7 @@ import { spawn } from 'child_process';
 import BaseCommand from './base.js';
 import { parseResourceAddress } from '../utils/address-parser.js';
 import { CANVAS_DIR_CONFIG, DOTFILES_FILE } from '../utils/config.js';
-import { DATA_TYPES, getWorkspaceDataDir } from '../utils/workspace-data.js';
+import { DATA_TYPES, getWorkspaceDataDir, getWorkspaceBackupDir } from '../utils/workspace-data.js';
 
 /**
  * Constants
@@ -1118,7 +1118,7 @@ export class DotCommand extends BaseCommand {
                     }
 
                     // Activate the file
-                    await this.activateFile(fileData, localDir, fileData.docId);
+                    await this.activateFile(fileData, localDir, address, fileData.docId);
                     fileData.active = true;
                     fileData.activatedAt = new Date().toISOString();
                     fileData.addedAt = new Date().toISOString();
@@ -1216,7 +1216,7 @@ export class DotCommand extends BaseCommand {
                 }
 
                 const docId = docIdMap.get(fileEntry.src);
-                await this.activateFile(fileEntry, localDir, docId);
+                await this.activateFile(fileEntry, localDir, address, docId);
 
                 // Update index
                 fileEntry.active = true;
@@ -1296,7 +1296,7 @@ export class DotCommand extends BaseCommand {
 
                     try {
                         const docId = fileData.docId || docIdMap.get(fileData.src) || null;
-                        await this.activateFile(fileData, localDir, docId);
+                        await this.activateFile(fileData, localDir, address, docId);
                         // Update or add to index with active=true
                         const existing = config.files.find((f) => f.src === fileData.src);
                         const toStore = { ...fileData, active: true, activatedAt: new Date().toISOString() };
@@ -1631,7 +1631,7 @@ export class DotCommand extends BaseCommand {
     /**
    * Activate a single dotfile or folder (create symlink)
    */
-    async activateFile(fileEntry, localDir, docId = null) {
+    async activateFile(fileEntry, localDir, address, docId = null) {
         const srcPath = fileEntry.src
             .replace(/^\$HOME(?=\/|$)/, os.homedir())
             .replace(/^\{\{\s*HOME\s*\}\}(?=\/|$)/, os.homedir())
@@ -1644,9 +1644,14 @@ export class DotCommand extends BaseCommand {
 
         // Check if target already exists
         if (existsSync(srcPath)) {
+            // Create backup in dedicated backup directory
+            const backupDir = getWorkspaceBackupDir(address);
+            await fs.mkdir(backupDir, { recursive: true });
+
             // Create backup with document ID if available, otherwise fallback to timestamp
-            const backupSuffix = docId ? `backup.${docId}` : `backup.${Date.now()}`;
-            const backupPath = `${srcPath}.${backupSuffix}`;
+            const backupSuffix = docId ? `${docId}` : `${Date.now()}`;
+            const backupFileName = path.basename(srcPath) + '.backup.' + backupSuffix;
+            const backupPath = path.join(backupDir, backupFileName);
 
             // If backup already exists with this docId, remove it first
             if (existsSync(backupPath)) {
@@ -1783,6 +1788,15 @@ export class DotCommand extends BaseCommand {
                 .replace(/^\$HOME(?=\/|$)/, os.homedir())
                 .replace(/^\{\{\s*HOME\s*\}\}(?=\/|$)/, os.homedir())
                 .replace(/^~/, os.homedir());
+
+            // Check if backup path is stored in index (new location)
+            if (fileEntry.backupPath && existsSync(fileEntry.backupPath)) {
+                await this.execCommand('cp', ['-r', fileEntry.backupPath, srcPath]);
+                console.log(chalk.green(`✓ Restored ${srcPath} from backup: ${fileEntry.backupPath}`));
+                return;
+            }
+
+            // Fallback to old location (backward compatibility)
             const backups = [
                 `${srcPath}.backup`,
                 ...(await fs.readdir(path.dirname(srcPath))).filter((f) =>
