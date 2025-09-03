@@ -1496,7 +1496,6 @@ export class DotCommand extends BaseCommand {
         if (!existsSync(localDir)) {
             // Clone repository
             try {
-                console.log(chalk.blue(`Cloning ${address.full}...`));
                 await this.handleClone({ args: ['clone', address.full] });
             } catch (cloneError) {
                 this.debug(`Failed to clone ${address.full}: ${cloneError.message}`);
