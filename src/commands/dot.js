@@ -296,7 +296,7 @@ export class DotCommand extends BaseCommand {
                         continue;
                     }
 
-                    const key = `${localPath} → ${displayRemote}`;
+                    const key = `${localPath} → ${displayRemote} (${docId})`;
                     dotfileMap.set(key, {
                         localPath,
                         remotePath: displayRemote,
@@ -316,19 +316,29 @@ export class DotCommand extends BaseCommand {
                         continue;
                     }
 
-                    const key = `${file.src} → ${file.dst}`;
-                    const existing = dotfileMap.get(key);
+                    // Create unique key including workspace info to handle duplicate dst paths
+                    const uniqueKey = `${file.src} → ${file.dst} (${indexKey})`;
+                    // Also check for existing database entries that might match this local file
+                    let existing = null;
+                    for (const [mapKey, mapValue] of dotfileMap.entries()) {
+                        if (mapValue.localPath === file.src && mapValue.remotePath === file.dst &&
+                            mapValue.remoteFull && mapValue.remoteFull.startsWith(indexKey)) {
+                            existing = mapValue;
+                            break;
+                        }
+                    }
+
                     if (existing) {
                         existing.active = file.active || false;
                         existing.localIndexEntry = file;
                         if (!existing.remoteFull) existing.remoteFull = `${indexKey}/${file.dst}`;
                     } else {
-                        dotfileMap.set(key, {
+                        dotfileMap.set(uniqueKey, {
                             localPath: file.src,
                             remotePath: file.dst,
                             remoteFull: `${indexKey}/${file.dst}`,
-                            docId: null,
-                            priority: 0,
+                            docId: file.docId || null,
+                            priority: file.priority || 0,
                             source: 'local-only',
                             active: file.active || false,
                             localIndexEntry: file,
