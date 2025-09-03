@@ -14,6 +14,7 @@
 
 # Session file
 CANVAS_SESSION="$HOME/.canvas/config/cli-session.json"
+CANVAS_REMOTES="$HOME/.canvas/config/remotes.json"
 
 # Colors
 CANVAS_PROMPT_YELLOW="$(tput setaf 3)"
@@ -40,50 +41,114 @@ if [ ! -f "$CANVAS_SESSION" ]; then
     exit 1
 fi
 
+# Check if the remotes file exists
+if [ ! -f "$CANVAS_REMOTES" ]; then
+    echo "ERROR | Remotes file not found: $CANVAS_REMOTES"
+    exit 1
+fi
+
 #################################
 # Functions                     #
 #################################
 
+get_token() {
+    local bound_remote
+    bound_remote=$(cat "$CANVAS_SESSION" | jq -r '.boundRemote // empty')
+    if [ -z "$bound_remote" ]; then
+        return 1
+    fi
+
+    local token
+    token=$(cat "$CANVAS_REMOTES" | jq -r --arg remote "$bound_remote" '.[$remote].auth.token // empty')
+    if [ -z "$token" ]; then
+        return 1
+    fi
+
+    echo "$token"
+    return 0
+}
+
+get_api_url() {
+    local bound_remote
+    bound_remote=$(cat "$CANVAS_SESSION" | jq -r '.boundRemote // empty')
+    if [ -z "$bound_remote" ]; then
+        return 1
+    fi
+
+    local url api_base
+    url=$(cat "$CANVAS_REMOTES" | jq -r --arg remote "$bound_remote" '.[$remote].url // empty')
+    api_base=$(cat "$CANVAS_REMOTES" | jq -r --arg remote "$bound_remote" '.[$remote].apiBase // empty')
+
+    if [ -z "$url" ] || [ -z "$api_base" ]; then
+        return 1
+    fi
+
+    echo "${url}${api_base}"
+    return 0
+}
+
 canvas_connected() {
     local server_status
-    server_status=$(cat $CANVAS_SESSION | jq -r '.boundRemoteStatus')
-    if [ "$server_status" == "connected" ]; then
-        return 0
+    server_status=$(cat "$CANVAS_SESSION" | jq -r '.boundRemoteStatus // empty')
+    [ "$server_status" = "connected" ]
+}
+
+get_context_url() {
+    local token api_url context_id
+
+    token=$(get_token) || return 1
+    api_url=$(get_api_url) || return 1
+    context_id=$(cat "$CANVAS_SESSION" | jq -r '.boundContextId // empty')
+
+    if [ -z "$context_id" ]; then
+        return 1
     fi
+
+    # Make API call with timeout to keep it fast
+    local response
+    response=$(curl -s --max-time 1 \
+        -H "Authorization: Bearer $token" \
+        -H "Content-Type: application/json" \
+        "${api_url}/contexts/${context_id}/url" 2>/dev/null)
+
+    if [ $? -eq 0 ] && [ -n "$response" ]; then
+        local status url
+        status=$(echo "$response" | jq -r '.status // empty')
+        if [ "$status" = "success" ]; then
+            url=$(echo "$response" | jq -r '.payload.url // empty')
+            if [ -n "$url" ]; then
+                echo "$url"
+                return 0
+            fi
+        fi
+    fi
+
     return 1
 }
 
 canvas_update_prompt() {
     if ! canvas_connected; then
-        # Server is already marked as disconnected in the session file
         export PS1="[disconnected] $ORIGINAL_PROMPT"
-        # Display a message only if the shell is interactive
-        if [[ $- == *i* ]]; then
-            echo "INFO | Not connected to Canvas server. Run 'canvas connect' to reconnect." >&2
+        return
+    fi
+
+    # Try to get current context URL from API
+    local context_url
+    context_url=$(get_context_url)
+
+    if [ $? -eq 0 ] && [ -n "$context_url" ]; then
+        # Successfully got context URL
+        local context_id
+        context_id=$(cat "$CANVAS_SESSION" | jq -r '.boundContextId // empty')
+
+        if [ "$context_id" = "default" ]; then
+            export PS1="[$context_url] $ORIGINAL_PROMPT"
+        else
+            export PS1="[($context_id) $context_url] $ORIGINAL_PROMPT"
         fi
     else
-        # Session status is "connected", so try to fetch the current context URL to verify
-        local context_id
-        local context_url
-        context_id=$(cat $CANVAS_SESSION | jq -r '.boundContextId')
-        context_url=$(cat $CANVAS_SESSION | jq -r '.boundContextUrl')
-
-        # Re-check connection status, as canvas_http_get might have updated it if the call failed
-        if [ -n "$context_url" ] && canvas_connected; then
-            if [ "$context_id" == "default" ]; then
-                export PS1="[$context_url] $ORIGINAL_PROMPT"
-            else
-                export PS1="[($context_id) $context_url] $ORIGINAL_PROMPT"
-            fi;
-        else
-            # Connection lost during the attempt, or context_url is empty
-            export PS1="[disconnected] $ORIGINAL_PROMPT"
-            # Only mark as disconnected if not already
-            if ! canvas_connected; then
-                store_value "$CANVAS_SESSION" "server_status" "disconnected"
-                store_value "$CANVAS_SESSION" "server_status_code" "0" # Generic code for connection lost during prompt update
-            fi
-        fi
+        # Failed to get context URL, show disconnected
+        export PS1="[disconnected] $ORIGINAL_PROMPT"
     fi
 }
 
