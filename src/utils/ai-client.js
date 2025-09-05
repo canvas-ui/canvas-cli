@@ -151,6 +151,7 @@ class OllamaClient extends BaseAIClient {
             },
             body: JSON.stringify({
                 model: options.model || this.model,
+                keep_alive: options.keepAlive || 3600, // Keep model in memory for 1 hour
                 messages: [
                     {
                         role: 'user',
