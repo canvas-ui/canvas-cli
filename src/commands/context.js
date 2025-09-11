@@ -512,22 +512,57 @@ export class ContextCommand extends BaseCommand {
             parsed.args[1] || (await this.getCurrentContext(parsed.options));
 
         try {
-            const response = await this.apiClient.getContextPathArray(contextId);
+            const response = await this.apiClient.getContextTree(contextId);
+            const tree = response.payload || response.data || response;
 
-            // Handle ResponseObject format
-            const data = response.payload || response.data || response;
-            const paths = data.pathArray || data;
-
-            if (Array.isArray(paths)) {
-                paths.forEach((p) => console.log(p));
-            } else if (paths) {
-                console.log(paths);
+            if (!tree || !tree.children) {
+                console.log(chalk.yellow('No tree structure found for this context'));
+                return 0;
             }
+
+            // Extract all paths from the tree structure
+            const paths = this.extractPathsFromTree(tree);
+            
+            // Display paths for easy copy-paste
+            paths.forEach((path) => console.log(path));
 
             return 0;
         } catch (error) {
             throw new Error(`Failed to get context paths: ${error.message}`);
         }
+    }
+
+    /**
+   * Extract all paths from a context tree structure recursively
+   */
+    extractPathsFromTree(node, currentPath = '') {
+        const paths = [];
+        
+        if (!node) return paths;
+
+        // Get the node name/label for the path segment
+        const nodeName = node.label || node.name || node.id;
+        
+        // Build the current path - skip root node (/) or universe root
+        let newPath = currentPath;
+        if (nodeName && nodeName !== '/' && nodeName !== '' && node.type !== 'universe') {
+            newPath = currentPath === '' ? `/${nodeName}` : `${currentPath}/${nodeName}`;
+        }
+
+        // If this node has a meaningful path (not just root), add it to the results
+        if (newPath && newPath !== '' && newPath !== '/' && node.type !== 'universe') {
+            paths.push(newPath);
+        }
+
+        // Recursively process children
+        if (node.children && Array.isArray(node.children)) {
+            node.children.forEach(child => {
+                const childPaths = this.extractPathsFromTree(child, newPath);
+                paths.push(...childPaths);
+            });
+        }
+
+        return paths;
     }
 
     /**
