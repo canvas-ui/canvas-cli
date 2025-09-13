@@ -760,8 +760,25 @@ export class ContextCommand extends BaseCommand {
 
         try {
             const options = {};
+
+            // Add search query if provided
             if (searchString) {
                 options.q = searchString;
+            }
+
+            // Add CLI options if provided
+            if (parsed.options.feature) {
+                // Support multiple --feature flags
+                options.featureArray = Array.isArray(parsed.options.feature)
+                    ? parsed.options.feature
+                    : [parsed.options.feature];
+            }
+
+            if (parsed.options.filter) {
+                // Support multiple --filter flags
+                options.filterArray = Array.isArray(parsed.options.filter)
+                    ? parsed.options.filter
+                    : [parsed.options.filter];
             }
 
             const response = await this.apiClient.getDocuments(
@@ -1382,6 +1399,10 @@ export class ContextCommand extends BaseCommand {
             '  --force                          Force deletion without confirmation',
         );
         console.log();
+        console.log(chalk.bold('Search Options (for documents command):'));
+        console.log('  --feature <feature>              Filter by feature (can be used multiple times)');
+        console.log('  --filter <filter>                Apply filter (can be used multiple times)');
+        console.log();
         console.log(chalk.bold('Examples:'));
         console.log(
             '  canvas context                               # Show current context',
@@ -1414,6 +1435,7 @@ export class ContextCommand extends BaseCommand {
         console.log(chalk.bold('Document Examples:'));
         console.log('  canvas context documents');
         console.log('  canvas context documents "search query"');
+        console.log('  canvas context documents "search" --feature data/abstraction/tab --filter timeline/today');
         console.log('  canvas context dotfiles');
         console.log('  canvas context tabs');
         console.log(
