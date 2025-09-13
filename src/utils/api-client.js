@@ -232,6 +232,15 @@ class BaseCanvasApiClient {
     // Document API methods
     async getDocuments(containerId, containerType = 'context', options = {}) {
         const params = new URLSearchParams();
+
+        // Add search query parameter if provided
+        if (options.q) {
+            params.append('q', options.q);
+        }
+        if (options.search) {
+            params.append('search', options.search);
+        }
+
         if (options.featureArray && Array.isArray(options.featureArray)) {
             options.featureArray.forEach((feature) =>
                 params.append('featureArray', feature),
@@ -242,11 +251,16 @@ class BaseCanvasApiClient {
                 params.append('filterArray', filter),
             );
         }
+        if (options.contextSpec) {
+            params.append('contextSpec', options.contextSpec);
+        }
         if (options.includeServerContext)
             params.append('includeServerContext', 'true');
         if (options.includeClientContext)
             params.append('includeClientContext', 'true');
         if (options.limit) params.append('limit', options.limit);
+        if (options.offset) params.append('offset', options.offset);
+        if (options.page) params.append('page', options.page);
 
         const baseUrl =
       containerType === 'context'
