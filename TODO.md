@@ -4,4 +4,5 @@
 - Auto-install ./scripts/update-prompt.sh on *nix
 - Fix BUN icons
 - Fix windoze builds
-- Detect electron socket, $ cat some/app.log | grep -i foo | awk .. | hi lucy "can you please help me analyze this thing" --canvas foo 
+- Detect electron socket, $ cat some/app.log | grep -i foo | awk .. | hi lucy "can you please help me analyze this thing" --canvas foo
+  should open a electron window
