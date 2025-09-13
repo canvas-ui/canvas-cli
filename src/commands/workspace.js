@@ -468,10 +468,40 @@ export class WorkspaceCommand extends BaseCommand {
             );
         }
 
+        // Check for optional search string as second argument
+        const searchString = parsed.args[2] || null;
+
         try {
+            const options = {};
+
+            // Add search query if provided
+            if (searchString) {
+                options.q = searchString;
+            }
+
+            // Add CLI options if provided
+            if (parsed.options.feature) {
+                // Support multiple --feature flags
+                options.featureArray = Array.isArray(parsed.options.feature)
+                    ? parsed.options.feature
+                    : [parsed.options.feature];
+            }
+
+            if (parsed.options['context-path']) {
+                options.contextSpec = parsed.options['context-path'];
+            }
+
+            if (parsed.options.filter) {
+                // Support multiple --filter flags
+                options.filterArray = Array.isArray(parsed.options.filter)
+                    ? parsed.options.filter
+                    : [parsed.options.filter];
+            }
+
             const response = await this.apiClient.getDocuments(
                 workspaceAddress,
                 'workspace',
+                options,
             );
 
             // Handle ResponseObject format
@@ -485,7 +515,7 @@ export class WorkspaceCommand extends BaseCommand {
             await this.output(documents, 'document');
             return 0;
         } catch (error) {
-            throw new Error(`Failed to list documents: ${error.message}`);
+            throw new Error(`Failed to ${searchString ? 'search' : 'list'} documents: ${error.message}`);
         }
     }
 
@@ -763,7 +793,7 @@ export class WorkspaceCommand extends BaseCommand {
         console.log('  open <address>                 Open workspace');
         console.log('  close <address>                Close workspace');
         console.log('  status <address>               Show workspace status');
-        console.log('  documents <address>            List documents in workspace');
+        console.log('  documents <address> [search]   List documents in workspace (with optional search)');
         console.log('  tabs <address>                 List tabs in workspace');
         console.log('  notes <address>                List notes in workspace');
         console.log('  tree <address>                 Show workspace tree');
@@ -788,6 +818,11 @@ export class WorkspaceCommand extends BaseCommand {
             '  --force                        Force deletion without confirmation',
         );
         console.log();
+        console.log(chalk.bold('Search Options (for documents command):'));
+        console.log('  --feature <feature>            Filter by feature (can be used multiple times)');
+        console.log('  --context-path <path>          Set context path (default: /)');
+        console.log('  --filter <filter>              Apply filter (can be used multiple times)');
+        console.log();
         console.log(chalk.bold('Examples:'));
         console.log('  canvas workspace list');
         console.log(
@@ -802,6 +837,8 @@ export class WorkspaceCommand extends BaseCommand {
         );
         console.log('  canvas workspace start admin@canvas.local:universe');
         console.log('  canvas workspace documents user@work.server:reports');
+        console.log('  canvas workspace documents universe "search query"');
+        console.log('  canvas workspace documents universe "search" --feature data/abstraction/tab --filter timeline/today');
         console.log('  canvas workspace delete old-workspace --force');
         console.log();
         console.log(

@@ -522,7 +522,7 @@ export class ContextCommand extends BaseCommand {
 
             // Extract all paths from the tree structure
             const paths = this.extractPathsFromTree(tree);
-            
+
             // Display paths for easy copy-paste
             paths.forEach((path) => console.log(path));
 
@@ -537,12 +537,12 @@ export class ContextCommand extends BaseCommand {
    */
     extractPathsFromTree(node, currentPath = '') {
         const paths = [];
-        
+
         if (!node) return paths;
 
         // Get the node name/label for the path segment
         const nodeName = node.label || node.name || node.id;
-        
+
         // Build the current path - skip root node (/) or universe root
         let newPath = currentPath;
         if (nodeName && nodeName !== '/' && nodeName !== '' && node.type !== 'universe') {
@@ -737,20 +737,44 @@ export class ContextCommand extends BaseCommand {
    * List all documents in context
    */
     async handleDocuments(parsed) {
-        const contextAddress =
-      parsed.args[1] || (await this.getCurrentContext(parsed.options));
+        // Check if first argument is a search string or context address
+        let contextAddress;
+        let searchString = null;
+
+        if (parsed.args.length >= 2) {
+            // If we have at least 2 args, check if first looks like context address
+            const potentialAddress = parsed.args[1];
+            if (potentialAddress.includes(':') || potentialAddress.includes('@')) {
+                // Looks like an address, second arg might be search string
+                contextAddress = potentialAddress;
+                searchString = parsed.args[2] || null;
+            } else {
+                // First arg is probably search string, use current context
+                contextAddress = await this.getCurrentContext(parsed.options);
+                searchString = potentialAddress;
+            }
+        } else {
+            // No args, use current context
+            contextAddress = await this.getCurrentContext(parsed.options);
+        }
 
         try {
+            const options = {};
+            if (searchString) {
+                options.q = searchString;
+            }
+
             const response = await this.apiClient.getDocuments(
                 contextAddress,
                 'context',
+                options,
             );
             const documents = response.payload || response.data || response;
 
             await this.output(documents, 'document');
             return 0;
         } catch (error) {
-            throw new Error(`Failed to list documents: ${error.message}`);
+            throw new Error(`Failed to ${searchString ? 'search' : 'list'} documents: ${error.message}`);
         }
     }
 
@@ -1316,7 +1340,7 @@ export class ContextCommand extends BaseCommand {
         console.log('  update <id>           Update context');
         console.log();
         console.log(chalk.bold('Document Commands:'));
-        console.log('  documents             List all documents in context');
+        console.log('  documents [search]    List all documents in context (with optional search)');
         console.log('  tab list              List tabs in context');
         console.log('  tabs                  List tabs in context (alias)');
         console.log('  tab add <url>         Add a tab to context');
@@ -1389,6 +1413,7 @@ export class ContextCommand extends BaseCommand {
         console.log();
         console.log(chalk.bold('Document Examples:'));
         console.log('  canvas context documents');
+        console.log('  canvas context documents "search query"');
         console.log('  canvas context dotfiles');
         console.log('  canvas context tabs');
         console.log(
