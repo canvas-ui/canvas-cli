@@ -21,6 +21,16 @@ A command-line interface for managing Canvas workspaces, contexts, dotfiles and 
 # One-liner installation (Linux/macOS)
 curl -sSL https://raw.githubusercontent.com/canvas-ai/canvas-cli/main/scripts/install.sh | bash
 
+# (Optional) Install prompt update script
+mkdir -p ~/.canvas/scripts
+curl -sSL https://raw.githubusercontent.com/canvas-ai/canvas-cli/refs/heads/main/scripts/update-prompt.sh -o ~/.canvas/scripts/update-prompt.sh
+chmod +x ~/.canvas/scripts/update-prompt.sh
+
+# Add to bashrc
+if [ -f $HOME/.canvas/scripts/update-prompt.sh ]; then
+  . $HOME/.canvas/scripts/update-prompt.sh
+fi; 
+
 # Manual installation
 tar -xzf canvas-*.tar.gz
 chmod +x canvas-*
