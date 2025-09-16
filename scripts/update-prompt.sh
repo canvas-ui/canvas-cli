@@ -128,7 +128,7 @@ get_context_url() {
 
 canvas_update_prompt() {
     if ! canvas_connected; then
-        export PS1="[disconnected] $ORIGINAL_PROMPT"
+        export PS1="[$CANVAS_PROMPT_RED●$CANVAS_PROMPT_RESET] $ORIGINAL_PROMPT"
         return
     fi
 
@@ -142,13 +142,13 @@ canvas_update_prompt() {
         context_id=$(cat "$CANVAS_SESSION" | jq -r '.boundContextId // empty')
 
         if [ "$context_id" = "default" ]; then
-            export PS1="[$context_url] $ORIGINAL_PROMPT"
+            export PS1="[$CANVAS_PROMPT_GREEN●$CANVAS_PROMPT_RESET $context_url] $ORIGINAL_PROMPT"
         else
-            export PS1="[($context_id) $context_url] $ORIGINAL_PROMPT"
+            export PS1="[$CANVAS_PROMPT_GREEN●$CANVAS_PROMPT_RESET ($context_id) $context_url] $ORIGINAL_PROMPT"
         fi
     else
         # Failed to get context URL, show disconnected
-        export PS1="[disconnected] $ORIGINAL_PROMPT"
+        export PS1="[$CANVAS_PROMPT_RED●$CANVAS_PROMPT_RESET] $ORIGINAL_PROMPT"
     fi
 }
 
