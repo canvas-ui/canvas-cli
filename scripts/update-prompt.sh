@@ -197,6 +197,30 @@ mark_connection_unbound() {
     return 1
 }
 
+update_context_url_in_session() {
+    # Atomically update the session file with fresh context URL
+    local url="$1"
+    local temp_file="${CANVAS_SESSION}.tmp.$$"
+    
+    if [ -z "$url" ]; then
+        return 1
+    fi
+    
+    # Create updated session with fresh URL
+    if jq --arg url "$url" '.boundContextUrl = $url' "$CANVAS_SESSION" > "$temp_file" 2>/dev/null; then
+        # Only update if jq succeeded
+        if mv "$temp_file" "$CANVAS_SESSION" 2>/dev/null; then
+            # Clear cache since we updated the file
+            _SESSION_DATA=""
+            return 0
+        fi
+    fi
+    
+    # Cleanup temp file if it exists
+    [ -f "$temp_file" ] && rm -f "$temp_file" 2>/dev/null
+    return 1
+}
+
 get_context_url() {
     local session_data token api_url context_id
 
@@ -240,6 +264,9 @@ get_context_url() {
         if [ "$status" = "success" ]; then
             url=$(echo "$response" | jq -r '.payload.url // empty')
             if [ -n "$url" ]; then
+                # Update session file with fresh URL (this updates the file mtime)
+                update_context_url_in_session "$url"
+                
                 # Cache the successful result
                 _CACHED_CONTEXT_URL="$url"
                 _LAST_CONTEXT_UPDATE=$(date +%s)
