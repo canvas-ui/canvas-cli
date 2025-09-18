@@ -11,6 +11,7 @@
 
 # Paths
 CANVAS_SESSION="$HOME/.canvas/config/cli-session.json"
+CANVAS_REMOTES="$HOME/.canvas/config/remotes.json"
 
 # How often to refresh the context URL via network if the session file is older than this
 CANVAS_CONTEXT_UPDATE_TIMEOUT=30
@@ -131,7 +132,7 @@ update_session_context_url() {
     fi
 }
 
-# Note: No network calls; we prefer the boundContextUrl in the session file.
+# Note: We prefer the boundContextUrl, but will refresh via network when stale.
 
 #################################
 # Prompt updater
