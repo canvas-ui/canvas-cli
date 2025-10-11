@@ -109,4 +109,7 @@ default_session="default"
 
 ## License
 
-Licensed under AGPL-3.0-or-later. See main project LICENSE file. 
+Licensed under AGPL-3.0-or-later. See main project LICENSE file.
+
+---
+This project is funded by [Augmentd Labs](https://augmentd.eu/en/labs)
