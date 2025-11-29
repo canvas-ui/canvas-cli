@@ -13,6 +13,14 @@ import { CANVAS_DIR_CONFIG, DOTFILES_FILE } from '../utils/config.js';
 import { DATA_TYPES, getWorkspaceDataDir, getWorkspaceBackupDir } from '../utils/workspace-data.js';
 
 /**
+ * Get the device identifier for this machine
+ * Uses hostname by default, can be overridden via CANVAS_DEVICE_ID env var
+ */
+function getDeviceId() {
+    return process.env.CANVAS_DEVICE_ID || os.hostname();
+}
+
+/**
  * Constants
  */
 // Use shared DOTFILES_FILE path (\~/.canvas/db/dotfiles.json)
@@ -280,9 +288,13 @@ export class DotCommand extends BaseCommand {
 
             // Add database dotfiles (only when we have a filter)
             if (databaseDotfiles.length > 0) {
+                const currentDeviceId = getDeviceId();
                 for (const doc of databaseDotfiles) {
                     const dotfileData = doc.data || doc;
-                    const localPath = dotfileData.localPath;
+                    // Support both old (localPath) and new (links) schema formats
+                    const localPath = dotfileData.localPath ||
+                        (dotfileData.links && dotfileData.links[currentDeviceId]) ||
+                        Object.values(dotfileData.links || {})[0];
                     const displayRemote = dotfileData.repoPath;
                     const docId = doc.id;
 
@@ -305,6 +317,7 @@ export class DotCommand extends BaseCommand {
                         backupPath: dotfileData.backupPath,
                         source: 'database',
                         active: false, // Will be updated from local index
+                        links: dotfileData.links, // Preserve links for display
                     });
                 }
             }
@@ -747,12 +760,17 @@ export class DotCommand extends BaseCommand {
                     throw new Error('Priority must be a non-negative integer');
                 }
 
+                // Get device ID for per-device linking (new schema format)
+                const deviceId = getDeviceId();
+
                 const docData = {
                     schema: 'data/abstraction/dotfile',
                     data: {
-                        localPath: canonicalSrc,
                         repoPath: repoPath,
                         type: isDirectory ? 'folder' : 'file',
+                        links: {
+                            [deviceId]: canonicalSrc, // Map device to local path
+                        },
                         priority: priority,
                     },
                 };
@@ -1060,17 +1078,25 @@ export class DotCommand extends BaseCommand {
             }
 
             // Build map of context dotfiles
+            const currentDeviceId = getDeviceId();
             const contextFileMap = new Map();
             for (const doc of contextDotfiles) {
                 const dotfileData = doc.data || doc;
-                const localPath = dotfileData.localPath;
+                // Support both old (localPath) and new (links) schema formats
+                const localPath = dotfileData.localPath ||
+                    (dotfileData.links && dotfileData.links[currentDeviceId]) ||
+                    Object.values(dotfileData.links || {})[0];
+
+                if (!localPath) {
+                    this.debug(`Skipping dotfile without local path mapping: ${dotfileData.repoPath}`);
+                    continue;
+                }
+
                 const displayRemote = dotfileData.repoPath;
                 const docId = doc.id;
 
                 // Extract relative path from repository
                 const relativePath = dotfileData.repoPath;
-                // Handle accidental duplicated context path segments (e.g., work/wipro/work/wipro/file)
-
 
                 contextFileMap.set(localPath, {
                     src: localPath,
@@ -1078,7 +1104,7 @@ export class DotCommand extends BaseCommand {
                     docId,
                     priority: dotfileData.priority || 0,
                     remotePath: displayRemote,
-                    type: 'file' // We'll determine this when activating
+                    type: dotfileData.type || 'file'
                 });
             }
 
@@ -1246,13 +1272,19 @@ export class DotCommand extends BaseCommand {
                 const config = index[key];
 
                 // Build candidate list from database; fallback to local index if DB empty
+                const currentDeviceId = getDeviceId();
                 const candidates = [];
                 if (databaseDotfiles.length > 0) {
                     for (const doc of databaseDotfiles) {
                         const d = doc.data || doc;
-                        if (!d.localPath || !d.repoPath) continue;
+                        // Support both old (localPath) and new (links) schema formats
+                        const localPath = d.localPath ||
+                            (d.links && d.links[currentDeviceId]) ||
+                            Object.values(d.links || {})[0];
+
+                        if (!localPath || !d.repoPath) continue;
                         candidates.push({
-                            src: d.localPath,
+                            src: localPath,
                             dst: d.repoPath,
                             type: d.type || 'file',
                             priority: d.priority || 0,
@@ -2052,15 +2084,21 @@ export class DotCommand extends BaseCommand {
      */
     async resolveContextDotfilesByPriority(allWorkspaceDotfiles, contextPath) {
         const normalizedContextPath = contextPath === '/' ? '' : contextPath.replace(/^\/+/, '').replace(/\/+$/, '');
+        const currentDeviceId = getDeviceId();
 
         // Group dotfiles by localPath to detect conflicts
         const conflictGroups = new Map();
 
         for (const doc of allWorkspaceDotfiles) {
             const dotfileData = doc.data || doc;
-            const localPath = dotfileData.localPath;
+            // Support both old (localPath) and new (links) schema formats
+            const localPath = dotfileData.localPath ||
+                (dotfileData.links && dotfileData.links[currentDeviceId]) ||
+                Object.values(dotfileData.links || {})[0];
             const repoPath = dotfileData.repoPath;
             const priority = dotfileData.priority || 0;
+
+            if (!localPath) continue; // Skip if no local path for this device
 
             // Check if this dotfile is relevant to the context path
             let isRelevant = false;
