@@ -2,6 +2,7 @@
 
 import axios from 'axios';
 import { remoteStore } from './config.js';
+import os from 'os';
 import {
     parseResourceAddress,
     extractRemoteIdentifier,
@@ -19,7 +20,11 @@ class BaseCanvasApiClient {
     constructor(config) {
         this.config = config;
         this.baseURL = config.get('server.url');
-        this.token = config.get('server.auth.token');
+        this.token = config.get('server.auth.token'); // user token (JWT or API token)
+        this.deviceToken = config.get('server.auth.deviceToken') || null;
+        this.deviceId = config.get('server.auth.deviceId') || null;
+        this.appKey = config.get('client.appKey') || 'canvas-cli';
+        this._deviceTokenPromise = null;
 
         // Create axios instance
         this.client = axios.create({
@@ -32,8 +37,24 @@ class BaseCanvasApiClient {
         });
 
         // Add request interceptor for authentication and content-type
-        this.client.interceptors.request.use((config) => {
-            if (this.token) {
+        this.client.interceptors.request.use(async (config) => {
+            config.headers['X-App-Name'] = this.appKey;
+
+            const url = String(config.url || '');
+            const method = String(config.method || 'get').toLowerCase();
+
+            // Ingest endpoints require client auth (JWT OR device token). Prefer device token when possible.
+            const isIngest =
+                (method === 'post' || method === 'put' || method === 'patch') &&
+                /\/(contexts|workspaces)\/[^/]+\/documents\b/.test(url);
+
+            // Never try to use a device token to register a device.
+            const isDeviceRegister = url.startsWith('/auth/devices/register');
+
+            if (isIngest && !isDeviceRegister) {
+                const deviceToken = await this.ensureDeviceToken();
+                config.headers.Authorization = `Bearer ${deviceToken}`;
+            } else if (this.token) {
                 config.headers.Authorization = `Bearer ${this.token}`;
             }
 
@@ -486,6 +507,64 @@ class BaseCanvasApiClient {
         const response = await this.client.get('/ping');
         return response.data;
     }
+
+    async ensureDeviceToken() {
+        if (this.deviceToken) return this.deviceToken;
+        if (this._deviceTokenPromise) return await this._deviceTokenPromise;
+        if (!this.token) {
+            throw new Error('No user token available to register device (set server.auth.token or run login)');
+        }
+
+        this._deviceTokenPromise = (async () => {
+            const payload = {
+                name: os.hostname(),
+                hostname: os.hostname(),
+                platform: process.platform,
+                arch: process.arch,
+                type: 'cli',
+            };
+
+            // Use a bare axios call with user token (avoid recursion into ingest-token logic)
+            const resp = await axios.post(
+                `${this.baseURL}/auth/devices/register`,
+                payload,
+                {
+                    timeout: 30000,
+                    headers: {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'canvas-cli/1.0.0',
+                        'X-App-Name': this.appKey,
+                        Authorization: `Bearer ${this.token}`,
+                    },
+                },
+            );
+
+            const body = resp.data?.payload || resp.data?.data || resp.data;
+            const token = body?.token;
+            const deviceId = body?.deviceId;
+
+            if (!token || !String(token).startsWith('canvas-')) {
+                throw new Error('Device registration did not return a device token');
+            }
+
+            this.deviceToken = token;
+            this.deviceId = deviceId || null;
+
+            if (typeof this.config.set === 'function') {
+                await this.config.set('server.auth.deviceToken', token);
+                if (this.deviceId) await this.config.set('server.auth.deviceId', this.deviceId);
+            }
+
+            return token;
+        })();
+
+        try {
+            return await this._deviceTokenPromise;
+        } finally {
+            this._deviceTokenPromise = null;
+        }
+    }
 }
 
 /**
@@ -526,7 +605,25 @@ export class CanvasApiClient {
                 if (key === 'server.auth.token') {
                     return remote.auth?.token || '';
                 }
+                if (key === 'server.auth.deviceToken') {
+                    return remote.auth?.deviceToken || '';
+                }
+                if (key === 'server.auth.deviceId') {
+                    return remote.auth?.deviceId || '';
+                }
+                if (key === 'client.appKey') {
+                    return 'canvas-cli';
+                }
                 return this.config.get(key);
+            },
+            set: async (key, value) => {
+                if (key !== 'server.auth.deviceToken' && key !== 'server.auth.deviceId') return;
+                const latest = await this.remoteStore.getRemote(remoteId);
+                if (!latest) return;
+                const auth = { ...(latest.auth || {}) };
+                if (key === 'server.auth.deviceToken') auth.deviceToken = value;
+                if (key === 'server.auth.deviceId') auth.deviceId = value;
+                await this.remoteStore.updateRemote(remoteId, { auth });
             },
         };
 
