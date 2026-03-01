@@ -34,7 +34,7 @@ jobs:
 
     - name: Update version in source
       run: |
-        sed -i "s/version: '1.0.0-alpha'/version: '${{ steps.extract_version.outputs.version }}'/" src/index.js
+        sed -i "s/version: '2.0.0-alpha'/version: '${{ steps.extract_version.outputs.version }}'/" src/index.js
 
     - name: Build all platforms
       run: |
