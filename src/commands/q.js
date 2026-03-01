@@ -9,19 +9,16 @@ import { PromptRenderer, ContextFormatter } from '../utils/prompt-templates.js';
  * Q (AI Query) command
  */
 export class QCommand extends BaseCommand {
-    constructor(config) {
-        super(config);
+    constructor() {
+        super();
         this.options = null;
-        this.aiManager = new AIClientManager(config);
+        this.aiManager = new AIClientManager(this.config);
         this.promptRenderer = new PromptRenderer();
     }
 
     async execute(parsed) {
         try {
             this.options = parsed.options;
-
-            // Collect client context for this execution
-            this.collectClientContext();
 
             // Handle subcommands
             const subcommand = parsed.args[0];
@@ -44,11 +41,9 @@ export class QCommand extends BaseCommand {
             let currentContext = null;
             try {
                 const contextAddress = await this.getCurrentContext(parsed.options);
-                const response = await this.apiClient.getContext(contextAddress);
-                currentContext = response.payload || response.data || response;
-
-                // Extract context from nested response if needed
-                if (currentContext && currentContext.context) {
+                const { api, id } = await this.client.resolve(contextAddress);
+                currentContext = await api.get(`/contexts/${id}`);
+                if (currentContext?.context) {
                     currentContext = currentContext.context;
                 }
             } catch (error) {

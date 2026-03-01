@@ -1,267 +1,142 @@
 'use strict';
 
 import chalk from 'chalk';
-import { CanvasApiClient } from '../utils/api-client.js';
+import { CanvasClient } from '../client.js';
 import { createFormatter } from '../utils/formatters.js';
-import { setupDebug } from '../lib/debug.js';
-import { clientContext } from '../utils/client-context.js';
+import config from '../utils/config.js';
+import debug from 'debug';
 
-const debug = setupDebug('canvas:cli:command');
+const log = debug('canvas:cli:command');
 
-/**
- * Base command class
- */
 export class BaseCommand {
-    constructor(config) {
+    constructor() {
         this.config = config;
-        this.apiClient = new CanvasApiClient(config);
-        this.debug = debug;
-        this.clientContext = clientContext;
+        this.client = new CanvasClient();
+        this.debug = log;
+        this.options = {};
     }
 
-    /**
-   * Execute the command
-   * @param {Object} parsed - Parsed command arguments
-   * @returns {number} Exit code
-   */
+    // ── Subclass config ──
+
+    get needsConnection() { return true; }
+    get skipConnectionFor() { return []; }
+    get defaultAction() { return 'list'; }
+
+    // ── Execute ──
+
     async execute(parsed) {
         try {
-            this.debug(
-                'Executing command:',
-                parsed.command,
-                'with args:',
-                parsed.args,
-            );
+            this.options = parsed.options || {};
 
-            // Collect client context for this execution
-            this.collectClientContext();
+            const action = parsed.args[0] || this.defaultAction;
+            const methodName = this._methodFor(action);
 
-            // Check if server is reachable
-            await this.checkConnection();
-
-            // Route to appropriate action
-            const action = parsed.args[0] || 'list';
-            const methodName = `handle${action.charAt(0).toUpperCase() + action.slice(1)}`;
-
-            if (typeof this[methodName] === 'function') {
-                return await this[methodName](parsed);
-            } else {
+            if (typeof this[methodName] !== 'function') {
                 console.error(chalk.red(`Unknown action: ${action}`));
-                this.showHelp();
+                if (typeof this.showHelp === 'function') this.showHelp();
                 return 1;
             }
+
+            if (this.needsConnection && !this.skipConnectionFor.includes(action)) {
+                await this.client.ping();
+            }
+
+            return await this[methodName](parsed);
         } catch (error) {
             console.error(chalk.red('Error:'), error.message);
-            if (process.env.DEBUG) {
-                console.error(error.stack);
-            }
+            if (process.env.DEBUG) console.error(error.stack);
             return 1;
         }
     }
 
-    /**
-   * Collect client context for this command execution
-   */
-    collectClientContext() {
-        try {
-            // Collect comprehensive context
-            this.currentContext = this.clientContext.collect();
-
-            // Generate feature array for API calls
-            this.featureArray = this.clientContext.generateFeatureArray();
-
-            // Generate LLM context for queries
-            this.llmContext = this.clientContext.generateLLMContext();
-
-            // Get API headers
-            this.apiHeaders = this.clientContext.getApiHeaders();
-
-            this.debug('Client context collected:', {
-                contextKeys: Object.keys(this.currentContext),
-                featureArrayLength: this.featureArray.length,
-                llmContextKeys: Object.keys(this.llmContext),
-            });
-
-            // Log feature array in debug mode
-            this.debug('Feature array:', this.featureArray);
-        } catch (error) {
-            this.debug('Failed to collect client context:', error.message);
-            // Set fallback values
-            this.currentContext = {};
-            this.featureArray = [];
-            this.llmContext = {};
-            this.apiHeaders = {};
-        }
+    _methodFor(action) {
+        const camel = action.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+        return `handle${camel.charAt(0).toUpperCase() + camel.slice(1)}`;
     }
 
-    /**
-   * Check connection to Canvas server
-   */
-    async checkConnection() {
-        try {
-            await this.apiClient.ping();
-        } catch (error) {
-            if (error.message.includes('No default remote bound')) {
-                throw new Error(
-                    `No default remote configured. Use: canvas remote add <user@remote> <url> && canvas remote bind <user@remote>`,
-                );
-            }
-            throw new Error(`Cannot connect to Canvas server: ${error.message}`);
-        }
-    }
+    // ── Output ──
 
-    /**
-   * Format and output data
-   * @param {*} data - Data to format
-   * @param {string} type - Formatter type
-   * @param {string} schema - Schema type for documents
-   */
     async output(data, type = 'generic', schema = null) {
         const formatter = createFormatter(type, {
             raw: this.options?.raw || false,
             format: this.options?.format || 'table',
         });
 
-        // Get session data for formatters that need it
         let session = null;
         if (['remote', 'workspace', 'context'].includes(type)) {
-            try {
-                session = await this.apiClient.remoteStore.getSession();
-            } catch (error) {
-                this.debug('Failed to get session for formatter:', error.message);
-            }
+            try { session = await this.client.store.getSession(); }
+            catch { /* ignore */ }
         }
 
-        if (type === 'document' && schema) {
-            console.log(formatter.format(data, session, schema));
-        } else {
-            console.log(formatter.format(data, session));
-        }
-    }
-
-    /**
-   * Show help for the command
-   */
-    showHelp() {
-        console.log(chalk.yellow('Help not implemented for this command'));
-    }
-
-    /**
-   * Get current context from session or options (supports resource addresses and aliases)
-   */
-    async getCurrentContext(options = {}) {
-        let contextAddress;
-
-        if (options.context) {
-            contextAddress = options.context;
-        } else {
-            // Get from session
-            const session = await this.apiClient.remoteStore.getSession();
-            if (session.boundContext) {
-                contextAddress = session.boundContext;
-            } else {
-                // Fallback to default context on current remote
-                const currentRemote = await this.apiClient.getCurrentRemote();
-                if (currentRemote) {
-                    contextAddress = `${currentRemote}:default`;
-                } else {
-                    throw new Error(
-                        'No default remote bound. Use: canvas remote bind <user@remote>',
-                    );
-                }
-            }
-        }
-
-        // Resolve alias if needed
-        let resolvedAddress = await this.apiClient.remoteStore.resolveAlias(
-            contextAddress,
+        console.log(
+            schema ? formatter.format(data, session, schema) : formatter.format(data, session),
         );
+    }
 
-        // If the address is only an ID (no colon) attach current remote automatically
-        if (!resolvedAddress.includes(':')) {
-            const currentRemote = await this.apiClient.getCurrentRemote();
-            if (currentRemote) {
-                resolvedAddress = `${currentRemote}:${resolvedAddress}`;
-            }
+    // ── Context resolution ──
+
+    async getCurrentContext(options = {}) {
+        if (options.context) {
+            return this._resolveContextAddress(options.context);
         }
 
-        // Validate that the context actually exists. If not, fall back to default.
-        try {
-            await this.apiClient.getContext(resolvedAddress);
-        } catch (err) {
-            // If not found (404) or bad request, fall back to default context
-            try {
-                const currentRemote = await this.apiClient.getCurrentRemote();
-                if (!currentRemote) throw err;
-                const fallbackAddress = `${currentRemote}:default`;
-                await this.apiClient.getContext(fallbackAddress);
-                resolvedAddress = fallbackAddress;
-
-                // Update session so we don\'t keep bad address around
-                await this.apiClient.remoteStore.updateSession({
-                    boundContext: resolvedAddress,
-                });
-            } catch (_) {
-                // Re-throw original error if fallback also fails
-                throw err;
-            }
+        const session = await this.client.store.getSession();
+        if (session.boundContext) {
+            return this._resolveContextAddress(session.boundContext);
         }
 
-        return resolvedAddress;
+        const remote = await this.client.currentRemote();
+        return `${remote}:default`;
     }
 
-    /**
-   * Validate required arguments
-   */
-    validateArgs(args, required = []) {
-        for (const arg of required) {
-            if (!args[arg]) {
-                throw new Error(`Missing required argument: ${arg}`);
-            }
+    async _resolveContextAddress(address) {
+        let resolved = await this.client.store.resolveAlias(address);
+        if (!resolved.includes(':')) {
+            const remote = await this.client.currentRemote();
+            resolved = `${remote}:${resolved}`;
+        }
+        return resolved;
+    }
+
+    // ── Tree display (shared between workspace/context) ──
+
+    displayTree(node, prefix = '', isLast = true) {
+        if (!node) return;
+
+        const connector = isLast ? '└── ' : '├── ';
+        const name = node.label || node.name || node.id;
+        const badge = node.type === 'universe' ? chalk.cyan('[UNIVERSE]') : '';
+        const dot = node.color ? chalk.hex(node.color)('●') : '';
+
+        console.log(`${prefix}${connector}${name} ${badge} ${dot}`);
+
+        if (node.description && node.description !== 'Canvas layer') {
+            console.log(`${prefix}${isLast ? '    ' : '│   '}${chalk.gray(node.description)}`);
+        }
+
+        if (Array.isArray(node.children)) {
+            const childPfx = prefix + (isLast ? '    ' : '│   ');
+            node.children.forEach((child, i) => {
+                this.displayTree(child, childPfx, i === node.children.length - 1);
+            });
         }
     }
 
-    /**
-   * Confirm action with user
-   */
-    async confirm(message) {
-    // For now, just return true. In the future, we could add interactive prompts
-        return true;
-    }
+    extractPaths(node, current = '') {
+        const paths = [];
+        if (!node) return paths;
 
-    /**
-   * Handle common list action
-   */
-    async handleList(parsed) {
-        throw new Error('List action not implemented');
-    }
+        const name = node.label || node.name || node.id;
+        let p = current;
+        if (name && name !== '/' && name !== '' && node.type !== 'universe') {
+            p = current === '' ? `/${name}` : `${current}/${name}`;
+        }
+        if (p && p !== '/' && node.type !== 'universe') paths.push(p);
 
-    /**
-   * Handle common create action
-   */
-    async handleCreate(parsed) {
-        throw new Error('Create action not implemented');
-    }
-
-    /**
-   * Handle common show action
-   */
-    async handleShow(parsed) {
-        throw new Error('Show action not implemented');
-    }
-
-    /**
-   * Handle common update action
-   */
-    async handleUpdate(parsed) {
-        throw new Error('Update action not implemented');
-    }
-
-    /**
-   * Handle common delete action
-   */
-    async handleDelete(parsed) {
-        throw new Error('Delete action not implemented');
+        if (Array.isArray(node.children)) {
+            for (const child of node.children) paths.push(...this.extractPaths(child, p));
+        }
+        return paths;
     }
 }
 

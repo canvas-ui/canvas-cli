@@ -3,854 +3,272 @@
 import chalk from 'chalk';
 import BaseCommand from './base.js';
 
-/**
- * Workspace command
- */
 export class WorkspaceCommand extends BaseCommand {
-    constructor(config) {
-        super(config);
-        this.options = null; // Will be set during execution
-    }
+    get skipConnectionFor() { return ['list']; }
+    get defaultAction() { return 'list'; }
 
     async execute(parsed) {
         try {
-            this.options = parsed.options;
+            this.options = parsed.options || {};
 
-            // Collect client context for this execution
-            this.collectClientContext();
+            if (parsed.args.length === 0) return this.handleList(parsed);
 
-            // Skip connection check for list action since we use cached data
-            const action = parsed.args[0] || 'list';
-            if (action !== 'list') {
-                // Check if server is reachable for non-list actions
-                await this.checkConnection();
-            }
-
-            // If no arguments, default to list
-            if (parsed.args.length === 0) {
-                return await this.handleList(parsed);
-            }
-
-            const firstArg = parsed.args[0];
-            const secondArg = parsed.args[1];
-
-            // Check if first arg is a known action
+            const first = parsed.args[0];
             const knownActions = [
-                'list',
-                'show',
-                'create',
-                'update',
-                'delete',
-                'start',
-                'stop',
-                'open',
-                'close',
-                'status',
-                'documents',
-                'document',
-                'dotfiles',
-                'tabs',
-                'notes',
-                'tree',
-                'current',
-                'help',
+                'list', 'show', 'create', 'update', 'delete', 'start', 'stop',
+                'status', 'documents', 'dotfiles', 'tabs', 'notes', 'tree', 'current', 'help',
             ];
 
-            if (knownActions.includes(firstArg)) {
-                // Route to appropriate action
-                const action = firstArg;
-                const methodName = `handle${action.charAt(0).toUpperCase() + action.slice(1)}`;
-
-                if (typeof this[methodName] === 'function') {
-                    return await this[methodName](parsed);
-                } else {
-                    console.error(chalk.red(`Unknown action: ${action}`));
-                    this.showHelp();
-                    return 1;
-                }
-            } else {
-                // First arg is workspace ID, second arg is action
-                const workspaceId = firstArg;
-                const action = secondArg || 'show'; // default to show if no action specified
-
-                // Create modified parsed object with workspace ID in correct position
-                const modifiedParsed = {
-                    ...parsed,
-                    args: [action, workspaceId, ...parsed.args.slice(2)],
-                };
-
-                const methodName = `handle${action.charAt(0).toUpperCase() + action.slice(1)}`;
-
-                if (typeof this[methodName] === 'function') {
-                    return await this[methodName](modifiedParsed);
-                } else {
-                    console.error(chalk.red(`Unknown action: ${action}`));
-                    this.showHelp();
-                    return 1;
-                }
+            if (knownActions.includes(first)) {
+                return super.execute(parsed);
             }
+
+            // First arg is workspace ID, second is action: `canvas ws universe tree`
+            const action = parsed.args[1] || 'show';
+            const modified = { ...parsed, args: [action, first, ...parsed.args.slice(2)] };
+            return super.execute(modified);
         } catch (error) {
             console.error(chalk.red('Error:'), error.message);
-            if (process.env.DEBUG) {
-                console.error(error.stack);
-            }
+            if (process.env.DEBUG) console.error(error.stack);
             return 1;
         }
     }
 
-    /**
-   * List all workspaces
-   */
+    // ── CRUD ──
+
     async handleList(parsed) {
-        try {
-            // Try to fetch from remote first while updating local index
-            let remoteUpdateSuccess = false;
-            try {
-                const remoteId = await this.apiClient.getCurrentRemote();
-                if (remoteId && await this.apiClient.isRemoteReachable(remoteId)) {
-                    this.debug('Remote is reachable, updating local index...');
-                    remoteUpdateSuccess = await this.apiClient.syncRemoteAndUpdateIndex(remoteId, {
-                        contexts: false,
-                        workspaces: true,
-                        silent: true
-                    });
-                    if (remoteUpdateSuccess) {
-                        this.debug('Local index updated successfully');
-                    }
-                }
-            } catch (remoteError) {
-                this.debug('Failed to update from remote:', remoteError.message);
-                // Continue with local cache fallback
-            }
-
-            // Use cached workspaces from local storage (which may have been just updated)
-            const cachedWorkspaces = await this.apiClient.getCachedWorkspaces();
-
-            // Transform cached data to include remote information
-            const workspaces = [];
-            for (const [key, workspace] of Object.entries(cachedWorkspaces)) {
-                // Parse key format: remoteId:workspaceId
-                const [remoteId, workspaceId] = key.includes(':')
-                    ? key.split(':', 2)
-                    : ['local', key];
-
-                workspaces.push({
-                    address: remoteId, // Show full remote identifier as address
-                    id: workspaceId,
-                    ...workspace,
-                });
-            }
-
-            // Sort by address, then by name
-            workspaces.sort((a, b) => {
-                if (a.address !== b.address) {
-                    return a.address.localeCompare(b.address);
-                }
-                return (a.name || a.label || '').localeCompare(b.name || b.label || '');
-            });
-
-            // Update session with current workspace information if we have a bound context
-            try {
-                const session = await this.apiClient.remoteStore.getSession();
-                if (session.boundContext) {
-                    // Get the workspace from the bound context
-                    const contextResponse = await this.apiClient.getContext(
-                        session.boundContext,
-                    );
-                    const context =
-            contextResponse.payload || contextResponse.data || contextResponse;
-
-                    if (context && context.url) {
-                        const workspaceName = context.url.split('://')[0] || 'universe';
-                        // Find the workspace in our list that matches the current workspace
-                        const currentWorkspace = workspaces.find(
-                            (w) =>
-                                w.label === workspaceName ||
-                w.name === workspaceName ||
-                w.id === workspaceName,
-                        );
-                        if (currentWorkspace) {
-                            await this.apiClient.remoteStore.updateSession({
-                                defaultWorkspace: `${currentWorkspace.address}:${currentWorkspace.id}`,
-                            });
-                        }
-                    }
-                }
-            } catch (error) {
-                // Ignore errors when updating session - this is not critical
-                this.debug(
-                    'Failed to update session with workspace info:',
-                    error.message,
-                );
-            }
-
-            await this.output(workspaces, 'workspace');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to list workspaces: ${error.message}`);
+        const remoteId = await this._tryCurrentRemote();
+        if (remoteId && await this.client.isReachable(remoteId)) {
+            await this.client.sync(remoteId, { contexts: false, workspaces: true });
         }
+
+        const cached = await this._cachedWorkspaces();
+        await this.output(cached, 'workspace');
+        return 0;
     }
 
-    /**
-   * Show workspace details
-   */
     async handleShow(parsed) {
-        const workspaceAddress = parsed.args[1];
-        if (!workspaceAddress) {
-            throw new Error(
-                'Workspace address is required (format: user@remote:workspace or just workspace if default remote is bound)',
-            );
-        }
-
-        try {
-            const response = await this.apiClient.getWorkspace(workspaceAddress);
-
-            // Handle ResponseObject format
-            let workspace = response.payload || response.data || response;
-
-            // Extract workspace from nested response if needed
-            if (workspace && workspace.workspace) {
-                workspace = workspace.workspace;
-            }
-
-            await this.output(workspace, 'workspace');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to show workspace: ${error.message}`);
-        }
+        const addr = parsed.args[1];
+        if (!addr) throw new Error('Workspace address required');
+        const { api, id } = await this.client.resolve(addr);
+        const ws = await api.get(`/workspaces/${id}`);
+        await this.output(ws?.workspace || ws, 'workspace');
+        return 0;
     }
 
-    /**
-   * Create new workspace
-   */
     async handleCreate(parsed) {
         const name = parsed.args[1];
-        if (!name) {
-            throw new Error('Workspace name is required');
-        }
-
-        const workspaceData = {
-            name: name,
+        if (!name) throw new Error('Workspace name required');
+        const api = await this.client.api();
+        const ws = await api.post('/workspaces', {
+            name,
             label: parsed.options.label || name,
             description: parsed.options.description || '',
             type: parsed.options.type || 'workspace',
             color: parsed.options.color,
-            metadata: parsed.options.metadata
-                ? JSON.parse(parsed.options.metadata)
-                : {},
-        };
-
-        try {
-            // Create on current default remote
-            const response = await this.apiClient.createWorkspace(workspaceData);
-
-            // Handle ResponseObject format
-            const workspace = response.payload || response.data || response;
-
-            console.log(chalk.green(`✓ Workspace '${name}' created successfully`));
-            await this.output(workspace, 'workspace');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to create workspace: ${error.message}`);
-        }
+            metadata: parsed.options.metadata ? JSON.parse(parsed.options.metadata) : {},
+        });
+        console.log(chalk.green(`Workspace '${name}' created`));
+        await this.output(ws, 'workspace');
+        return 0;
     }
 
-    /**
-   * Update workspace
-   */
     async handleUpdate(parsed) {
-        const workspaceAddress = parsed.args[1];
-        if (!workspaceAddress) {
-            throw new Error(
-                'Workspace address is required (format: user@remote:workspace or just workspace if default remote is bound)',
-            );
-        }
+        const addr = parsed.args[1];
+        if (!addr) throw new Error('Workspace address required');
+        const data = {};
+        if (parsed.options.label) data.label = parsed.options.label;
+        if (parsed.options.description) data.description = parsed.options.description;
+        if (parsed.options.color) data.color = parsed.options.color;
+        if (parsed.options.metadata) data.metadata = JSON.parse(parsed.options.metadata);
+        if (Object.keys(data).length === 0) throw new Error('Nothing to update. Use --label, --description, --color, or --metadata');
 
-        const updateData = {};
-        if (parsed.options.label) updateData.label = parsed.options.label;
-        if (parsed.options.description)
-            updateData.description = parsed.options.description;
-        if (parsed.options.color) updateData.color = parsed.options.color;
-        if (parsed.options.metadata)
-            updateData.metadata = JSON.parse(parsed.options.metadata);
-
-        if (Object.keys(updateData).length === 0) {
-            throw new Error(
-                'No update data provided. Use --label, --description, --color, or --metadata',
-            );
-        }
-
-        try {
-            const response = await this.apiClient.updateWorkspace(
-                workspaceAddress,
-                updateData,
-            );
-
-            // Handle ResponseObject format
-            const workspace = response.payload || response.data || response;
-
-            console.log(
-                chalk.green(`✓ Workspace '${workspaceAddress}' updated successfully`),
-            );
-            await this.output(workspace, 'workspace');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to update workspace: ${error.message}`);
-        }
+        const { api, id } = await this.client.resolve(addr);
+        const ws = await api.patch(`/workspaces/${id}`, data);
+        console.log(chalk.green(`Workspace '${addr}' updated`));
+        await this.output(ws, 'workspace');
+        return 0;
     }
 
-    /**
-   * Delete workspace
-   */
     async handleDelete(parsed) {
-        const workspaceAddress = parsed.args[1];
-        if (!workspaceAddress) {
-            throw new Error(
-                'Workspace address is required (format: user@remote:workspace or just workspace if default remote is bound)',
-            );
-        }
-
+        const addr = parsed.args[1];
+        if (!addr) throw new Error('Workspace address required');
         if (!parsed.options.force) {
-            console.log(
-                chalk.yellow(
-                    `Warning: This will permanently delete workspace '${workspaceAddress}' and all its data.`,
-                ),
-            );
-            console.log(chalk.yellow('Use --force to confirm deletion.'));
+            console.log(chalk.yellow(`Will permanently delete '${addr}'. Use --force to confirm.`));
+            return 1;
+        }
+        const { api, id } = await this.client.resolve(addr);
+        await api.del(`/workspaces/${id}`);
+        console.log(chalk.green(`Workspace '${addr}' deleted`));
+        return 0;
+    }
+
+    // ── Lifecycle ──
+
+    async handleStart(parsed) {
+        const addr = parsed.args[1];
+        if (!addr) throw new Error('Workspace address required');
+        const { api, id } = await this.client.resolve(addr);
+        await api.post(`/workspaces/${id}/start`);
+        console.log(chalk.green(`Workspace '${addr}' started`));
+        return 0;
+    }
+
+    async handleStop(parsed) {
+        const addr = parsed.args[1];
+        if (!addr) throw new Error('Workspace address required');
+        const { api, id } = await this.client.resolve(addr);
+        await api.post(`/workspaces/${id}/stop`);
+        console.log(chalk.green(`Workspace '${addr}' stopped`));
+        return 0;
+    }
+
+    async handleStatus(parsed) {
+        const addr = parsed.args[1];
+        if (!addr) throw new Error('Workspace address required');
+        const { api, id } = await this.client.resolve(addr);
+        const status = await api.get(`/workspaces/${id}/status`);
+        console.log(chalk.bold(`Workspace Status: ${addr}`));
+        console.log(`  Status: ${status.status || JSON.stringify(status)}`);
+        return 0;
+    }
+
+    // ── Tree ──
+
+    async handleTree(parsed) {
+        const addr = parsed.args[1];
+        if (!addr) throw new Error('Workspace address required');
+        const { api, id } = await this.client.resolve(addr);
+        const tree = await api.get(`/workspaces/${id}/tree`);
+        if (!tree?.children) {
+            console.log(chalk.yellow('No tree structure found'));
+            return 0;
+        }
+        console.log(chalk.bold(`Workspace Tree: ${addr}`));
+        console.log();
+        this.displayTree(tree);
+        return 0;
+    }
+
+    // ── Documents ──
+
+    async handleDocuments(parsed) {
+        const addr = parsed.args[1];
+        if (!addr) throw new Error('Workspace address required');
+        const search = parsed.args[2] || null;
+        const { api, id } = await this.client.resolve(addr);
+
+        const params = {};
+        if (search) params.q = search;
+        if (parsed.options.feature) params.featureArray = [].concat(parsed.options.feature);
+        if (parsed.options.filter) params.filterArray = [].concat(parsed.options.filter);
+        if (parsed.options['context-path']) params.contextSpec = parsed.options['context-path'];
+
+        const docs = await api.get(`/workspaces/${id}/documents`, params);
+        const list = docs?.data && Array.isArray(docs.data) ? docs.data : docs;
+        await this.output(list, 'document');
+        return 0;
+    }
+
+    async handleDotfiles(parsed) {
+        const addr = parsed.args[1];
+        if (!addr) throw new Error('Workspace address required');
+        const { api, id } = await this.client.resolve(addr);
+        const docs = await api.get(`/workspaces/${id}/documents`, { featureArray: 'data/abstraction/dotfile' });
+        const list = docs?.data && Array.isArray(docs.data) ? docs.data : docs;
+        await this.output(list, 'document', 'dotfile');
+        return 0;
+    }
+
+    async handleTabs(parsed) {
+        const addr = parsed.args[1];
+        if (!addr) throw new Error('Workspace address required');
+        const { api, id } = await this.client.resolve(addr);
+        const docs = await api.get(`/workspaces/${id}/documents`, { featureArray: 'data/abstraction/tab' });
+        await this.output(docs, 'document', 'tab');
+        return 0;
+    }
+
+    async handleNotes(parsed) {
+        const addr = parsed.args[1];
+        if (!addr) throw new Error('Workspace address required');
+        const { api, id } = await this.client.resolve(addr);
+        const docs = await api.get(`/workspaces/${id}/documents`, { featureArray: 'data/abstraction/note' });
+        await this.output(docs, 'document', 'note');
+        return 0;
+    }
+
+    // ── Current ──
+
+    async handleCurrent() {
+        const session = await this.client.store.getSession();
+        if (!session.boundContext) {
+            console.log(chalk.yellow('No context bound'));
+            console.log(chalk.cyan('Bind: canvas context bind <address>'));
             return 1;
         }
 
-        try {
-            await this.apiClient.deleteWorkspace(workspaceAddress);
-            console.log(
-                chalk.green(`✓ Workspace '${workspaceAddress}' deleted successfully`),
-            );
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to delete workspace: ${error.message}`);
-        }
-    }
+        const resolved = await this.client.store.resolveAlias(session.boundContext);
+        const parts = resolved.includes(':') ? resolved.split(':') : [null, resolved];
+        const remoteId = parts[0];
 
-    /**
-   * Start workspace
-   */
-    async handleStart(parsed) {
-        const workspaceAddress = parsed.args[1];
-        if (!workspaceAddress) {
-            throw new Error(
-                'Workspace address is required (format: user@remote:workspace or just workspace if default remote is bound)',
-            );
-        }
+        if (!remoteId) { console.log(chalk.red('Cannot determine remote')); return 1; }
+
+        const remote = await this.client.store.getRemote(remoteId);
+        if (!remote) { console.log(chalk.red(`Remote '${remoteId}' not found`)); return 1; }
+
+        console.log(chalk.cyan('Current:'));
+        console.log(`  Context: ${resolved}`);
+        console.log(`  Remote:  ${remoteId} (${remote.url})`);
+        if (session.boundAt) console.log(`  Bound:   ${new Date(session.boundAt).toLocaleString()}`);
 
         try {
-            const response = await this.apiClient.startWorkspace(workspaceAddress);
-
-            // Handle ResponseObject format
-            const workspace = response.payload || response.data || response;
-
-            console.log(
-                chalk.green(`✓ Workspace '${workspaceAddress}' started successfully`),
-            );
-            await this.output(workspace, 'workspace');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to start workspace: ${error.message}`);
+            const api = await this.client.api(remoteId);
+            const ctx = await api.get(`/contexts/${parts.slice(1).join(':')}`);
+            const c = ctx?.context || ctx;
+            if (c?.url) {
+                console.log(`  Workspace: ${c.url.split('://')[0] || 'universe'}`);
+                console.log(`  URL:       ${c.url}`);
+            }
+        } catch (e) {
+            console.log(chalk.yellow(`  Could not fetch context: ${e.message}`));
         }
+        return 0;
     }
 
-    /**
-   * Stop workspace
-   */
-    async handleStop(parsed) {
-        const workspaceAddress = parsed.args[1];
-        if (!workspaceAddress) {
-            throw new Error(
-                'Workspace address is required (format: user@remote:workspace or just workspace if default remote is bound)',
-            );
-        }
+    // ── Helpers ──
 
-        try {
-            const response = await this.apiClient.stopWorkspace(workspaceAddress);
-
-            // Handle ResponseObject format
-            const result = response.payload || response.data || response;
-
-            console.log(
-                chalk.green(`✓ Workspace '${workspaceAddress}' stopped successfully`),
-            );
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to stop workspace: ${error.message}`);
-        }
+    async _tryCurrentRemote() {
+        try { return await this.client.currentRemote(); }
+        catch { return null; }
     }
 
-    /**
-   * Open workspace
-   */
-    async handleOpen(parsed) {
-        const workspaceId = parsed.args[1];
-        if (!workspaceId) {
-            throw new Error('Workspace ID is required');
-        }
-
-        try {
-            const response = await this.apiClient.openWorkspace(workspaceId);
-
-            // Handle ResponseObject format
-            const workspace = response.payload || response.data || response;
-
-            console.log(
-                chalk.green(`✓ Workspace '${workspaceId}' opened successfully`),
-            );
-            await this.output(workspace, 'workspace');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to open workspace: ${error.message}`);
-        }
+    async _cachedWorkspaces() {
+        const cached = await this.client.store.getWorkspaces();
+        return Object.entries(cached)
+            .map(([key, ws]) => {
+                const [remoteId, wsId] = key.includes(':') ? key.split(':', 2) : ['local', key];
+                return { address: remoteId, id: wsId, ...ws };
+            })
+            .sort((a, b) => a.address.localeCompare(b.address) || (a.name || '').localeCompare(b.name || ''));
     }
 
-    /**
-   * Close workspace
-   */
-    async handleClose(parsed) {
-        const workspaceId = parsed.args[1];
-        if (!workspaceId) {
-            throw new Error('Workspace ID is required');
-        }
-
-        try {
-            const response = await this.apiClient.closeWorkspace(workspaceId);
-
-            // Handle ResponseObject format
-            const workspace = response.payload || response.data || response;
-
-            console.log(
-                chalk.green(`✓ Workspace '${workspaceId}' closed successfully`),
-            );
-            await this.output(workspace, 'workspace');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to close workspace: ${error.message}`);
-        }
-    }
-
-    /**
-   * Show workspace status
-   */
-    async handleStatus(parsed) {
-        const workspaceId = parsed.args[1];
-        if (!workspaceId) {
-            throw new Error('Workspace ID is required');
-        }
-
-        try {
-            const response = await this.apiClient.getWorkspaceStatus(workspaceId);
-
-            // Handle ResponseObject format
-            const statusData = response.payload || response.data || response;
-
-            console.log(chalk.bold(`Workspace Status: ${workspaceId}`));
-            console.log(`Status: ${statusData.status}`);
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to get workspace status: ${error.message}`);
-        }
-    }
-
-    /**
-   * List all documents in workspace
-   */
-    async handleDocuments(parsed) {
-        const workspaceAddress = parsed.args[1];
-        if (!workspaceAddress) {
-            throw new Error(
-                'Workspace address is required (format: user@remote:workspace or just workspace if default remote is bound)',
-            );
-        }
-
-        // Check for optional search string as second argument
-        const searchString = parsed.args[2] || null;
-
-        try {
-            const options = {};
-
-            // Add search query if provided
-            if (searchString) {
-                options.q = searchString;
-            }
-
-            // Add CLI options if provided
-            if (parsed.options.feature) {
-                // Support multiple --feature flags
-                options.featureArray = Array.isArray(parsed.options.feature)
-                    ? parsed.options.feature
-                    : [parsed.options.feature];
-            }
-
-            if (parsed.options['context-path']) {
-                options.contextSpec = parsed.options['context-path'];
-            }
-
-            if (parsed.options.filter) {
-                // Support multiple --filter flags
-                options.filterArray = Array.isArray(parsed.options.filter)
-                    ? parsed.options.filter
-                    : [parsed.options.filter];
-            }
-
-            const response = await this.apiClient.getDocuments(
-                workspaceAddress,
-                'workspace',
-                options,
-            );
-
-            // Handle ResponseObject format
-            let documents = response.payload || response.data || response;
-
-            // Handle SynapsD response structure {data: [...], count: number, error: string}
-            if (documents && typeof documents === 'object' && documents.data && Array.isArray(documents.data)) {
-                documents = documents.data;
-            }
-
-            await this.output(documents, 'document');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to ${searchString ? 'search' : 'list'} documents: ${error.message}`);
-        }
-    }
-
-    /**
-   * List dotfiles in workspace
-   */
-    async handleDotfiles(parsed) {
-        const workspaceAddress = parsed.args[1];
-        if (!workspaceAddress) {
-            throw new Error(
-                'Workspace address is required (format: user@remote:workspace or just workspace if default remote is bound)',
-            );
-        }
-
-        try {
-            const options = {
-                featureArray: ['data/abstraction/dotfile'],
-            };
-            const response = await this.apiClient.getDocuments(
-                workspaceAddress,
-                'workspace',
-                options,
-            );
-
-            // Handle ResponseObject format
-            let dotfiles = response.payload || response.data || response;
-
-            // Handle SynapsD response structure {data: [...], count: number, error: string}
-            if (dotfiles && typeof dotfiles === 'object' && dotfiles.data && Array.isArray(dotfiles.data)) {
-                dotfiles = dotfiles.data;
-            }
-
-            await this.output(dotfiles, 'document', 'dotfile');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to list dotfiles: ${error.message}`);
-        }
-    }
-
-    /**
-   * List tabs in workspace
-   */
-    async handleTabs(parsed) {
-        const workspaceId = parsed.args[1];
-        if (!workspaceId) {
-            throw new Error('Workspace ID is required');
-        }
-
-        try {
-            const options = {
-                featureArray: ['data/abstraction/tab'],
-            };
-            const response = await this.apiClient.getDocuments(
-                workspaceId,
-                'workspace',
-                options,
-            );
-
-            // Handle ResponseObject format
-            const tabs = response.payload || response.data || response;
-
-            await this.output(tabs, 'document', 'tab');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to list tabs: ${error.message}`);
-        }
-    }
-
-    /**
-   * Handle document commands
-   */
-    async handleDocument(parsed) {
-        const action = parsed.args[1] || 'list';
-        const workspaceId = parsed.args[2];
-
-        if (!workspaceId) {
-            throw new Error('Workspace ID is required');
-        }
-
-        // Redirect to appropriate handler based on action
-        // Implementation would be similar to context document handling
-        throw new Error(
-            'Document operations not yet implemented for workspace command',
-        );
-    }
-
-    /**
-   * List notes in workspace
-   */
-    async handleNotes(parsed) {
-        const workspaceId = parsed.args[1];
-        if (!workspaceId) {
-            throw new Error('Workspace ID is required');
-        }
-
-        try {
-            const options = {
-                featureArray: ['data/abstraction/note'],
-            };
-            const response = await this.apiClient.getDocuments(
-                workspaceId,
-                'workspace',
-                options,
-            );
-
-            // Handle ResponseObject format
-            const notes = response.payload || response.data || response;
-
-            await this.output(notes, 'document', 'note');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to list notes: ${error.message}`);
-        }
-    }
-
-    /**
-   * Show workspace tree
-   */
-    async handleTree(parsed) {
-        const workspaceId = parsed.args[1];
-        if (!workspaceId) {
-            throw new Error('Workspace ID is required');
-        }
-
-        try {
-            const response = await this.apiClient.getWorkspaceTree(workspaceId);
-
-            // Handle ResponseObject format
-            const tree = response.payload || response.data || response;
-
-            if (!tree || !tree.children) {
-                console.log(chalk.yellow('No tree structure found for this workspace'));
-                return 0;
-            }
-
-            console.log(chalk.bold(`Workspace Tree: ${workspaceId}`));
-            console.log();
-            this.displayTreeNode(tree);
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to get workspace tree: ${error.message}`);
-        }
-    }
-
-    /**
-   * Show current workspace (based on bound context)
-   */
-    async handleCurrent(parsed) {
-        try {
-            // Get current context
-            const session = await this.apiClient.remoteStore.getSession();
-
-            if (!session.boundContext) {
-                console.log(chalk.yellow('No context currently bound'));
-                console.log();
-                console.log(chalk.cyan('Bind to a context first:'));
-                console.log('  canvas context bind <context-address>');
-                return 1;
-            }
-
-            // Parse the context address to get remote and context info
-            const resolvedContextAddress =
-        await this.apiClient.remoteStore.resolveAlias(session.boundContext);
-            const contextParts = resolvedContextAddress.includes(':')
-                ? resolvedContextAddress.split(':')
-                : [null, resolvedContextAddress];
-
-            if (contextParts.length < 2) {
-                console.log(chalk.red('Invalid context address format'));
-                return 1;
-            }
-
-            const [remoteId] = contextParts;
-
-            if (!remoteId) {
-                console.log(chalk.red('Cannot determine remote from context address'));
-                return 1;
-            }
-
-            // Get current remote info
-            const remote = await this.apiClient.remoteStore.getRemote(remoteId);
-            if (!remote) {
-                console.log(chalk.red(`Remote '${remoteId}' not found`));
-                return 1;
-            }
-
-            console.log(chalk.cyan('Current workspace context:'));
-            console.log(`  Bound Context: ${resolvedContextAddress}`);
-            console.log(`  Remote: ${remoteId}`);
-            console.log(`  Remote URL: ${remote.url}`);
-            console.log(`  Remote Version: ${remote.version || 'Unknown'}`);
-
-            if (session.boundAt) {
-                console.log(
-                    `  Bound At: ${new Date(session.boundAt).toLocaleString()}`,
-                );
-            }
-
-            // Try to get context details to show workspace info
-            try {
-                const contextResponse = await this.apiClient.getContext(
-                    resolvedContextAddress,
-                );
-                const context =
-          contextResponse.payload || contextResponse.data || contextResponse;
-
-                if (context && context.url) {
-                    const workspaceName = context.url.split('://')[0] || 'universe';
-                    console.log(`  Workspace: ${workspaceName}`);
-                    console.log(`  Context URL: ${context.url}`);
-                }
-            } catch (error) {
-                console.log(
-                    chalk.yellow(
-                        `  Note: Could not fetch context details (${error.message})`,
-                    ),
-                );
-            }
-
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to get current workspace: ${error.message}`);
-        }
-    }
-
-    /**
-   * Display a tree node recursively
-   */
-    displayTreeNode(node, prefix = '', isLast = true) {
-        if (!node) return;
-
-        const connector = isLast ? '└── ' : '├── ';
-        const nameDisplay = node.label || node.name || node.id;
-        const typeDisplay =
-      node.type === 'universe' ? chalk.cyan('[UNIVERSE]') : '';
-        const colorDisplay = node.color ? chalk.hex(node.color)('●') : '';
-
-        console.log(
-            `${prefix}${connector}${nameDisplay} ${typeDisplay} ${colorDisplay}`,
-        );
-
-        if (node.description && node.description !== 'Canvas layer') {
-            const descPrefix = prefix + (isLast ? '    ' : '│   ');
-            console.log(`${descPrefix}${chalk.gray(node.description)}`);
-        }
-
-        if (node.children && Array.isArray(node.children)) {
-            const childPrefix = prefix + (isLast ? '    ' : '│   ');
-            node.children.forEach((child, index) => {
-                const isLastChild = index === node.children.length - 1;
-                this.displayTreeNode(child, childPrefix, isLastChild);
-            });
-        }
-    }
-
-    /**
-   * Show help
-   */
     showHelp() {
         console.log(chalk.bold('Workspace Commands:'));
-        console.log(
-            '  list                           List all workspaces from default remote',
-        );
-        console.log(
-            '  current                        Show current workspace (based on bound context)',
-        );
-        console.log('  show <address>                 Show workspace details');
-        console.log(
-            '  create <name>                  Create new workspace on default remote',
-        );
-        console.log('  update <address>               Update workspace');
-        console.log('  delete <address>               Delete workspace');
-        console.log('  start <address>                Start workspace');
-        console.log('  stop <address>                 Stop workspace');
-        console.log('  open <address>                 Open workspace');
-        console.log('  close <address>                Close workspace');
-        console.log('  status <address>               Show workspace status');
-        console.log('  documents <address> [search]   List documents in workspace (with optional search)');
-        console.log('  tabs <address>                 List tabs in workspace');
-        console.log('  notes <address>                List notes in workspace');
-        console.log('  tree <address>                 Show workspace tree');
+        console.log('  list                       List workspaces');
+        console.log('  current                    Show current workspace');
+        console.log('  show <address>             Show details');
+        console.log('  create <name>              Create workspace');
+        console.log('  update <address>           Update workspace');
+        console.log('  delete <address>           Delete workspace');
+        console.log('  start/stop <address>       Start/stop workspace');
+        console.log('  status <address>           Show status');
+        console.log('  tree <address>             Show tree');
+        console.log('  documents <address> [q]    List/search documents');
+        console.log('  dotfiles/tabs/notes <addr> List by type');
         console.log();
-        console.log(chalk.bold('Address Format:'));
-        console.log('  user@remote:workspace          Full resource address');
-        console.log(
-            '  workspace                      Short form (uses default remote)',
-        );
-        console.log();
-        console.log(chalk.bold('Options:'));
-        console.log('  --label <label>                Workspace label');
-        console.log('  --description <desc>           Workspace description');
-        console.log('  --color <color>                Workspace color (hex)');
-        console.log(
-            '  --type <type>                  Workspace type (workspace, universe)',
-        );
-        console.log(
-            '  --metadata <json>              Workspace metadata (JSON string)',
-        );
-        console.log(
-            '  --force                        Force deletion without confirmation',
-        );
-        console.log();
-        console.log(chalk.bold('Search Options (for documents command):'));
-        console.log('  --feature <feature>            Filter by feature (can be used multiple times)');
-        console.log('  --context-path <path>          Set context path (default: /)');
-        console.log('  --filter <filter>              Apply filter (can be used multiple times)');
-        console.log();
-        console.log(chalk.bold('Examples:'));
-        console.log('  canvas workspace list');
-        console.log(
-            '  canvas workspace current                         # Show current workspace',
-        );
-        console.log('  canvas workspace show admin@canvas.local:universe');
-        console.log(
-            '  canvas workspace show universe                    # Uses default remote',
-        );
-        console.log(
-            '  canvas workspace create my-workspace --description "My workspace"',
-        );
-        console.log('  canvas workspace start admin@canvas.local:universe');
-        console.log('  canvas workspace documents user@work.server:reports');
-        console.log('  canvas workspace documents universe "search query"');
-        console.log('  canvas workspace documents universe "search" --feature data/abstraction/tab --filter timeline/today');
-        console.log('  canvas workspace delete old-workspace --force');
-        console.log();
-        console.log(
-            chalk.cyan(
-                'Note: Set a default remote with: canvas remote bind <user@remote>',
-            ),
-        );
-        console.log(
-            chalk.cyan(
-                '      Aliases can be used in place of full addresses: canvas alias set prod user@remote:workspace',
-            ),
-        );
+        console.log(chalk.bold('Shorthand:'));
+        console.log('  canvas ws universe tree    = canvas ws tree universe');
     }
 }
 

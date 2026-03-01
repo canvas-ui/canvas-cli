@@ -30,17 +30,14 @@ const DOTFILES_CONFIG_FILE = DOTFILES_FILE;
  * Dotfile manager command
  */
 export class DotCommand extends BaseCommand {
-    constructor(config) {
-        super(config);
+    constructor() {
+        super();
         this.options = null;
     }
 
     async execute(parsed) {
         try {
             this.options = parsed.options;
-
-            // Collect client context for this execution
-            this.collectClientContext();
 
             // If no arguments, default to list
             if (parsed.args.length === 0) {
@@ -90,7 +87,7 @@ export class DotCommand extends BaseCommand {
         }
 
         // Otherwise, use current session context
-        const session = await this.apiClient.remoteStore.getSession();
+        const session = await this.client.store.getSession();
         if (!session.boundRemote) {
             throw new Error(
                 'No remote bound. Use full address format user@remote:workspace or bind a remote with: canvas remote bind <user@remote>',
@@ -207,7 +204,7 @@ export class DotCommand extends BaseCommand {
    */
     async getApiToken(remoteId) {
     // Get token from remote configuration
-        const remote = await this.apiClient.remoteStore.getRemote(remoteId);
+        const remote = await this.client.store.getRemote(remoteId);
         if (remote?.auth?.token) {
             return remote.auth.token;
         }
@@ -221,7 +218,7 @@ export class DotCommand extends BaseCommand {
    */
     async buildGitUrl(address) {
     // Get remote URL from config
-        const remotes = await this.apiClient.remoteStore.getRemotes();
+        const remotes = await this.client.store.getRemotes();
         const remoteKey = `${address.userIdentifier}@${address.remote}`;
         const remoteConfig = remotes[remoteKey];
 
@@ -269,9 +266,9 @@ export class DotCommand extends BaseCommand {
             let databaseDotfiles = [];
             if (hasContextFilter && contextId) {
                 try {
-                    await this.checkConnection();
-                    const response = await this.apiClient.getDotfilesByContext(contextId);
-                    const result = response.payload || response.data || response;
+                    await this.client.ping();
+                    const { api, id } = await this.client.resolve(contextId);
+                    const result = await api.get(`/contexts/${id}/documents`, { featureArray: 'data/abstraction/dotfile' });
                     databaseDotfiles = Array.isArray(result) ? result : [];
                 } catch (err) {
                     console.log(chalk.yellow('Warning: Could not fetch dotfiles from database; showing local index'));
@@ -467,38 +464,28 @@ export class DotCommand extends BaseCommand {
         const address = await this.parseAddress(addressStr);
 
         try {
-            await this.checkConnection();
+            await this.client.ping();
 
             // Get the API client for the specific remote
             const remoteId = `${address.userIdentifier}@${address.remote}`;
-            const apiClient = await this.apiClient.getApiClient(remoteId);
+            const api = await this.client.api(remoteId);
 
-            const response = await apiClient.client.post(
+            await api.post(
                 `/workspaces/${address.resource}/dotfiles/init`,
                 {},
             );
 
-            if (response.data.status === 'success') {
-                console.log(
-                    chalk.green(`✓ Dotfiles repository initialized for ${address.full}`),
-                );
+            console.log(
+                chalk.green(`✓ Dotfiles repository initialized for ${address.full}`),
+            );
 
-                // Update index
-                await this.updateIndexEntry(address, {
-                    status: 'initialized',
-                });
+            await this.updateIndexEntry(address, {
+                status: 'initialized',
+            });
 
-                return 0;
-            } else {
-                throw new Error(
-                    response.data.message || 'Failed to initialize repository',
-                );
-            }
+            return 0;
         } catch (error) {
-            if (error.response?.data?.message) {
-                throw new Error(error.response.data.message);
-            }
-            throw error;
+            throw new Error(`Failed to initialize repository: ${error.message}`);
         }
     }
 
@@ -738,8 +725,8 @@ export class DotCommand extends BaseCommand {
                     contextPath = contextPathInput;
                 } else {
                     // Fetch current context details to derive path
-                    const ctxResp = await this.apiClient.getContext(contextAddress);
-                    let ctx = ctxResp.payload || ctxResp.data || ctxResp;
+                    const { api: ctxApi, id: ctxId } = await this.client.resolve(contextAddress);
+                    let ctx = await ctxApi.get(`/contexts/${ctxId}`);
                     if (ctx && ctx.context) ctx = ctx.context;
                     contextPath = ctx?.path || '/';
                 }
@@ -778,13 +765,13 @@ export class DotCommand extends BaseCommand {
                 const workspaceAddress = `${address.userIdentifier}@${address.remote}:${address.resource}`;
                 // Allow explicit --context to bind immediately
                 const useContextPath = this.options?.context || contextPath;
-                await this.apiClient.createDocument(
-                    workspaceAddress,
-                    docData,
-                    'workspace',
-                    ['data/abstraction/dotfile'],
-                    useContextPath,
-                );
+                const { api: wsApi, id: wsId } = await this.client.resolve(workspaceAddress);
+                const payload = {
+                    documents: [docData],
+                    featureArray: ['data/abstraction/dotfile'],
+                };
+                if (useContextPath) payload.contextSpec = useContextPath;
+                await wsApi.post(`/workspaces/${wsId}/documents`, payload);
             } catch (err) {
                 this.debug('Failed to create dotfile document:', err.message);
             }
@@ -987,18 +974,17 @@ export class DotCommand extends BaseCommand {
 
         // Check remote status
         try {
-            await this.checkConnection();
+            await this.client.ping();
 
             // Get the API client for the specific remote
             const remoteId = `${address.userIdentifier}@${address.remote}`;
-            const apiClient = await this.apiClient.getApiClient(remoteId);
+            const api = await this.client.api(remoteId);
 
-            const response = await apiClient.client.get(
+            const status = await api.get(
                 `/workspaces/${address.resource}/dotfiles/status`,
             );
 
-            if (response.data.status === 'success') {
-                const status = response.data.payload;
+            if (status) {
                 if (status.initialized) {
                     console.log(chalk.green('✓ Remote repository initialized'));
                     console.log(`Branches: ${status.branches?.join(', ') || 'none'}`);
@@ -1029,9 +1015,9 @@ export class DotCommand extends BaseCommand {
             // Get ALL workspace dotfiles (not just context-filtered) for priority resolution
             let allWorkspaceDotfiles = [];
             try {
-                await this.checkConnection();
-                const response = await this.apiClient.getDotfilesByWorkspace(workspaceAddress);
-                const result = response.payload || response.data || response;
+                await this.client.ping();
+                const { api: wsApi, id: wsId } = await this.client.resolve(workspaceAddress);
+                const result = await wsApi.get(`/workspaces/${wsId}/documents`, { featureArray: 'data/abstraction/dotfile' });
                 allWorkspaceDotfiles = Array.isArray(result) ? result : [];
             } catch (err) {
                 this.debug('Could not fetch workspace dotfiles:', err.message);
@@ -1217,10 +1203,9 @@ export class DotCommand extends BaseCommand {
             const workspaceAddress = `${address.userIdentifier}@${address.remote}:${address.resource}`;
 
             try {
-                await this.checkConnection();
-                // Prefer querying by explicit workspace address
-                const response = await this.apiClient.getDotfilesByWorkspace(workspaceAddress);
-                const result = response.payload || response.data || response;
+                await this.client.ping();
+                const { api: wsApi2, id: wsId2 } = await this.client.resolve(workspaceAddress);
+                const result = await wsApi2.get(`/workspaces/${wsId2}/documents`, { featureArray: 'data/abstraction/dotfile' });
                 databaseDotfiles = Array.isArray(result) ? result : [];
 
                 // Build map from localPath to docId
@@ -1462,7 +1447,7 @@ export class DotCommand extends BaseCommand {
     async syncAllRemotes() {
         try {
             // Get all configured remotes
-            const remotes = await this.apiClient.remoteStore.getRemotes();
+            const remotes = await this.client.store.getRemotes();
             const remoteKeys = Object.keys(remotes);
 
             if (remoteKeys.length === 0) {
@@ -1478,13 +1463,11 @@ export class DotCommand extends BaseCommand {
                     const remote = remotes[remoteKey];
                     console.log(chalk.blue(`Syncing remote: ${remoteKey}...`));
 
-                    // Get workspaces for this remote
-                    const apiClient = await this.apiClient.getApiClient(remoteKey);
+                    const api = await this.client.api(remoteKey);
                     let workspaces = [];
 
                     try {
-                        const workspaceResponse = await apiClient.client.get('/workspaces');
-                        const workspaceData = workspaceResponse.data.payload || workspaceResponse.data.data || workspaceResponse.data;
+                        const workspaceData = await api.get('/workspaces');
                         workspaces = Array.isArray(workspaceData) ? workspaceData : [];
                     } catch (workspaceError) {
                         console.log(chalk.yellow(`Warning: Could not fetch workspaces from ${remoteKey}: ${workspaceError.message}`));
@@ -1561,9 +1544,8 @@ export class DotCommand extends BaseCommand {
         try {
             const workspaceAddress = `${address.userIdentifier}@${address.remote}:${address.resource}`;
 
-            // Query dotfiles from database
-            const response = await this.apiClient.getDotfilesByWorkspace(workspaceAddress);
-            const databaseDotfiles = response.payload || response.data || response;
+            const { api: wsApi, id: wsId } = await this.client.resolve(workspaceAddress);
+            const databaseDotfiles = await wsApi.get(`/workspaces/${wsId}/documents`, { featureArray: 'data/abstraction/dotfile' });
             const dotfiles = Array.isArray(databaseDotfiles) ? databaseDotfiles : [];
 
             if (dotfiles.length === 0) {
@@ -1895,8 +1877,8 @@ export class DotCommand extends BaseCommand {
         const normalizedContextPath = contextPathOpt.replace(/^\/+/, '').replace(/\/+$/, '');
         const workspaceAddress = `${address.userIdentifier}@${address.remote}:${address.resource}`;
         // Find the document in that context by repoPath
-        const response = await this.apiClient.getDotfilesByContext(`${workspaceAddress}/${normalizedContextPath}`);
-        const docs = response.payload || response.data || response;
+        const { api: ctxApi, id: ctxId } = await this.client.resolve(`${workspaceAddress}/${normalizedContextPath}`);
+        const docs = await ctxApi.get(`/contexts/${ctxId}/documents`, { featureArray: 'data/abstraction/dotfile' });
         const match = (Array.isArray(docs) ? docs : []).find((doc) => {
             const d = doc.data || doc;
             return d.repoPath === repoPath;
@@ -1905,8 +1887,8 @@ export class DotCommand extends BaseCommand {
             throw new Error(`Dotfile not found in context '${normalizedContextPath}': ${repoPath}`);
         }
 
-        // Remove via workspace route with contextSpec
-        await this.apiClient.removeDocument(workspaceAddress, match.id, 'workspace', `/${normalizedContextPath}`);
+        const { api: wsApi, id: wsId } = await this.client.resolve(workspaceAddress);
+        await wsApi.del(`/workspaces/${wsId}/documents/remove`, [match.id], { contextSpec: `/${normalizedContextPath}` });
         console.log(chalk.green(`✓ Removed from context ${normalizedContextPath}: ${repoPath}`));
         return 0;
     }
@@ -1925,8 +1907,8 @@ export class DotCommand extends BaseCommand {
 
         // Find document by repoPath in workspace
         const workspaceAddress = `${address.userIdentifier}@${address.remote}:${address.resource}`;
-        const resp = await this.apiClient.getDotfilesByWorkspace(workspaceAddress);
-        const docs = resp.payload || resp.data || resp;
+        const { api: wsApi3, id: wsId3 } = await this.client.resolve(workspaceAddress);
+        const docs = await wsApi3.get(`/workspaces/${wsId3}/documents`, { featureArray: 'data/abstraction/dotfile' });
         const match = (Array.isArray(docs) ? docs : []).find((doc) => {
             const d = doc.data || doc;
             return d.repoPath === repoPath;
@@ -1964,7 +1946,8 @@ export class DotCommand extends BaseCommand {
         }
 
         // Delete document from workspace
-        await this.apiClient.deleteDocument(workspaceAddress, match.id, 'workspace');
+        const { api: wsApi4, id: wsId4 } = await this.client.resolve(workspaceAddress);
+        await wsApi4.del(`/workspaces/${wsId4}/documents`, [match.id]);
         console.log(chalk.green(`✓ Deleted dotfile and document: ${repoPath}`));
         return 0;
     }

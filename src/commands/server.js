@@ -15,8 +15,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * Server command for managing local Canvas server
  */
 export class ServerCommand extends BaseCommand {
-    constructor(config) {
-        super(config);
+    constructor() {
+        super();
         this.options = null;
         this.serverRoot = this.findServerRoot();
         this.serverScript = this.serverRoot
@@ -159,8 +159,7 @@ export class ServerCommand extends BaseCommand {
    */
     async isServerRunning() {
         try {
-            const response = await this.apiClient.ping();
-            return response && response.payload;
+            return await this.client.ping();
         } catch (error) {
             return false;
         }

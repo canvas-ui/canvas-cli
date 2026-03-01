@@ -1,8 +1,8 @@
 'use strict';
 
-import { setupDebug } from '../lib/debug.js';
+import debugLib from 'debug';
 
-const debug = setupDebug('canvas:cli:address-parser');
+const debug = debugLib('canvas:cli:address-parser');
 
 /**
  * Canvas Resource Address Parser

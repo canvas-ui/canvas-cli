@@ -2,1483 +2,391 @@
 
 import chalk from 'chalk';
 import BaseCommand from './base.js';
-import DotCommand from './dot.js';
 
-/**
- * Context command
- */
 export class ContextCommand extends BaseCommand {
-    constructor(config) {
-        super(config);
-        this.options = null;
-    }
+    get skipConnectionFor() { return ['list']; }
+    get defaultAction() { return 'current'; }
 
-    async execute(parsed) {
-        try {
-            this.options = parsed.options;
+    // ── CRUD ──
 
-            // Collect client context for this execution
-            this.collectClientContext();
-
-            // Skip connection check for list action since we use cached data
-            const action = parsed.args[0] || 'current';
-            if (action !== 'list') {
-                // Check if server is reachable for non-list actions
-                await this.checkConnection();
-            }
-
-            // Handle special case for hyphenated commands
-            let methodName;
-
-            if (action === 'base-url') {
-                methodName = 'handleBaseUrl';
-            } else {
-                methodName = `handle${action.charAt(0).toUpperCase() + action.slice(1)}`;
-            }
-
-            if (typeof this[methodName] === 'function') {
-                return await this[methodName](parsed);
-            } else {
-                console.error(chalk.red(`Unknown action: ${action}`));
-                this.showHelp();
-                return 1;
-            }
-        } catch (error) {
-            console.error(chalk.red('Error:'), error.message);
-            if (process.env.DEBUG) {
-                console.error(error.stack);
-            }
-            return 1;
+    async handleList() {
+        const remoteId = await this._tryCurrentRemote();
+        if (remoteId && await this.client.isReachable(remoteId)) {
+            await this.client.sync(remoteId, { contexts: true, workspaces: false });
         }
+
+        const cached = await this._cachedContexts();
+        await this.output(cached, 'context');
+        return 0;
     }
 
-    /**
-   * List contexts
-   */
-    async handleList(parsed) {
-        try {
-            // Try to fetch from remote first while updating local index
-            let remoteUpdateSuccess = false;
-            try {
-                const remoteId = await this.apiClient.getCurrentRemote();
-                if (remoteId && await this.apiClient.isRemoteReachable(remoteId)) {
-                    this.debug('Remote is reachable, updating local index...');
-                    remoteUpdateSuccess = await this.apiClient.syncRemoteAndUpdateIndex(remoteId, {
-                        contexts: true,
-                        workspaces: false,
-                        silent: true
-                    });
-                    if (remoteUpdateSuccess) {
-                        this.debug('Local index updated successfully');
-                    }
-                }
-            } catch (remoteError) {
-                this.debug('Failed to update from remote:', remoteError.message);
-                // Continue with local cache fallback
-            }
-
-            // Use cached contexts from local storage (which may have been just updated)
-            const cachedContexts = await this.apiClient.getCachedContexts();
-
-            // Transform cached data to include remote information
-            const contexts = [];
-            for (const [key, context] of Object.entries(cachedContexts)) {
-                // Parse key format: remoteId:contextId
-                const [remoteId, contextId] = key.includes(':')
-                    ? key.split(':', 2)
-                    : ['local', key];
-
-                contexts.push({
-                    address: remoteId, // Show full remote identifier as address
-                    id: contextId,
-                    ...context,
-                });
-            }
-
-            // Sort by address, then by id
-            contexts.sort((a, b) => {
-                if (a.address !== b.address) {
-                    return a.address.localeCompare(b.address);
-                }
-                return (a.id || '').localeCompare(b.id || '');
-            });
-
-            // Update session with current workspace information if we have a bound context
-            try {
-                const session = await this.apiClient.remoteStore.getSession();
-                if (session.boundContext) {
-                    // Get the workspace from the bound context
-                    const contextResponse = await this.apiClient.getContext(
-                        session.boundContext,
-                    );
-                    const context =
-            contextResponse.payload || contextResponse.data || contextResponse;
-
-                    if (context && context.url) {
-                        const workspaceName = context.url.split('://')[0] || 'universe';
-                        // Find the context in our list that matches the bound context
-                        const boundContext = contexts.find(
-                            (c) =>
-                                `${c.address}:${c.id}` === session.boundContext ||
-                c.id === session.boundContext,
-                        );
-                        if (boundContext) {
-                            // Update session with workspace information
-                            await this.apiClient.remoteStore.updateSession({
-                                defaultWorkspace: workspaceName,
-                            });
-                        }
-                    }
-                }
-            } catch (error) {
-                // Ignore errors when updating session - this is not critical
-                this.debug(
-                    'Failed to update session with workspace info:',
-                    error.message,
-                );
-            }
-
-            await this.output(contexts, 'context');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to list contexts: ${error.message}`);
-        }
-    }
-
-    /**
-   * Show context details
-   */
     async handleShow(parsed) {
-        const contextAddress =
-      parsed.args[1] || (await this.getCurrentContext(parsed.options));
-
-        try {
-            const response = await this.apiClient.getContext(contextAddress);
-            let context = response.payload || response.data || response;
-
-            // Extract context from nested response if needed
-            if (context && context.context) {
-                context = context.context;
-            }
-
-            await this.output(context, 'context');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to show context: ${error.message}`);
-        }
+        const addr = parsed.args[1] || await this.getCurrentContext(parsed.options);
+        const { api, id } = await this.client.resolve(addr);
+        const ctx = await api.get(`/contexts/${id}`);
+        await this.output(ctx?.context || ctx, 'context');
+        return 0;
     }
 
-    /**
-   * Create a new context
-   * Usage: canvas context create <id> [url] [options]
-   */
     async handleCreate(parsed) {
         const contextId = parsed.args[1];
-        if (!contextId) {
-            throw new Error('Context ID is required');
-        }
+        if (!contextId) throw new Error('Context ID required');
 
+        const data = { id: contextId, description: parsed.options.description || '', metadata: {} };
         const url = parsed.args[2];
-        const contextData = {
-            id: contextId,
-            description: parsed.options.description || '',
-            metadata: {},
-        };
-
-        // Only include URL if provided
         if (url) {
-            // If URL contains ://, use as-is, otherwise assume universe workspace
-            if (url.includes('://')) {
-                contextData.url = url;
-            } else {
-                contextData.url = `universe://${url.startsWith('/') ? url : '/' + url}`;
-            }
+            data.url = url.includes('://') ? url : `universe://${url.startsWith('/') ? url : '/' + url}`;
         }
+        if (parsed.options.color) data.metadata.color = parsed.options.color;
 
-        if (parsed.options.color) {
-            contextData.metadata.color = parsed.options.color;
-        }
-
-        try {
-            // Create on current default remote
-            const response = await this.apiClient.createContext(contextData);
-            let context = response.payload || response.data || response;
-
-            // Extract context from nested response if needed
-            if (context && context.context) {
-                context = context.context;
-            }
-
-            console.log(chalk.green(`✓ Context '${contextId}' created successfully`));
-            await this.output(context, 'context');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to create context: ${error.message}`);
-        }
+        const api = await this.client.api();
+        const ctx = await api.post('/contexts', data);
+        console.log(chalk.green(`Context '${contextId}' created`));
+        await this.output(ctx?.context || ctx, 'context');
+        return 0;
     }
 
-    /**
-   * Delete context (destroy)
-   */
     async handleDestroy(parsed) {
-        const contextAddress = parsed.args[1];
-        if (!contextAddress) {
-            throw new Error(
-                'Context address is required (format: user@remote:context or just context if default remote is bound)',
-            );
-        }
-
-        try {
-            const response = await this.apiClient.deleteContext(contextAddress);
-            const result = response.payload || response.data || response;
-
-            if (result.status === 'success') {
-                console.log(
-                    chalk.green(`✓ Context '${contextAddress}' destroyed successfully`),
-                );
-            } else {
-                console.log(
-                    chalk.red(`✗ Failed to destroy context: ${result.message}`),
-                );
-                return 1;
-            }
-            return 0;
-        } catch (error) {
-            if (error.message && error.message.includes('404')) {
-                // Remove local cache for this context
-                try {
-                    const remoteId = await this.apiClient.getCurrentRemote();
-                    const key = `${remoteId}:${contextAddress.includes(':') ? contextAddress.split(':').pop() : contextAddress}`;
-                    await this.apiClient.remoteStore.removeContext(key);
-                    console.log(chalk.yellow('Local cache entry removed for missing context'));
-                    return 0;
-                } catch (_cleanupErr) {
-                    console.log(chalk.red('Failed to remove context from local cache: ', _cleanupErr.message));
-                }
-            }
-            throw new Error(`Failed to destroy context: ${error.message}`);
-        }
+        const addr = parsed.args[1];
+        if (!addr) throw new Error('Context address required');
+        const { api, id } = await this.client.resolve(addr);
+        await api.del(`/contexts/${id}`);
+        console.log(chalk.green(`Context '${addr}' destroyed`));
+        return 0;
     }
 
-    /**
-   * Switch/bind to a context (both do the same)
-   */
-    async handleSwitch(parsed) {
-        return this.handleBind(parsed);
-    }
-
-    async handleBind(parsed) {
-        const contextAddress = parsed.args[1];
-        if (!contextAddress) {
-            throw new Error(
-                'Context address is required (format: user@remote:context or just context if default remote is bound)',
-            );
-        }
-
-        try {
-            // Resolve alias if needed
-            const resolvedAddress =
-        await this.apiClient.remoteStore.resolveAlias(contextAddress);
-
-            // Get context details and remote status for session
-            let contextUrl = null;
-            let contextId = null;
-            let remoteStatus = 'disconnected';
-
-            try {
-                // Extract context ID from resolved address
-                const addressParts = resolvedAddress.split(':');
-                if (addressParts.length >= 2) {
-                    contextId = addressParts[addressParts.length - 1];
-                }
-
-                // Try to get context details and check remote connectivity
-                const ctxResp = await this.apiClient.getContext(resolvedAddress);
-                let ctx = ctxResp.payload || ctxResp.data || ctxResp;
-                if (ctx && ctx.context) ctx = ctx.context;
-
-                if (ctx) {
-                    contextUrl = ctx.url;
-                    contextId = ctx.id || contextId;
-                }
-
-                // Check remote connectivity
-                const remoteId = addressParts.length >= 2 ? addressParts.slice(0, -1).join(':') : await this.apiClient.getCurrentRemote();
-                if (remoteId && await this.apiClient.isRemoteReachable(remoteId)) {
-                    remoteStatus = 'connected';
-                }
-            } catch (error) {
-                // If we can't get context details or check connectivity, keep defaults
-                this.debug('Failed to get context details or check connectivity:', error.message);
-            }
-
-            // Update session with bound context and new fields
-            await this.apiClient.remoteStore.updateSession({
-                boundContext: resolvedAddress,
-                boundContextUrl: contextUrl,
-                boundContextId: contextId,
-                boundRemoteStatus: remoteStatus,
-                boundAt: new Date().toISOString(),
-            });
-
-            if (resolvedAddress !== contextAddress) {
-                console.log(
-                    chalk.green(
-                        `✓ Switched to context '${resolvedAddress}' (resolved from alias '${contextAddress}')`,
-                    ),
-                );
-            } else {
-                console.log(chalk.green(`✓ Switched to context '${resolvedAddress}'`));
-            }
-
-            if (parsed.options && (parsed.options['update-dotfiles'] || parsed.options.u)) {
-                try {
-                    const ctxResp = await this.apiClient.getContext(resolvedAddress);
-                    let ctx = ctxResp.payload || ctxResp.data || ctxResp;
-                    if (ctx && ctx.context) ctx = ctx.context;
-                    const contextPath = ctx.path || '/';
-                    const workspaceName = ctx.workspaceName || (ctx.url ? ctx.url.split('://')[0] : 'universe');
-                    const remoteId = await this.apiClient.getCurrentRemote();
-                    if (remoteId) {
-                        const workspaceAddress = `${remoteId}:${workspaceName}`;
-                        const dot = new DotCommand(this.config);
-                        await dot.handleActivateForContext(workspaceAddress, contextPath);
-                    }
-                } catch (dotErr) {
-                    this.debug('Failed to update dotfiles:', dotErr.message);
-                }
-            }
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to bind context: ${error.message}`);
-        }
-    }
-
-    /**
-   * Set context URL
-   */
-    async handleSet(parsed) {
-        const url = parsed.args[1];
-        if (!url) {
-            throw new Error('Context URL is required');
-        }
-
-        const contextId = await this.getCurrentContext(parsed.options);
-
-        try {
-            const response = await this.apiClient.setContextUrl(contextId, url);
-
-            // Handle ResponseObject format
-            const result = response.payload || response.data || response;
-            console.log(chalk.green(`✓ Context URL set to '${result.url}'`));
-
-            // Update session file with new context URL if this is the currently bound context
-            try {
-                const session = await this.apiClient.remoteStore.getSession();
-                if (session.boundContext) {
-                    // Compare both the full address and just the context ID part
-                    const boundContextMatches = session.boundContext === contextId ||
-                        (session.boundContextId && session.boundContextId === contextId.split(':').pop()) ||
-                        contextId.endsWith(`:${session.boundContextId}`);
-
-                    if (boundContextMatches) {
-                        await this.apiClient.remoteStore.updateSession({
-                            boundContextUrl: result.url || url,
-                        });
-                        this.debug('Session updated with new context URL:', result.url || url);
-                    }
-                }
-            } catch (sessionUpdateError) {
-                this.debug('Failed to update session with new context URL:', sessionUpdateError.message);
-                // Don't fail the main operation if session update fails
-            }
-
-            // Trigger local index update if remote is reachable
-            try {
-                const remoteId = await this.apiClient.getCurrentRemote();
-                if (remoteId && await this.apiClient.isRemoteReachable(remoteId)) {
-                    this.debug('Remote is reachable, updating local index...');
-                    await this.apiClient.syncRemoteAndUpdateIndex(remoteId, {
-                        contexts: true,
-                        workspaces: false,
-                        silent: true
-                    });
-                    this.debug('Local index updated successfully');
-                }
-            } catch (indexUpdateError) {
-                this.debug('Failed to update local index:', indexUpdateError.message);
-                // Don't fail the main operation if index update fails
-            }
-
-            // Auto update dotfiles if flag provided
-            if (parsed.options && (parsed.options['update-dotfiles'] || parsed.options.u)) {
-                try {
-                    // Fetch updated context details
-                    const ctxResp = await this.apiClient.getContext(contextId);
-                    let ctx = ctxResp.payload || ctxResp.data || ctxResp;
-                    if (ctx && ctx.context) ctx = ctx.context;
-
-                    const contextPath = ctx.path || '/';
-                    const workspaceName = ctx.workspaceName || (ctx.url ? ctx.url.split('://')[0] : 'universe');
-                    const remoteId = await this.apiClient.getCurrentRemote();
-                    if (remoteId) {
-                        const workspaceAddress = `${remoteId}:${workspaceName}`;
-                        const dot = new DotCommand(this.config);
-                        await dot.handleActivateForContext(workspaceAddress, contextPath);
-                    }
-                } catch (dotErr) {
-                    this.debug('Failed to update dotfiles:', dotErr.message);
-                }
-            }
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to set context URL: ${error.message}`);
-        }
-    }
-
-    /**
-   * Get context URL
-   */
-    async handleUrl(parsed) {
-        const contextId =
-      parsed.args[1] || (await this.getCurrentContext(parsed.options));
-
-        try {
-            const response = await this.apiClient.getContextUrl(contextId);
-
-            // Handle ResponseObject format
-            const data = response.payload || response.data || response;
-            const url = data.url || data;
-
-            console.log(url);
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to get context URL: ${error.message}`);
-        }
-    }
-
-    /**
-   * Get base URL for context (workspace part)
-   */
-    async handleBaseUrl(parsed) {
-        const contextId =
-      parsed.args[1] || (await this.getCurrentContext(parsed.options));
-
-        try {
-            const response = await this.apiClient.getContextUrl(contextId);
-
-            // Handle ResponseObject format
-            const data = response.payload || response.data || response;
-            const url = data.url || data;
-
-            if (url && url.includes('://')) {
-                const baseUrl = url.split('://')[0];
-                console.log(baseUrl);
-            } else {
-                console.log('universe'); // fallback
-            }
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to get context base URL: ${error.message}`);
-        }
-    }
-
-    /**
-   * Get context path
-   */
-    async handlePath(parsed) {
-        const contextId =
-      parsed.args[1] || (await this.getCurrentContext(parsed.options));
-
-        try {
-            const response = await this.apiClient.getContextPath(contextId);
-
-            // Handle ResponseObject format
-            const data = response.payload || response.data || response;
-            const path = data.path || data;
-
-            console.log(path);
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to get context path: ${error.message}`);
-        }
-    }
-
-    /**
-   * Get all available context paths
-   */
-    async handlePaths(parsed) {
-        const contextId =
-            parsed.args[1] || (await this.getCurrentContext(parsed.options));
-
-        try {
-            const response = await this.apiClient.getContextTree(contextId);
-            const tree = response.payload || response.data || response;
-
-            if (!tree || !tree.children) {
-                console.log(chalk.yellow('No tree structure found for this context'));
-                return 0;
-            }
-
-            // Extract all paths from the tree structure
-            const paths = this.extractPathsFromTree(tree);
-
-            // Display paths for easy copy-paste
-            paths.forEach((path) => console.log(path));
-
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to get context paths: ${error.message}`);
-        }
-    }
-
-    /**
-   * Extract all paths from a context tree structure recursively
-   */
-    extractPathsFromTree(node, currentPath = '') {
-        const paths = [];
-
-        if (!node) return paths;
-
-        // Get the node name/label for the path segment
-        const nodeName = node.label || node.name || node.id;
-
-        // Build the current path - skip root node (/) or universe root
-        let newPath = currentPath;
-        if (nodeName && nodeName !== '/' && nodeName !== '' && node.type !== 'universe') {
-            newPath = currentPath === '' ? `/${nodeName}` : `${currentPath}/${nodeName}`;
-        }
-
-        // If this node has a meaningful path (not just root), add it to the results
-        if (newPath && newPath !== '' && newPath !== '/' && node.type !== 'universe') {
-            paths.push(newPath);
-        }
-
-        // Recursively process children
-        if (node.children && Array.isArray(node.children)) {
-            node.children.forEach(child => {
-                const childPaths = this.extractPathsFromTree(child, newPath);
-                paths.push(...childPaths);
-            });
-        }
-
-        return paths;
-    }
-
-    /**
-   * Show context tree
-   */
-    async handleTree(parsed) {
-        const contextId =
-      parsed.args[1] || (await this.getCurrentContext(parsed.options));
-
-        try {
-            const response = await this.apiClient.getContextTree(contextId);
-            const tree = response.payload || response.data || response;
-
-            if (!tree || !tree.children) {
-                console.log(chalk.yellow('No tree structure found for this context'));
-                return 0;
-            }
-
-            console.log(chalk.bold(`Context Tree: ${contextId}`));
-            console.log();
-            this.displayTreeNode(tree);
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to get context tree: ${error.message}`);
-        }
-    }
-
-    /**
-   * Display a tree node recursively
-   */
-    displayTreeNode(node, prefix = '', isLast = true) {
-        if (!node) return;
-
-        const connector = isLast ? '└── ' : '├── ';
-        const nameDisplay = node.label || node.name || node.id;
-        const typeDisplay =
-      node.type === 'universe' ? chalk.cyan('[UNIVERSE]') : '';
-        const colorDisplay = node.color ? chalk.hex(node.color)('●') : '';
-
-        console.log(
-            `${prefix}${connector}${nameDisplay} ${typeDisplay} ${colorDisplay}`,
-        );
-
-        if (node.description && node.description !== 'Canvas layer') {
-            const descPrefix = prefix + (isLast ? '    ' : '│   ');
-            console.log(`${descPrefix}${chalk.gray(node.description)}`);
-        }
-
-        if (node.children && Array.isArray(node.children)) {
-            const childPrefix = prefix + (isLast ? '    ' : '│   ');
-            node.children.forEach((child, index) => {
-                const isLastChild = index === node.children.length - 1;
-                this.displayTreeNode(child, childPrefix, isLastChild);
-            });
-        }
-    }
-
-    /**
-   * Get context workspace
-   */
-    async handleWorkspace(parsed) {
-        const contextId =
-      parsed.args[1] || (await this.getCurrentContext(parsed.options));
-
-        try {
-            const response = await this.apiClient.getContextUrl(contextId);
-
-            // Handle ResponseObject format
-            const data = response.payload || response.data || response;
-            const url = data.url || data;
-
-            if (url && url.includes('://')) {
-                const workspace = url.split('://')[0];
-                console.log(workspace);
-            } else {
-                console.log('universe'); // fallback
-            }
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to get context workspace: ${error.message}`);
-        }
-    }
-
-    /**
-   * Show current context
-   */
-    async handleCurrent(parsed) {
-        try {
-            const currentContextAddress = await this.getCurrentContext(
-                parsed.options,
-            );
-            const session = await this.apiClient.remoteStore.getSession();
-
-            console.log(chalk.cyan('Current context:'), currentContextAddress);
-            if (session.boundRemote) {
-                console.log(chalk.cyan('Default remote:'), session.boundRemote);
-            }
-            if (session.boundAt) {
-                console.log(
-                    chalk.cyan('Bound at:'),
-                    new Date(session.boundAt).toLocaleString(),
-                );
-            }
-
-            try {
-                const response = await this.apiClient.getContext(currentContextAddress);
-                let context = response.payload || response.data || response;
-
-                // Extract context from nested response if needed
-                if (context && context.context) {
-                    context = context.context;
-                }
-
-                await this.output(context, 'context');
-                return 0;
-            } catch (error) {
-                console.log(
-                    chalk.yellow('Warning: Current context not found on server'),
-                );
-                return 1;
-            }
-        } catch (error) {
-            console.log(chalk.red('No current context set.'));
-            console.log(chalk.cyan('Use: canvas context bind <context-address>'));
-            console.log(chalk.cyan('Or: canvas remote bind <user@remote> first'));
-            return 1;
-        }
-    }
-
-    /**
-   * Update context
-   */
     async handleUpdate(parsed) {
         const contextId = parsed.args[1];
-        if (!contextId) {
-            throw new Error('Context ID is required');
-        }
+        if (!contextId) throw new Error('Context ID required');
+        const data = {};
+        if (parsed.options.description) data.description = parsed.options.description;
+        if (parsed.options.metadata) data.metadata = JSON.parse(parsed.options.metadata);
+        if (Object.keys(data).length === 0) throw new Error('Nothing to update. Use --description or --metadata');
 
-        const updateData = {};
-        if (parsed.options.description)
-            updateData.description = parsed.options.description;
-        if (parsed.options.metadata)
-            updateData.metadata = JSON.parse(parsed.options.metadata);
+        const { api, id } = await this.client.resolve(contextId);
+        const ctx = await api.put(`/contexts/${id}`, data);
+        console.log(chalk.green(`Context '${contextId}' updated`));
+        await this.output(ctx?.context || ctx, 'context');
+        return 0;
+    }
 
-        if (Object.keys(updateData).length === 0) {
-            throw new Error(
-                'No update data provided. Use --description or --metadata',
-            );
-        }
+    // ── Bind / Switch ──
+
+    async handleSwitch(parsed) { return this.handleBind(parsed); }
+
+    async handleBind(parsed) {
+        const addr = parsed.args[1];
+        if (!addr) throw new Error('Context address required');
+
+        const resolved = await this.client.store.resolveAlias(addr);
+        let contextUrl = null, contextId = null, remoteStatus = 'disconnected';
 
         try {
-            const response = await this.apiClient.updateContext(
-                contextId,
-                updateData,
-            );
-            let context = response.payload || response.data || response;
+            const { api, id, remote } = await this.client.resolve(resolved);
+            contextId = id;
+            const ctx = await api.get(`/contexts/${id}`);
+            const c = ctx?.context || ctx;
+            contextUrl = c?.url;
+            contextId = c?.id || contextId;
+            if (await this.client.isReachable(remote)) remoteStatus = 'connected';
+        } catch (e) {
+            this.debug('Context details unavailable:', e.message);
+        }
 
-            // Extract context from nested response if needed
-            if (context && context.context) {
-                context = context.context;
+        await this.client.store.updateSession({
+            boundContext: resolved, boundContextUrl: contextUrl,
+            boundContextId: contextId, boundRemoteStatus: remoteStatus,
+            boundAt: new Date().toISOString(),
+        });
+
+        const label = resolved !== addr ? `'${resolved}' (alias '${addr}')` : `'${resolved}'`;
+        console.log(chalk.green(`Switched to context ${label}`));
+        return 0;
+    }
+
+    // ── URL / Path ──
+
+    async handleSet(parsed) {
+        const url = parsed.args[1];
+        if (!url) throw new Error('URL required');
+        const addr = await this.getCurrentContext(parsed.options);
+        const { api, id } = await this.client.resolve(addr);
+        const result = await api.post(`/contexts/${id}/url`, { url });
+        console.log(chalk.green(`Context URL set to '${result.url || url}'`));
+
+        const session = await this.client.store.getSession();
+        if (session.boundContext) {
+            await this.client.store.updateSession({ boundContextUrl: result.url || url });
+        }
+        return 0;
+    }
+
+    async handleUrl(parsed) {
+        const addr = parsed.args[1] || await this.getCurrentContext(parsed.options);
+        const { api, id } = await this.client.resolve(addr);
+        const data = await api.get(`/contexts/${id}/url`);
+        console.log(data.url || data);
+        return 0;
+    }
+
+    async handleBaseUrl(parsed) {
+        const addr = parsed.args[1] || await this.getCurrentContext(parsed.options);
+        const { api, id } = await this.client.resolve(addr);
+        const data = await api.get(`/contexts/${id}/url`);
+        const url = data.url || data;
+        console.log(url?.includes('://') ? url.split('://')[0] : 'universe');
+        return 0;
+    }
+
+    async handlePath(parsed) {
+        const addr = parsed.args[1] || await this.getCurrentContext(parsed.options);
+        const { api, id } = await this.client.resolve(addr);
+        const data = await api.get(`/contexts/${id}/path`);
+        console.log(data.path || data);
+        return 0;
+    }
+
+    async handlePaths(parsed) {
+        const addr = parsed.args[1] || await this.getCurrentContext(parsed.options);
+        const { api, id } = await this.client.resolve(addr);
+        const tree = await api.get(`/contexts/${id}/tree`);
+        if (!tree?.children) { console.log(chalk.yellow('No tree found')); return 0; }
+        this.extractPaths(tree).forEach((p) => console.log(p));
+        return 0;
+    }
+
+    // ── Tree ──
+
+    async handleTree(parsed) {
+        const addr = parsed.args[1] || await this.getCurrentContext(parsed.options);
+        const { api, id } = await this.client.resolve(addr);
+        const tree = await api.get(`/contexts/${id}/tree`);
+        if (!tree?.children) { console.log(chalk.yellow('No tree found')); return 0; }
+        console.log(chalk.bold(`Context Tree: ${addr}`));
+        console.log();
+        this.displayTree(tree);
+        return 0;
+    }
+
+    async handleWorkspace(parsed) {
+        const addr = parsed.args[1] || await this.getCurrentContext(parsed.options);
+        const { api, id } = await this.client.resolve(addr);
+        const data = await api.get(`/contexts/${id}/url`);
+        const url = data.url || data;
+        console.log(url?.includes('://') ? url.split('://')[0] : 'universe');
+        return 0;
+    }
+
+    // ── Current ──
+
+    async handleCurrent(parsed) {
+        try {
+            const addr = await this.getCurrentContext(parsed.options);
+            const session = await this.client.store.getSession();
+
+            console.log(chalk.cyan('Current context:'), addr);
+            if (session.boundRemote) console.log(chalk.cyan('Remote:'), session.boundRemote);
+            if (session.boundAt) console.log(chalk.cyan('Bound:'), new Date(session.boundAt).toLocaleString());
+
+            try {
+                const { api, id } = await this.client.resolve(addr);
+                const ctx = await api.get(`/contexts/${id}`);
+                await this.output(ctx?.context || ctx, 'context');
+            } catch {
+                console.log(chalk.yellow('Context not found on server'));
             }
-
-            console.log(chalk.green(`✓ Context '${contextId}' updated successfully`));
-            await this.output(context, 'context');
             return 0;
-        } catch (error) {
-            throw new Error(`Failed to update context: ${error.message}`);
+        } catch {
+            console.log(chalk.red('No context set.'));
+            console.log(chalk.cyan('Use: canvas context bind <address>'));
+            return 1;
         }
     }
 
-    /**
-   * List all documents in context
-   */
-    async handleDocuments(parsed) {
-        // Check if first argument is a search string or context address
-        let contextAddress;
-        let searchString = null;
+    // ── Documents ──
 
+    async handleDocuments(parsed) {
+        let addr, search = null;
         if (parsed.args.length >= 2) {
-            // If we have at least 2 args, check if first looks like context address
-            const potentialAddress = parsed.args[1];
-            if (potentialAddress.includes(':') || potentialAddress.includes('@')) {
-                // Looks like an address, second arg might be search string
-                contextAddress = potentialAddress;
-                searchString = parsed.args[2] || null;
+            const pot = parsed.args[1];
+            if (pot.includes(':') || pot.includes('@')) {
+                addr = pot;
+                search = parsed.args[2] || null;
             } else {
-                // First arg is probably search string, use current context
-                contextAddress = await this.getCurrentContext(parsed.options);
-                searchString = potentialAddress;
+                addr = await this.getCurrentContext(parsed.options);
+                search = pot;
             }
         } else {
-            // No args, use current context
-            contextAddress = await this.getCurrentContext(parsed.options);
+            addr = await this.getCurrentContext(parsed.options);
         }
 
-        try {
-            const options = {};
+        const { api, id } = await this.client.resolve(addr);
+        const params = {};
+        if (search) params.q = search;
+        if (parsed.options.feature) params.featureArray = [].concat(parsed.options.feature);
+        if (parsed.options.filter) params.filterArray = [].concat(parsed.options.filter);
 
-            // Add search query if provided
-            if (searchString) {
-                options.q = searchString;
-            }
-
-            // Add CLI options if provided
-            if (parsed.options.feature) {
-                // Support multiple --feature flags
-                options.featureArray = Array.isArray(parsed.options.feature)
-                    ? parsed.options.feature
-                    : [parsed.options.feature];
-            }
-
-            if (parsed.options.filter) {
-                // Support multiple --filter flags
-                options.filterArray = Array.isArray(parsed.options.filter)
-                    ? parsed.options.filter
-                    : [parsed.options.filter];
-            }
-
-            const response = await this.apiClient.getDocuments(
-                contextAddress,
-                'context',
-                options,
-            );
-            const documents = response.payload || response.data || response;
-
-            await this.output(documents, 'document');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to ${searchString ? 'search' : 'list'} documents: ${error.message}`);
-        }
+        const docs = await api.get(`/contexts/${id}/documents`, params);
+        await this.output(docs, 'document');
+        return 0;
     }
 
-    /**
-   * Handle dotfile commands (alias for handleDotfiles)
-   */
-    async handleDot(parsed) {
-        return await this.handleDotfiles(parsed);
-    }
-
-    /**
-   * List dotfiles in current context
-   */
     async handleDotfiles(parsed) {
-        const contextAddress = parsed.args[1] || (await this.getCurrentContext(parsed.options));
-
-        try {
-            const options = {
-                featureArray: ['data/abstraction/dotfile'],
-            };
-            const response = await this.apiClient.getDocuments(
-                contextAddress,
-                'context',
-                options,
-            );
-            const dotfiles = response.payload || response.data || response;
-
-            await this.output(dotfiles, 'document', 'dotfile');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to list dotfiles: ${error.message}`);
-        }
+        const addr = parsed.args[1] || await this.getCurrentContext(parsed.options);
+        const { api, id } = await this.client.resolve(addr);
+        const docs = await api.get(`/contexts/${id}/documents`, { featureArray: 'data/abstraction/dotfile' });
+        await this.output(docs, 'document', 'dotfile');
+        return 0;
     }
 
-    /**
-   * Handle tab commands (list, add, delete, remove)
-   */
+    async handleDot(parsed) { return this.handleDotfiles(parsed); }
+
+    // ── Tabs ──
+
+    async handleTabs(parsed) { return this._listByType(parsed, 'tab'); }
     async handleTab(parsed) {
         const action = parsed.args[1] || 'list';
-
-        if (action === 'list') {
-            return this.handleTabList(parsed);
-        } else if (action === 'add') {
-            return this.handleTabAdd(parsed);
-        } else if (action === 'get') {
-            return this.handleTabGet(parsed);
-        } else if (action === 'delete') {
-            return this.handleTabDelete(parsed);
-        } else if (action === 'remove') {
-            return this.handleTabRemove(parsed);
-        } else {
-            console.error(chalk.red(`Unknown tab action: ${action}`));
-            console.log(
-                chalk.yellow('Available actions: list, add, get, delete, remove'),
-            );
-            return 1;
-        }
+        if (action === 'list') return this._listByType(parsed, 'tab');
+        if (action === 'add') return this._addDoc(parsed, 'tab', 2);
+        if (action === 'get') return this._getDoc(parsed, 2);
+        if (action === 'delete') return this._bulkDocOp(parsed, 'delete', 'tab', 2);
+        if (action === 'remove') return this._bulkDocOp(parsed, 'remove', 'tab', 2);
+        console.error(chalk.red(`Unknown tab action: ${action}`));
+        return 1;
     }
 
-    /**
-   * Handle tabs command (alias for tab list)
-   */
-    async handleTabs(parsed) {
-        return this.handleTabList(parsed);
-    }
+    // ── Notes ──
 
-    /**
-   * List tabs in context
-   */
-    async handleTabList(parsed) {
-        const contextAddress = await this.getCurrentContext(parsed.options);
-
-        try {
-            const options = {
-                featureArray: ['data/abstraction/tab'],
-            };
-            const response = await this.apiClient.getDocuments(
-                contextAddress,
-                'context',
-                options,
-            );
-            const tabs = response.payload || response.data || response;
-
-            await this.output(tabs, 'document', 'tab');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to list tabs: ${error.message}`);
-        }
-    }
-
-    /**
-   * Add a tab to context
-   */
-    async handleTabAdd(parsed) {
-        const url = parsed.args[2];
-        if (!url) {
-            throw new Error('URL is required for adding a tab');
-        }
-
-        const contextAddress = await this.getCurrentContext(parsed.options);
-        const title = parsed.options.title || url;
-
-        const tabDocument = {
-            schema: 'data/abstraction/tab',
-            data: {
-                url: url,
-                title: title,
-                timestamp: new Date().toISOString(),
-            },
-        };
-
-        try {
-            const featureArray = ['data/abstraction/tab'];
-            const response = await this.apiClient.createDocument(
-                contextAddress,
-                tabDocument,
-                'context',
-                featureArray,
-            );
-            const result = response.payload || response.data || response;
-
-            console.log(chalk.green(`✓ Tab added successfully`));
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to add tab: ${error.message}`);
-        }
-    }
-
-    /**
-   * Get a specific tab by ID
-   */
-    async handleTabGet(parsed) {
-        const documentId = parsed.args[2];
-        if (!documentId) {
-            throw new Error('Document ID is required');
-        }
-
-        const contextId = await this.getCurrentContext(parsed.options);
-
-        try {
-            const response = await this.apiClient.getDocument(
-                contextId,
-                documentId,
-                'context',
-            );
-            let document = response.payload || response.data || response;
-
-            // Extract document from nested response if needed
-            if (document && document.document) {
-                document = document.document;
-            }
-
-            await this.output(document, 'document', 'tab');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to get tab: ${error.message}`);
-        }
-    }
-
-    /**
-   * Delete tabs from database (permanent)
-   */
-    async handleTabDelete(parsed) {
-        const documentIds = parsed.args.slice(2); // Skip 'tab' and 'delete'
-        if (documentIds.length === 0) {
-            throw new Error('At least one document ID is required');
-        }
-
-        return this.handleDocumentOperation(
-            parsed,
-            documentIds,
-            'delete',
-            'data/abstraction/tab',
-            'tab',
-        );
-    }
-
-    /**
-   * Remove tabs from context (like removing symlinks)
-   */
-    async handleTabRemove(parsed) {
-        const documentIds = parsed.args.slice(2); // Skip 'tab' and 'remove'
-        if (documentIds.length === 0) {
-            throw new Error('At least one document ID is required');
-        }
-
-        return this.handleDocumentOperation(
-            parsed,
-            documentIds,
-            'remove',
-            'data/abstraction/tab',
-            'tab',
-        );
-    }
-
-    /**
-   * Handle note commands (list, add, delete, remove)
-   */
+    async handleNotes(parsed) { return this._listByType(parsed, 'note'); }
     async handleNote(parsed) {
         const action = parsed.args[1] || 'list';
-
-        if (action === 'list') {
-            return this.handleNoteList(parsed);
-        } else if (action === 'add') {
-            return this.handleNoteAdd(parsed);
-        } else if (action === 'get') {
-            return this.handleNoteGet(parsed);
-        } else if (action === 'delete') {
-            return this.handleNoteDelete(parsed);
-        } else if (action === 'remove') {
-            return this.handleNoteRemove(parsed);
-        } else {
-            console.error(chalk.red(`Unknown note action: ${action}`));
-            console.log(
-                chalk.yellow('Available actions: list, add, get, delete, remove'),
-            );
-            return 1;
-        }
+        if (action === 'list') return this._listByType(parsed, 'note');
+        if (action === 'add') return this._addDoc(parsed, 'note', 2);
+        if (action === 'get') return this._getDoc(parsed, 2);
+        if (action === 'delete') return this._bulkDocOp(parsed, 'delete', 'note', 2);
+        if (action === 'remove') return this._bulkDocOp(parsed, 'remove', 'note', 2);
+        console.error(chalk.red(`Unknown note action: ${action}`));
+        return 1;
     }
 
-    /**
-   * Handle notes command (alias for note list)
-   */
-    async handleNotes(parsed) {
-        return this.handleNoteList(parsed);
-    }
+    // ── Document commands ──
 
-    /**
-   * List notes in context
-   */
-    async handleNoteList(parsed) {
-        const contextAddress = await this.getCurrentContext(parsed.options);
-
-        try {
-            const options = {
-                featureArray: ['data/abstraction/note'],
-            };
-            const response = await this.apiClient.getDocuments(
-                contextAddress,
-                'context',
-                options,
-            );
-            const notes = response.payload || response.data || response;
-
-            await this.output(notes, 'document', 'note');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to list notes: ${error.message}`);
-        }
-    }
-
-    /**
-   * Add a note to context
-   */
-    async handleNoteAdd(parsed) {
-        const noteText = parsed.args[2];
-        if (!noteText) {
-            throw new Error('Note text is required');
-        }
-
-        const contextAddress = await this.getCurrentContext(parsed.options);
-        const title =
-      parsed.options.title || `Note - ${new Date().toLocaleString()}`;
-
-        const noteDocument = {
-            schema: 'data/abstraction/note',
-            data: {
-                content: noteText,
-                title: title,
-                timestamp: new Date().toISOString(),
-            },
-        };
-
-        try {
-            const featureArray = ['data/abstraction/note'];
-            const response = await this.apiClient.createDocument(
-                contextAddress,
-                noteDocument,
-                'context',
-                featureArray,
-            );
-
-            // Handle ResponseObject format
-            const result = response.payload || response.data || response;
-
-            console.log(chalk.green(`✓ Note added successfully`));
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to add note: ${error.message}`);
-        }
-    }
-
-    /**
-   * Get a specific note by ID
-   */
-    async handleNoteGet(parsed) {
-        const documentId = parsed.args[2];
-        if (!documentId) {
-            throw new Error('Document ID is required');
-        }
-
-        const contextId = await this.getCurrentContext(parsed.options);
-
-        try {
-            const response = await this.apiClient.getDocument(
-                contextId,
-                documentId,
-                'context',
-            );
-
-            // Handle ResponseObject format
-            let document = response.payload || response.data || response;
-
-            // Extract document from nested response if needed
-            if (document && document.document) {
-                document = document.document;
-            }
-
-            await this.output(document, 'document', 'note');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to get note: ${error.message}`);
-        }
-    }
-
-    /**
-   * Delete notes from database (permanent)
-   */
-    async handleNoteDelete(parsed) {
-        const documentIds = parsed.args.slice(2); // Skip 'note' and 'delete'
-        if (documentIds.length === 0) {
-            throw new Error('At least one document ID is required');
-        }
-
-        return this.handleDocumentOperation(
-            parsed,
-            documentIds,
-            'delete',
-            'data/abstraction/note',
-            'note',
-        );
-    }
-
-    /**
-   * Remove notes from context (like removing symlinks)
-   */
-    async handleNoteRemove(parsed) {
-        const documentIds = parsed.args.slice(2); // Skip 'note' and 'remove'
-        if (documentIds.length === 0) {
-            throw new Error('At least one document ID is required');
-        }
-
-        return this.handleDocumentOperation(
-            parsed,
-            documentIds,
-            'remove',
-            'data/abstraction/note',
-            'note',
-        );
-    }
-
-    /**
-   * Handle document commands (delete, remove)
-   */
     async handleDocument(parsed) {
         const action = parsed.args[1] || 'list';
+        if (action === 'get') return this._getDoc(parsed, 2);
+        if (action === 'delete') return this._bulkDocOp(parsed, 'delete', 'document', 2);
+        if (action === 'remove') return this._bulkDocOp(parsed, 'remove', 'document', 2);
+        console.error(chalk.red(`Unknown document action: ${action}`));
+        return 1;
+    }
 
-        if (action === 'get') {
-            return this.handleDocumentGet(parsed);
-        } else if (action === 'delete') {
-            return this.handleDocumentDelete(parsed);
-        } else if (action === 'remove') {
-            return this.handleDocumentRemove(parsed);
+    // ── Shared document helpers ──
+
+    async _listByType(parsed, type) {
+        const addr = await this.getCurrentContext(parsed.options);
+        const { api, id } = await this.client.resolve(addr);
+        const docs = await api.get(`/contexts/${id}/documents`, { featureArray: `data/abstraction/${type}` });
+        await this.output(docs, 'document', type);
+        return 0;
+    }
+
+    async _addDoc(parsed, type, argOffset) {
+        const value = parsed.args[argOffset];
+        if (!value) throw new Error(`${type === 'tab' ? 'URL' : 'Text'} required`);
+
+        const addr = await this.getCurrentContext(parsed.options);
+        const { api, id } = await this.client.resolve(addr);
+
+        const doc = { schema: `data/abstraction/${type}`, data: { timestamp: new Date().toISOString() } };
+        if (type === 'tab') {
+            doc.data.url = value;
+            doc.data.title = parsed.options.title || value;
         } else {
-            console.error(chalk.red(`Unknown document action: ${action}`));
-            console.log(chalk.yellow('Available actions: get, delete, remove'));
-            return 1;
+            doc.data.content = value;
+            doc.data.title = parsed.options.title || `Note - ${new Date().toLocaleString()}`;
         }
+
+        await api.post(`/contexts/${id}/documents`, {
+            documents: [doc],
+            featureArray: [`data/abstraction/${type}`, 'client/app/canvas-cli'],
+        });
+        console.log(chalk.green(`${type} added`));
+        return 0;
     }
 
-    /**
-   * Get a specific document by ID
-   */
-    async handleDocumentGet(parsed) {
-        const documentId = parsed.args[2];
-        if (!documentId) {
-            throw new Error('Document ID is required');
-        }
-
-        const contextId = await this.getCurrentContext(parsed.options);
-
-        try {
-            const response = await this.apiClient.getDocument(
-                contextId,
-                documentId,
-                'context',
-            );
-
-            // Handle ResponseObject format
-            let document = response.payload || response.data || response;
-
-            // Extract document from nested response if needed
-            if (document && document.document) {
-                document = document.document;
-            }
-
-            await this.output(document, 'document');
-            return 0;
-        } catch (error) {
-            throw new Error(`Failed to get document: ${error.message}`);
-        }
+    async _getDoc(parsed, argOffset) {
+        const docId = parsed.args[argOffset];
+        if (!docId) throw new Error('Document ID required');
+        const addr = await this.getCurrentContext(parsed.options);
+        const { api, id } = await this.client.resolve(addr);
+        const doc = await api.get(`/contexts/${id}/documents/${docId}`);
+        await this.output(doc?.document || doc, 'document');
+        return 0;
     }
 
-    /**
-   * Delete documents from database (permanent)
-   */
-    async handleDocumentDelete(parsed) {
-        const documentIds = parsed.args.slice(2); // Skip 'document' and 'delete'
-        if (documentIds.length === 0) {
-            throw new Error('At least one document ID is required');
-        }
+    async _bulkDocOp(parsed, operation, docType, argOffset) {
+        const ids = parsed.args.slice(argOffset);
+        if (ids.length === 0) throw new Error('At least one document ID required');
 
-        return this.handleDocumentOperation(
-            parsed,
-            documentIds,
-            'delete',
-            null,
-            'document',
-        );
+        const addr = await this.getCurrentContext(parsed.options);
+        const { api, id } = await this.client.resolve(addr);
+
+        const endpoint = operation === 'delete'
+            ? `/contexts/${id}/documents`
+            : `/contexts/${id}/documents/remove`;
+
+        const result = await api.del(endpoint, ids);
+        const successful = result?.successful || ids;
+        const failed = result?.failed || [];
+
+        const label = operation === 'delete' ? 'deleted' : 'removed';
+        if (successful.length) {
+            console.log(chalk.green(`${successful.length} ${docType}(s) ${label}`));
+        }
+        if (failed.length) {
+            console.log(chalk.red(`${failed.length} ${docType}(s) failed`));
+            failed.forEach((f) => console.log(chalk.red(`  ${f.id || f}: ${f.error || 'unknown'}`)));
+        }
+        return failed.length === ids.length ? 1 : 0;
     }
 
-    /**
-   * Remove documents from context (like removing symlinks)
-   */
-    async handleDocumentRemove(parsed) {
-        const documentIds = parsed.args.slice(2); // Skip 'document' and 'remove'
-        if (documentIds.length === 0) {
-            throw new Error('At least one document ID is required');
-        }
+    // ── Helpers ──
 
-        return this.handleDocumentOperation(
-            parsed,
-            documentIds,
-            'remove',
-            null,
-            'document',
-        );
+    async _tryCurrentRemote() {
+        try { return await this.client.currentRemote(); }
+        catch { return null; }
     }
 
-    /**
-   * Generic handler for document operations (delete/remove)
-   */
-    async handleDocumentOperation(
-        parsed,
-        documentIds,
-        operation,
-        featureArray,
-        docType,
-    ) {
-        const contextId = await this.getCurrentContext(parsed.options);
-
-        try {
-            let response;
-            let successful = [];
-            let failed = [];
-
-            // Always use bulk operations to get proper response format
-            if (operation === 'delete') {
-                response = await this.apiClient.deleteDocuments(
-                    contextId,
-                    documentIds,
-                    'context',
-                );
-            } else {
-                response = await this.apiClient.removeDocuments(
-                    contextId,
-                    documentIds,
-                    'context',
-                );
-            }
-
-            // Parse the API response to extract successful and failed operations
-            const payload = response.payload || response.data || response;
-
-            if (payload && typeof payload === 'object') {
-                // Handle the detailed response format from SynapsD
-                if (Array.isArray(payload.successful)) {
-                    successful = payload.successful.map((item) =>
-                        typeof item === 'object' ? item.id : item,
-                    );
-                }
-
-                if (Array.isArray(payload.failed)) {
-                    failed = payload.failed.map((item) => ({
-                        id: typeof item === 'object' ? item.id : item,
-                        error: typeof item === 'object' ? item.error : 'Unknown error',
-                    }));
-                }
-            }
-
-            // Fallback: if no detailed response format, assume all succeeded if no exception
-            if (successful.length === 0 && failed.length === 0) {
-                successful = documentIds;
-            }
-
-            // Report results
-            const operationText =
-        operation === 'delete'
-            ? 'deleted from database'
-            : 'removed from context';
-
-            if (successful.length > 0) {
-                if (successful.length === 1) {
-                    console.log(
-                        chalk.green(`✓ ${docType} '${successful[0]}' ${operationText}`),
-                    );
-                } else {
-                    console.log(
-                        chalk.green(`✓ ${successful.length} ${docType}s ${operationText}:`),
-                    );
-                    successful.forEach((id) => console.log(chalk.green(`  - ${id}`)));
-                }
-            }
-
-            if (failed.length > 0) {
-                console.log(
-                    chalk.red(`✗ Failed to ${operation} ${failed.length} ${docType}(s):`),
-                );
-                failed.forEach(({ id, error }) => {
-                    console.log(chalk.red(`  - ${id}: ${error}`));
-                });
-            }
-
-            // Return error code if all operations failed, success if any succeeded
-            return failed.length === documentIds.length ? 1 : 0;
-        } catch (error) {
-            throw new Error(`Failed to ${operation} ${docType}s: ${error.message}`);
-        }
+    async _cachedContexts() {
+        const cached = await this.client.store.getContexts();
+        return Object.entries(cached)
+            .map(([key, ctx]) => {
+                const [remoteId, ctxId] = key.includes(':') ? key.split(':', 2) : ['local', key];
+                return { address: remoteId, id: ctxId, ...ctx };
+            })
+            .sort((a, b) => a.address.localeCompare(b.address) || (a.id || '').localeCompare(b.id || ''));
     }
 
-    /**
-   * Show help
-   */
     showHelp() {
         console.log(chalk.bold('Context Commands:'));
-        console.log('  (no args)             Show current context (default)');
         console.log('  current               Show current context');
         console.log('  list                  List all contexts');
-        console.log(
-            '  show [id]             Show context details (current if no ID)',
-        );
-        console.log('  create <id> [url]     Create new context with optional URL');
-        console.log('  destroy <id>          Delete a context');
-        console.log('  switch <id>           Switch to context (alias: bind)');
-        console.log('  bind <id>             Bind to context (alias: switch)');
-        console.log('  set <url>             Set the context URL');
-        console.log('  url [id]              Get the context URL');
-        console.log('  base-url [id]         Get the base URL for context');
-        console.log('  path [id]             Get the context path');
-        console.log('  paths                 Get all available context paths');
-        console.log('  tree [id]             Show context tree for workspace');
-        console.log('  workspace [id]        Get the context workspace');
+        console.log('  show [id]             Show context details');
+        console.log('  create <id> [url]     Create context');
+        console.log('  destroy <id>          Delete context');
+        console.log('  switch/bind <id>      Switch to context');
+        console.log('  set <url>             Set context URL');
+        console.log('  url/path [id]         Get URL/path');
+        console.log('  paths                 List all tree paths');
+        console.log('  tree [id]             Show tree');
         console.log('  update <id>           Update context');
         console.log();
-        console.log(chalk.bold('Document Commands:'));
-        console.log('  documents [search]    List all documents in context (with optional search)');
-        console.log('  tab list              List tabs in context');
-        console.log('  tabs                  List tabs in context (alias)');
-        console.log('  tab add <url>         Add a tab to context');
-        console.log('  tab get <id>          Get a specific tab by ID');
-        console.log(
-            '  tab delete <id...>    Delete tabs from database (permanent)',
-        );
-        console.log('  tab remove <id...>    Remove tabs from context');
-        console.log('  note list             List notes in context');
-        console.log('  notes                 List notes in context (alias)');
-        console.log('  note add <text>       Add a note to context');
-        console.log('  note get <id>         Get a specific note by ID');
-        console.log(
-            '  note delete <id...>   Delete notes from database (permanent)',
-        );
-        console.log('  note remove <id...>   Remove notes from context');
-        console.log('  document get <id>     Get a specific document by ID');
-        console.log(
-            '  document delete <id...> Delete documents from database (permanent)',
-        );
-        console.log('  document remove <id...> Remove documents from context');
-        console.log();
-        console.log(chalk.bold('Address Format:'));
-        console.log('  user@remote:context              Full resource address');
-        console.log(
-            '  context                          Short form (uses default remote)',
-        );
-        console.log();
-        console.log(chalk.bold('Options:'));
-        console.log('  --description <desc>             Context description');
-        console.log('  --color <value>                  Context color');
-        console.log(
-            '  --metadata <json>                Context metadata (JSON string)',
-        );
-        console.log(
-            '  --title <title>                  Title for documents (e.g., tabs, notes)',
-        );
-        console.log(
-            '  --force                          Force deletion without confirmation',
-        );
-        console.log();
-        console.log(chalk.bold('Search Options (for documents command):'));
-        console.log('  --feature <feature>              Filter by feature (can be used multiple times)');
-        console.log('  --filter <filter>                Apply filter (can be used multiple times)');
-        console.log();
-        console.log(chalk.bold('Examples:'));
-        console.log(
-            '  canvas context                               # Show current context',
-        );
-        console.log(
-            '  canvas context list                         # List contexts from default remote',
-        );
-        console.log(
-            '  canvas context create my-project            # Create on default remote',
-        );
-        console.log(
-            '  canvas context create work-proj work://acme-org/devops/jira-1234',
-        );
-        console.log(
-            '  canvas context switch admin@canvas.local:my-project  # Full address',
-        );
-        console.log(
-            '  canvas context switch my-project           # Uses default remote',
-        );
-        console.log(
-            '  canvas context destroy user@work.server:old-project --force',
-        );
-        console.log(
-            '  canvas context notes                        # List notes in current context',
-        );
-        console.log(
-            '  canvas context note add "Remember to check logs" --title "Important"',
-        );
-        console.log();
-        console.log(chalk.bold('Document Examples:'));
-        console.log('  canvas context documents');
-        console.log('  canvas context documents "search query"');
-        console.log('  canvas context documents "search" --feature data/abstraction/tab --filter timeline/today');
-        console.log('  canvas context dotfiles');
-        console.log('  canvas context tabs');
-        console.log(
-            '  canvas context tab add https://example.com --title "Example Site"',
-        );
-        console.log('  canvas context tab get 12345');
-        console.log('  canvas context tab delete 12345');
-        console.log('  canvas context tab remove 12345 67890');
-        console.log('  canvas context note get 11111');
-        console.log('  canvas context note delete 11111 22222');
-        console.log('  canvas context document get 33333');
-        console.log('  canvas context document remove 33333 44444 55555');
-        console.log();
-        console.log(chalk.bold('Architecture:'));
-        console.log('  • Contexts are views/filters on top of your data');
-        console.log(
-            '  • Context URLs: workspace://path (e.g., work://acme-org/devops/jira-1234)',
-        );
-        console.log('  • Default workspace is "universe" for relative paths');
-        console.log('  • Delete = permanent removal from database');
-        console.log(
-            '  • Remove = remove from context only (like removing symlinks)',
-        );
-        console.log(
-            '  • For contexts: only destroy is available (removes entire context)',
-        );
-        console.log('  • For documents: both delete and remove are available');
-        console.log();
-        console.log(
-            chalk.cyan(
-                'Note: Set up remotes first with: canvas remote add <user@remote> <url>',
-            ),
-        );
-        console.log(
-            chalk.cyan(
-                '      Then bind to default: canvas remote bind <user@remote>',
-            ),
-        );
-        console.log(
-            chalk.cyan(
-                '      Aliases can be used in place of full addresses: canvas alias set prod user@remote:context',
-            ),
-        );
+        console.log(chalk.bold('Documents:'));
+        console.log('  documents [search]    List/search documents');
+        console.log('  tab list/add/get/delete/remove');
+        console.log('  note list/add/get/delete/remove');
+        console.log('  document get/delete/remove');
+        console.log('  dotfiles              List dotfiles');
     }
 }
 
