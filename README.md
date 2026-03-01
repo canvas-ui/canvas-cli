@@ -18,7 +18,7 @@ A command-line interface for managing Canvas workspaces, contexts, dotfiles and 
 **Quick install with our script:**
 
 ```bash
-# One-liner installation (Linux/macOS)
+# One-liner "trust-me-bro" installation (Linux/macOS)
 curl -sSL https://raw.githubusercontent.com/canvas-ai/canvas-cli/main/scripts/install.sh | bash
 
 # (Optional) Install prompt update script
