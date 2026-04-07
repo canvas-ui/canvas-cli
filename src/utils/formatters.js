@@ -802,22 +802,27 @@ export class DocumentFormatter extends BaseFormatter {
         const table = new Table({
             head: [
                 chalk.cyan('ID'),
-                chalk.cyan('Schema'),
-                chalk.cyan('Local Path'),
                 chalk.cyan('Repo Path'),
                 chalk.cyan('Type'),
+                chalk.cyan('Device Links'),
             ],
             style: { head: [], border: [] },
         });
 
         data.forEach((doc) => {
             const dotfileData = doc.data || {};
+            const links = dotfileData.links || {};
+            const linkCount = Object.keys(links).length;
+            const linkSummary = linkCount === 0
+                ? chalk.gray('none')
+                : Object.entries(links)
+                    .map(([deviceId, localPath]) => `${chalk.dim(deviceId)}: ${localPath}`)
+                    .join('\n');
             table.push([
                 doc.id || 'N/A',
-                doc.schema || 'N/A',
-                dotfileData.localPath || 'N/A',
                 dotfileData.repoPath || 'N/A',
                 dotfileData.type || 'file',
+                linkSummary,
             ]);
         });
 
