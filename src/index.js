@@ -13,6 +13,7 @@ import AliasCommand from './commands/alias.js';
 import DotCommand from './commands/dot.js';
 import QCommand from './commands/q.js';
 import ServerCommand from './commands/server.js';
+import AgentCommand from './commands/agent.js';
 
 const VERSION = '2.0.0-alpha';
 
@@ -26,6 +27,8 @@ const COMMANDS = {
     q: QCommand,
     dot: DotCommand,
     server: ServerCommand,
+    agent: AgentCommand,
+    agents: AgentCommand,
 };
 
 const PLURAL_ALIASES = ['remotes', 'contexts', 'workspaces'];
@@ -118,6 +121,7 @@ function showHelp() {
     console.log('  alias             Resource aliases');
     console.log('  q                 AI assistant');
     console.log('  dot               Dotfile manager');
+    console.log('  agent, agents     List/query Canvas agents');
     console.log();
     console.log(chalk.bold('Global Options:'));
     console.log('  -h, --help        Show help');

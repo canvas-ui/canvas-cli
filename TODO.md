@@ -24,8 +24,8 @@
     - bind
 - `canvas agent`, alias `canvas ag`, command alias `ag` and `hi`
   - Subcommands:
-    - list
-    - bind
+    - list: list agents
+    - 
   - Examples:
     - hi lucy "whats the weather today" 
     - hi carmack "any new PRs to review?"
@@ -44,6 +44,12 @@
     - set configName var.path
     - get configName var.path
     - test configName
+
+## Output formats
+
+- table (default where applicable)
+- json
+- csv
 
 ## Utilities
 

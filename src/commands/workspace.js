@@ -2,6 +2,7 @@
 
 import chalk from 'chalk';
 import BaseCommand from './base.js';
+import { buildListDocumentsParams, normalizeDocumentList } from '../utils/api-helpers.js';
 
 export class WorkspaceCommand extends BaseCommand {
     get skipConnectionFor() { return ['list']; }
@@ -158,15 +159,16 @@ export class WorkspaceCommand extends BaseCommand {
         const search = parsed.args[2] || null;
         const { api, id } = await this.client.resolve(addr);
 
-        const params = {};
-        if (search) params.q = search;
-        if (parsed.options.feature) params.featureArray = [].concat(parsed.options.feature);
-        if (parsed.options.filter) params.filterArray = [].concat(parsed.options.filter);
-        if (parsed.options['context-path']) params.contextSpec = parsed.options['context-path'];
+        const params = buildListDocumentsParams({
+            q: search || undefined,
+            feature: parsed.options.feature,
+            filter: parsed.options.filter,
+            context: parsed.options['context-path'],
+            treeNameOrTreeId: parsed.options.tree,
+        });
 
         const docs = await api.get(`/workspaces/${id}/documents`, params);
-        const list = docs?.data && Array.isArray(docs.data) ? docs.data : docs;
-        await this.output(list, 'document');
+        await this.output(normalizeDocumentList(docs), 'document');
         return 0;
     }
 
@@ -174,9 +176,11 @@ export class WorkspaceCommand extends BaseCommand {
         const addr = parsed.args[1];
         if (!addr) throw new Error('Workspace address required');
         const { api, id } = await this.client.resolve(addr);
-        const docs = await api.get(`/workspaces/${id}/documents`, { featureArray: 'data/abstraction/dotfile' });
-        const list = docs?.data && Array.isArray(docs.data) ? docs.data : docs;
-        await this.output(list, 'document', 'dotfile');
+        const docs = await api.get(
+            `/workspaces/${id}/documents`,
+            buildListDocumentsParams({ feature: 'data/abstraction/dotfile' }),
+        );
+        await this.output(normalizeDocumentList(docs), 'document', 'dotfile');
         return 0;
     }
 
@@ -184,8 +188,11 @@ export class WorkspaceCommand extends BaseCommand {
         const addr = parsed.args[1];
         if (!addr) throw new Error('Workspace address required');
         const { api, id } = await this.client.resolve(addr);
-        const docs = await api.get(`/workspaces/${id}/documents`, { featureArray: 'data/abstraction/tab' });
-        await this.output(docs, 'document', 'tab');
+        const docs = await api.get(
+            `/workspaces/${id}/documents`,
+            buildListDocumentsParams({ feature: 'data/abstraction/tab' }),
+        );
+        await this.output(normalizeDocumentList(docs), 'document', 'tab');
         return 0;
     }
 
@@ -193,8 +200,11 @@ export class WorkspaceCommand extends BaseCommand {
         const addr = parsed.args[1];
         if (!addr) throw new Error('Workspace address required');
         const { api, id } = await this.client.resolve(addr);
-        const docs = await api.get(`/workspaces/${id}/documents`, { featureArray: 'data/abstraction/note' });
-        await this.output(docs, 'document', 'note');
+        const docs = await api.get(
+            `/workspaces/${id}/documents`,
+            buildListDocumentsParams({ feature: 'data/abstraction/note' }),
+        );
+        await this.output(normalizeDocumentList(docs), 'document', 'note');
         return 0;
     }
 

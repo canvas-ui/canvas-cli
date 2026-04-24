@@ -20,6 +20,17 @@ export class AuthCommand extends BaseCommand {
 
         this.config.set('server.auth.token', token);
         this.config.set('server.auth.type', 'jwt');
+
+        try {
+            const session = await this.client.store.getSession();
+            if (session.boundRemote) {
+                await this.client.store.updateRemote(session.boundRemote, {
+                    auth: { method: 'token', tokenType: 'jwt', token },
+                });
+                this.client.clearCache();
+            }
+        } catch { /* ignore */ }
+
         console.log(chalk.green(`Logged in as ${user.name || user.email}`));
         return 0;
     }
@@ -65,6 +76,15 @@ export class AuthCommand extends BaseCommand {
             this.config.set('server.auth.token', token.token);
             this.config.set('server.auth.type', 'token');
             console.log(chalk.green('Token saved to config'));
+            try {
+                const session = await this.client.store.getSession();
+                if (session.boundRemote) {
+                    await this.client.store.updateRemote(session.boundRemote, {
+                        auth: { method: 'token', tokenType: 'jwt', token: token.token },
+                    });
+                    this.client.clearCache();
+                }
+            } catch { /* ignore */ }
         }
         return 0;
     }
@@ -89,6 +109,16 @@ export class AuthCommand extends BaseCommand {
         this.config.set('server.auth.token', token);
         this.config.set('server.auth.type', 'token');
         console.log(chalk.green('API token set'));
+
+        try {
+            const session = await this.client.store.getSession();
+            if (session.boundRemote) {
+                await this.client.store.updateRemote(session.boundRemote, {
+                    auth: { method: 'token', tokenType: 'jwt', token },
+                });
+                this.client.clearCache();
+            }
+        } catch { /* ignore */ }
 
         try {
             await this.client.ping();

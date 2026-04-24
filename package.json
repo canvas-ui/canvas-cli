@@ -11,7 +11,8 @@
     "ctx": "bin/context",
     "dot": "bin/dot",
     "q": "bin/q",
-    "ws": "bin/ws"
+    "ws": "bin/ws",
+    "agent": "bin/agent.js"
   },
   "scripts": {
     "lint": "eslint \"**/*.js\"",

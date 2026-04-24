@@ -2,7 +2,7 @@
 
 import axios from 'axios';
 import os from 'os';
-import { remoteStore } from './utils/config.js';
+import config, { remoteStore } from './utils/config.js';
 import { parseResourceAddress, extractRemoteIdentifier } from './utils/address-parser.js';
 
 /**
@@ -155,9 +155,11 @@ export class CanvasClient {
             throw new Error(`Remote '${remoteId}' not found. Add: canvas remote add ${remoteId} <url>`);
         }
 
+        const token = remote.auth?.token || config.get('server.auth.token') || '';
+
         const client = new RemoteClient(
-            remote.url + (remote.apiBase || '/rest/v2'),
-            remote.auth?.token || '',
+            remote.url.replace(/\/$/, '') + (remote.apiBase || '/rest/v2'),
+            token,
             {
                 onDeviceToken: async (token, deviceId) => {
                     const r = await this.store.getRemote(remoteId);
