@@ -2,6 +2,7 @@
 
 import chalk from 'chalk';
 import BaseCommand from './base.js';
+import { buildListDocumentsParams, normalizeDocumentList } from '../utils/api-helpers.js';
 
 export class ContextCommand extends BaseCommand {
     get skipConnectionFor() { return ['list']; }
@@ -221,21 +222,25 @@ export class ContextCommand extends BaseCommand {
         }
 
         const { api, id } = await this.client.resolve(addr);
-        const params = {};
-        if (search) params.q = search;
-        if (parsed.options.feature) params.featureArray = [].concat(parsed.options.feature);
-        if (parsed.options.filter) params.filterArray = [].concat(parsed.options.filter);
+        const params = buildListDocumentsParams({
+            q: search || undefined,
+            feature: parsed.options.feature,
+            filter: parsed.options.filter,
+        });
 
         const docs = await api.get(`/contexts/${id}/documents`, params);
-        await this.output(docs, 'document');
+        await this.output(normalizeDocumentList(docs), 'document');
         return 0;
     }
 
     async handleDotfiles(parsed) {
         const addr = parsed.args[1] || await this.getCurrentContext(parsed.options);
         const { api, id } = await this.client.resolve(addr);
-        const docs = await api.get(`/contexts/${id}/documents`, { featureArray: 'data/abstraction/dotfile' });
-        await this.output(docs, 'document', 'dotfile');
+        const docs = await api.get(
+            `/contexts/${id}/documents`,
+            buildListDocumentsParams({ feature: 'data/abstraction/dotfile' }),
+        );
+        await this.output(normalizeDocumentList(docs), 'document', 'dotfile');
         return 0;
     }
 
@@ -285,8 +290,11 @@ export class ContextCommand extends BaseCommand {
     async _listByType(parsed, type) {
         const addr = await this.getCurrentContext(parsed.options);
         const { api, id } = await this.client.resolve(addr);
-        const docs = await api.get(`/contexts/${id}/documents`, { featureArray: `data/abstraction/${type}` });
-        await this.output(docs, 'document', type);
+        const docs = await api.get(
+            `/contexts/${id}/documents`,
+            buildListDocumentsParams({ feature: `data/abstraction/${type}` }),
+        );
+        await this.output(normalizeDocumentList(docs), 'document', type);
         return 0;
     }
 
@@ -308,7 +316,7 @@ export class ContextCommand extends BaseCommand {
 
         await api.post(`/contexts/${id}/documents`, {
             documents: [doc],
-            featureArray: [`data/abstraction/${type}`, 'client/app/canvas-cli'],
+            features: [`data/abstraction/${type}`, 'client/app/canvas-cli'],
         });
         console.log(chalk.green(`${type} added`));
         return 0;
