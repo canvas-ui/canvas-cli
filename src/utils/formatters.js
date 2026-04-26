@@ -994,6 +994,63 @@ export class AgentFormatter extends BaseFormatter {
         return table.toString();
     }
 
+    // ── Session context (GET /agents/:id/session) ──
+
+    formatSessionContext(ctx) {
+        if (!ctx) return chalk.yellow('No session data');
+        const table = new Table({ style: { head: [], border: [] } });
+        table.push([chalk.cyan('Mode'),      ctx.mode || 'N/A']);
+        if (ctx.sessionId)   table.push([chalk.cyan('Session ID'),   ctx.sessionId]);
+        if (ctx.sessionFile) table.push([chalk.cyan('Session File'), ctx.sessionFile]);
+        table.push([chalk.cyan('Thinking'),  ctx.thinkingLevel || 'N/A']);
+        if (ctx.model) {
+            const m = ctx.model;
+            table.push([chalk.cyan('Model'), `${m.provider || ''}/${m.modelId || m.id || ''}`]);
+        }
+        const msgs = Array.isArray(ctx.messages) ? ctx.messages : [];
+        table.push([chalk.cyan('Messages'),  String(msgs.length)]);
+        return table.toString();
+    }
+
+    // ── Session list (GET /agents/:id/sessions) ──
+
+    formatSessionList(data) {
+        const sessions = data?.sessions || (Array.isArray(data) ? data : []);
+        if (!sessions.length) return chalk.yellow('No sessions');
+
+        const currentId = data?.currentSessionId || null;
+
+        const table = new Table({
+            head: [
+                chalk.cyan(''),
+                chalk.cyan('Name'),
+                chalk.cyan('Created'),
+                chalk.cyan('Updated'),
+                chalk.cyan('Messages'),
+                chalk.cyan('Experimental'),
+            ],
+            style: { head: [], border: [] },
+        });
+
+        for (const s of sessions) {
+            const isCurrent = s.isCurrent || s.id === currentId;
+            const marker    = isCurrent ? chalk.green('●') : '';
+            const expMark   = s.isExperimental ? chalk.yellow('yes') : 'no';
+            table.push([
+                marker,
+                s.name || chalk.gray('(unnamed)'),
+                s.createdAt ? this.formatDate(s.createdAt) : '',
+                s.updatedAt ? this.formatDate(s.updatedAt) : '',
+                String(s.messageCount ?? ''),
+                expMark,
+            ]);
+        }
+
+        const lines = [table.toString()];
+        if (data?.mode) lines.unshift(chalk.gray(`Mode: ${data.mode}`));
+        return lines.join('\n');
+    }
+
     formatStatus(status) {
         const map = {
             active:    chalk.green,
