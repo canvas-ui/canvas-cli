@@ -952,10 +952,10 @@ export class AgentFormatter extends BaseFormatter {
             head: [
                 chalk.cyan('Name'),
                 chalk.cyan('Label'),
+                chalk.cyan('Remote'),
                 chalk.cyan('Status'),
                 chalk.cyan('Provider'),
                 chalk.cyan('Model'),
-                chalk.cyan('Color'),
                 chalk.cyan('Updated'),
             ],
             style: { head: [], border: [] },
@@ -965,10 +965,10 @@ export class AgentFormatter extends BaseFormatter {
             table.push([
                 a.name || a.id || 'N/A',
                 a.label || '',
+                a.host || '',
                 this.formatStatus(a.status),
                 a.llmProvider || 'N/A',
                 this.truncate(a.model || 'N/A', 28),
-                this.formatColor(a.color),
                 a.updatedAt ? this.formatDate(a.updatedAt) : '',
             ]);
         }
