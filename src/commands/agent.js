@@ -14,6 +14,7 @@ const SUBCOMMANDS = new Set([
 
 export class AgentCommand extends BaseCommand {
     get defaultAction() { return 'list'; }
+    get skipConnectionFor() { return ['list']; }
 
     /**
      * If the first arg is not a known subcommand, treat it as "agentname[@remote] message..."
@@ -65,9 +66,11 @@ export class AgentCommand extends BaseCommand {
     // ── List ──
 
     async handleList() {
-        const api = await this.client.api();
-        const agents = await api.get('/agents');
-        const rows = Array.isArray(agents) ? agents : [];
+        const remoteId = await this._tryCurrentRemote();
+        if (remoteId && await this.client.isReachable(remoteId)) {
+            await this.client.sync(remoteId, { contexts: false, workspaces: false, agents: true });
+        }
+        const rows = await this._cachedAgents();
         await this.output(rows, 'agent');
         return 0;
     }
@@ -230,6 +233,23 @@ export class AgentCommand extends BaseCommand {
         const spec = parsed.args[1];
         if (!spec) throw new Error('Agent name required');
         return this._runPrompt(parsed, spec, parsed.args.slice(2));
+    }
+
+    // ── Helpers ──
+
+    async _tryCurrentRemote() {
+        try { return await this.client.currentRemote(); }
+        catch { return null; }
+    }
+
+    async _cachedAgents() {
+        const cached = await this.client.store.getAgents();
+        return Object.entries(cached)
+            .map(([key, agent]) => {
+                const [remoteId] = key.includes(':') ? key.split(':', 2) : ['local', key];
+                return { remote: remoteId, ...agent };
+            })
+            .sort((a, b) => (a.remote || '').localeCompare(b.remote || '') || (a.name || '').localeCompare(b.name || ''));
     }
 
     // ── Help ──
