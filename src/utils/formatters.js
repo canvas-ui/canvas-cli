@@ -965,7 +965,7 @@ export class AgentFormatter extends BaseFormatter {
             table.push([
                 a.name || a.id || 'N/A',
                 a.label || '',
-                a.host || '',
+                a.remote || a.host || '',
                 this.formatStatus(a.status),
                 a.llmProvider || 'N/A',
                 this.truncate(a.model || 'N/A', 28),
