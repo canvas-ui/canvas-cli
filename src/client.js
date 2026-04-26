@@ -240,7 +240,7 @@ export class CanvasClient {
 
     // ── Sync (one implementation to rule them all) ──
 
-    async sync(remoteId, { contexts = true, workspaces = true, silent = true } = {}) {
+    async sync(remoteId, { contexts = true, workspaces = true, agents = true, silent = true } = {}) {
         const api = await this.api(remoteId);
         const info = await api.get('/ping');
 
@@ -285,6 +285,24 @@ export class CanvasClient {
                 }
             }
             if (!silent) console.log(`    Synced ${list.length} contexts`);
+        }
+
+        if (agents) {
+            const ag = await api.get('/agents');
+            const list = Array.isArray(ag) ? ag : [];
+            const keys = new Set();
+            for (const a of list) {
+                const key = `${remoteId}:${a.id || a.name}`;
+                keys.add(key);
+                await this.store.updateAgent(key, a);
+            }
+            const local = await this.store.getAgents();
+            for (const k of Object.keys(local)) {
+                if (k.startsWith(`${remoteId}:`) && !keys.has(k)) {
+                    await this.store.removeAgent(k);
+                }
+            }
+            if (!silent) console.log(`    Synced ${list.length} agents`);
         }
 
         await this.store.updateRemote(remoteId, { lastSynced: new Date().toISOString() });
