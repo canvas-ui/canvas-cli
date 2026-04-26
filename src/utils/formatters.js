@@ -938,6 +938,89 @@ export class RemoteFormatter extends BaseFormatter {
 }
 
 /**
+ * Agent formatter
+ */
+export class AgentFormatter extends BaseFormatter {
+    formatTable(data) {
+        if (!Array.isArray(data)) return this.formatDetailedTable(data);
+        if (!data.length) return chalk.yellow('No agents found');
+        return this.formatListTable(data);
+    }
+
+    formatListTable(data) {
+        const table = new Table({
+            head: [
+                chalk.cyan('Name'),
+                chalk.cyan('Label'),
+                chalk.cyan('Status'),
+                chalk.cyan('Provider'),
+                chalk.cyan('Model'),
+                chalk.cyan('Color'),
+                chalk.cyan('Updated'),
+            ],
+            style: { head: [], border: [] },
+        });
+
+        for (const a of data) {
+            table.push([
+                a.name || a.id || 'N/A',
+                a.label || '',
+                this.formatStatus(a.status),
+                a.llmProvider || 'N/A',
+                this.truncate(a.model || 'N/A', 28),
+                this.formatColor(a.color),
+                a.updatedAt ? this.formatDate(a.updatedAt) : '',
+            ]);
+        }
+
+        return table.toString();
+    }
+
+    formatDetailedTable(a) {
+        if (!a) return chalk.yellow('No agent data');
+        const table = new Table({ style: { head: [], border: [] } });
+        table.push([chalk.cyan('ID'),          a.id || 'N/A']);
+        table.push([chalk.cyan('Name'),        a.name || 'N/A']);
+        table.push([chalk.cyan('Label'),       a.label || '']);
+        table.push([chalk.cyan('Description'), a.description || '']);
+        table.push([chalk.cyan('Status'),      this.formatStatus(a.status)]);
+        table.push([chalk.cyan('Provider'),    a.llmProvider || 'N/A']);
+        table.push([chalk.cyan('Model'),       a.model || 'N/A']);
+        table.push([chalk.cyan('Color'),       this.formatColor(a.color)]);
+        table.push([chalk.cyan('Owner'),       a.owner || 'N/A']);
+        table.push([chalk.cyan('Created'),     this.formatDate(a.createdAt)]);
+        table.push([chalk.cyan('Updated'),     this.formatDate(a.updatedAt)]);
+        if (a.rootPath) table.push([chalk.cyan('Root'),  a.rootPath]);
+        return table.toString();
+    }
+
+    formatStatus(status) {
+        const map = {
+            active:    chalk.green,
+            inactive:  chalk.yellow,
+            error:     chalk.red,
+            available: chalk.blue,
+        };
+        if (!status) return 'N/A';
+        return (map[status] || chalk.white)(status);
+    }
+
+    formatColor(colorValue) {
+        if (!colorValue) return '';
+        try {
+            const hex = colorValue.replace('#', '');
+            if (!/^[0-9A-Fa-f]{6}$/.test(hex)) return colorValue;
+            const r = parseInt(hex.substr(0, 2), 16);
+            const g = parseInt(hex.substr(2, 2), 16);
+            const b = parseInt(hex.substr(4, 2), 16);
+            return chalk.rgb(r, g, b)(colorValue);
+        } catch {
+            return colorValue;
+        }
+    }
+}
+
+/**
  * Create formatter based on type
  */
 export function createFormatter(type, options = {}) {
@@ -952,6 +1035,8 @@ export function createFormatter(type, options = {}) {
             return new AuthFormatter(options);
         case 'remote':
             return new RemoteFormatter(options);
+        case 'agent':
+            return new AgentFormatter(options);
         default:
             return new BaseFormatter(options);
     }
@@ -964,5 +1049,6 @@ export default {
     DocumentFormatter,
     AuthFormatter,
     RemoteFormatter,
+    AgentFormatter,
     createFormatter,
 };
