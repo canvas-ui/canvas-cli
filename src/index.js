@@ -47,9 +47,11 @@ export async function main(argv = process.argv.slice(2)) {
         const args = minimist(argv, {
             string: ['context', 'workspace', 'format', 'title', 'tag', 'schema',
                 'connector', 'model', 'template', 'max-tokens', 'priority',
-                'label', 'description', 'color', 'llm-provider', 'api-key', 'base-url'],
+                'label', 'description', 'color', 'llm-provider', 'api-key', 'base-url',
+                'streaming-behavior'],
             boolean: ['help', 'version', 'raw', 'verbose', 'debug', 'code', 'quiet',
-                'show-prompt', 'show-prompt-only', 'update-dotfiles', 'encrypt', 'force'],
+                'show-prompt', 'show-prompt-only', 'update-dotfiles', 'encrypt', 'force',
+                'steer', 'follow-up'],
             alias: {
                 h: 'help', v: 'version', c: 'context', w: 'workspace',
                 f: 'format', t: 'title', s: 'schema', r: 'raw', d: 'debug',

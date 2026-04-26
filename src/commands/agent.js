@@ -58,7 +58,14 @@ export class AgentCommand extends BaseCommand {
         if (parsed.options.context)   meta.push(`Context: ${parsed.options.context}`);
         if (meta.length) message = `[${meta.join(', ')}]\n\n${message}`;
 
-        const out = await api.post(`/agents/${encodeURIComponent(agentName)}/prompt`, { message });
+        const streamingBehavior = parsed.options.steer || parsed.options['streaming-behavior'] === 'steer'
+            ? 'steer'
+            : 'followUp';
+        const out = await api.post(`/agents/${encodeURIComponent(agentName)}/prompt`, { message, streamingBehavior });
+        if (out?.queued && (!out.messages || out.messages.length === 0)) {
+            console.log(chalk.yellow(`Agent is busy; message accepted as ${out.streamingBehavior === 'steer' ? 'steering input' : 'follow-up'}.`));
+            return 0;
+        }
         this._printMessages(out?.messages || []);
         return 0;
     }
@@ -298,6 +305,7 @@ export class AgentCommand extends BaseCommand {
         console.log(chalk.bold('Prompt options:'));
         console.log('  --workspace <name>   Prepend workspace to message');
         console.log('  --context <path>     Prepend context to message');
+        console.log('  --steer              Steer active generation instead of queueing follow-up');
         console.log();
         console.log(chalk.bold('Examples:'));
         console.log("  canvas agent lucy \"what's the weather?\"");
