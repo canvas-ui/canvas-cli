@@ -67,8 +67,7 @@ export class AgentCommand extends BaseCommand {
         const api = await this.client.api();
         const agents = await api.get('/agents');
         const rows = Array.isArray(agents) ? agents : [];
-        if (!rows.length) { console.log(chalk.yellow('No agents')); return 0; }
-        await this.output(rows, 'generic');
+        await this.output(rows, 'agent');
         return 0;
     }
 
@@ -79,7 +78,7 @@ export class AgentCommand extends BaseCommand {
         if (!spec) throw new Error('Agent name required');
         const { api, agentName } = await this._resolve(spec);
         const agent = await api.get(`/agents/${encodeURIComponent(agentName)}`);
-        await this.output(agent, 'generic');
+        await this.output(agent, 'agent');
         return 0;
     }
 
