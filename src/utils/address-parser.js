@@ -196,6 +196,32 @@ export function determineResourceType(resource) {
 }
 
 /**
+ * Parse an agent address: agentname[@remote]
+ * @param {string} str
+ * @returns {{ agentName: string, remote: string|null }|null}
+ */
+export function parseAgentAddress(str) {
+    if (!str || typeof str !== 'string') return null;
+    const match = str.match(/^([^@\s]+)(?:@([^@\s]+))?$/);
+    if (!match) return null;
+    return { agentName: match[1], remote: match[2] || null };
+}
+
+/**
+ * Resolve a short remote name to a full remote ID.
+ * Tries exact match first, then suffix match (id ending with "@shortname").
+ * @param {string} shortname
+ * @param {Object} remotes - remotes store object keyed by remote ID
+ * @returns {string|null}
+ */
+export function resolveRemoteByShortname(shortname, remotes) {
+    if (!shortname || !remotes) return null;
+    if (remotes[shortname]) return shortname;
+    const suffix = '@' + shortname;
+    return Object.keys(remotes).find((id) => id.endsWith(suffix)) || null;
+}
+
+/**
  * Validate a resource address format
  * @param {string} address - Resource address to validate
  * @returns {boolean} True if valid format
@@ -277,4 +303,6 @@ export default {
     splitResourcePath,
     joinResourcePath,
     getBaseResourceAddress,
+    parseAgentAddress,
+    resolveRemoteByShortname,
 };
