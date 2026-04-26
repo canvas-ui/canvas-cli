@@ -213,6 +213,8 @@ create_alias_wrappers() {
 
     for name in "${names[@]}"; do
         local target="$INSTALL_DIR/$name"
+        # Remove any existing file or dangling symlink before writing
+        rm -f "$target"
         cat >"$target" <<EOF
 #!/usr/bin/env bash
 exec "$INSTALL_DIR/$BINARY_NAME" "$name" "\$@"
@@ -222,6 +224,71 @@ EOF
     done
 
     success "Created alias wrappers: ${created[*]}"
+}
+
+# Install from local source checkout (dev mode)
+install_local() {
+    local cli_dir="$1"
+    local runtime="$2"
+
+    log "Local install from: $cli_dir"
+    log "Runtime: $runtime"
+    log "Installing to: $INSTALL_DIR"
+
+    mkdir -p "$INSTALL_DIR" || error "Failed to create directory: $INSTALL_DIR"
+
+    # canvas — main entry
+    local canvas_bin="$cli_dir/bin/canvas.js"
+    [[ -f "$canvas_bin" ]] || error "canvas.js not found: $canvas_bin"
+
+    rm -f "$INSTALL_DIR/$BINARY_NAME"
+    cat >"$INSTALL_DIR/$BINARY_NAME" <<EOF
+#!/usr/bin/env bash
+exec $runtime "$canvas_bin" "\$@"
+EOF
+    chmod +x "$INSTALL_DIR/$BINARY_NAME"
+    success "Installed: $INSTALL_DIR/$BINARY_NAME"
+
+    # Named bin aliases — map name → bin script
+    declare -A BIN_MAP=(
+        [ws]="ws.js"
+        [ctx]="context.js"
+        [dot]="dot.js"
+        [q]="q.js"
+        [hi]="hi.js"
+        [agent]="agent.js"
+    )
+
+    local created=()
+    for name in "${!BIN_MAP[@]}"; do
+        local bin_file="$cli_dir/bin/${BIN_MAP[$name]}"
+        local target="$INSTALL_DIR/$name"
+        if [[ ! -f "$bin_file" ]]; then
+            warning "Skipping $name — bin file not found: $bin_file"
+            continue
+        fi
+        rm -f "$target"
+        cat >"$target" <<EOF
+#!/usr/bin/env bash
+exec $runtime "$bin_file" "\$@"
+EOF
+        chmod +x "$target"
+        created+=("$name")
+    done
+
+    success "Created wrappers: ${created[*]}"
+
+    # Verify
+    set +e
+    local ver
+    ver=$("$INSTALL_DIR/$BINARY_NAME" --version 2>&1)
+    local ec=$?
+    set -e
+    if [[ $ec -eq 0 ]] || [[ "$ver" =~ canvas-cli ]]; then
+        success "canvas-cli $ver"
+    else
+        error "Verification failed — binary not working after install"
+    fi
 }
 
 # Prompt helper (Y/n)
@@ -248,6 +315,17 @@ prompt_yes_no() {
     esac
 }
 
+# Detect available JS runtime (prefer bun, fall back to node)
+detect_runtime() {
+    if command -v bun >/dev/null 2>&1; then
+        echo "bun"
+    elif command -v node >/dev/null 2>&1; then
+        echo "node"
+    else
+        error "No JS runtime found — install bun or node"
+    fi
+}
+
 # Show usage help
 show_help() {
     cat << EOF
@@ -258,23 +336,42 @@ USAGE:
 
 OPTIONS:
     -h, --help          Show this help message
+    --local [dir]       Install from local source checkout (dev mode)
+                        dir defaults to parent of this script (the CLI package root)
 
 EXAMPLES:
-    # Install Canvas CLI locally
+    # Install latest GitHub release
     $0
 
-    # Install via curl
+    # Install via curl (GitHub release)
     curl -sSL https://raw.githubusercontent.com/canvas-ai/canvas-cli/main/scripts/install.sh | bash
+
+    # Dev install from this source tree
+    $0 --local
+
+    # Dev install from explicit path
+    $0 --local /path/to/canvas-cli
 
 EOF
 }
 
 # Parse command line arguments
+LOCAL_INSTALL=false
+LOCAL_DIR=""
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         --help|-h)
             show_help
             exit 0
+            ;;
+        --local)
+            LOCAL_INSTALL=true
+            if [[ -n "${2:-}" ]] && [[ "${2}" != --* ]]; then
+                LOCAL_DIR="$2"
+                shift
+            fi
+            shift
             ;;
         *)
             error "Unknown option: $1"
@@ -284,17 +381,23 @@ done
 
 # Main execution
 log "Canvas CLI Installation Script"
-log "Repository: https://github.com/$REPO"
 log "Installing to: $INSTALL_DIR"
 
-# Check system requirements
-check_dependencies
+if [[ "$LOCAL_INSTALL" == true ]]; then
+    # Resolve CLI source dir
+    if [[ -z "$LOCAL_DIR" ]]; then
+        LOCAL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    fi
+    [[ -f "$LOCAL_DIR/src/index.js" ]] || error "Not a canvas-cli source dir: $LOCAL_DIR"
 
-# Install Canvas CLI
-install_canvas
-
-# Create alias wrappers for dot, ws, ctx, q
-create_alias_wrappers
+    RUNTIME="$(detect_runtime)"
+    install_local "$LOCAL_DIR" "$RUNTIME"
+else
+    log "Repository: https://github.com/$REPO"
+    check_dependencies
+    install_canvas
+    create_alias_wrappers
+fi
 
 # Show PATH setup information if needed
 if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
