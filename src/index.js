@@ -27,8 +27,8 @@ const COMMANDS = {
     q: QCommand,
     dot: DotCommand,
     server: ServerCommand,
-    agent: AgentCommand,
-    agents: AgentCommand,
+    agent: AgentCommand, agents: AgentCommand,
+    hi: AgentCommand,
 };
 
 const PLURAL_ALIASES = ['remotes', 'contexts', 'workspaces'];
@@ -38,13 +38,15 @@ export async function main(argv = process.argv.slice(2)) {
     try {
         const args = minimist(argv, {
             string: ['context', 'workspace', 'format', 'title', 'tag', 'schema',
-                'connector', 'model', 'template', 'max-tokens', 'priority'],
+                'connector', 'model', 'template', 'max-tokens', 'priority',
+                'label', 'description', 'color', 'llm-provider', 'api-key', 'base-url'],
             boolean: ['help', 'version', 'raw', 'verbose', 'debug', 'code', 'quiet',
                 'show-prompt', 'show-prompt-only', 'update-dotfiles', 'encrypt', 'force'],
             alias: {
                 h: 'help', v: 'version', c: 'context', w: 'workspace',
                 f: 'format', t: 'title', s: 'schema', r: 'raw', d: 'debug',
                 q: 'quiet', u: 'update-dotfiles', e: 'encrypt', p: 'priority',
+                'lp': 'llm-provider',
             },
         });
 
@@ -121,7 +123,8 @@ function showHelp() {
     console.log('  alias             Resource aliases');
     console.log('  q                 AI assistant');
     console.log('  dot               Dotfile manager');
-    console.log('  agent, agents     List/query Canvas agents');
+    console.log('  agent, agents     Manage/query Canvas agents');
+    console.log('  hi                Shorthand agent prompt (alias for agent)');
     console.log();
     console.log(chalk.bold('Global Options:'));
     console.log('  -h, --help        Show help');

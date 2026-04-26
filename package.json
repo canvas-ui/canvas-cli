@@ -12,7 +12,8 @@
     "dot": "bin/dot",
     "q": "bin/q",
     "ws": "bin/ws",
-    "agent": "bin/agent.js"
+    "agent": "bin/agent.js",
+    "hi": "bin/hi.js"
   },
   "scripts": {
     "lint": "eslint \"**/*.js\"",

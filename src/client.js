@@ -3,7 +3,7 @@
 import axios from 'axios';
 import os from 'os';
 import config, { remoteStore } from './utils/config.js';
-import { parseResourceAddress, extractRemoteIdentifier } from './utils/address-parser.js';
+import { parseResourceAddress, extractRemoteIdentifier, resolveRemoteByShortname } from './utils/address-parser.js';
 
 /**
  * Unwrap the ResponseObject envelope, returning payload directly
@@ -181,6 +181,21 @@ export class CanvasClient {
             throw new Error('No default remote bound. Use: canvas remote bind <user@remote>');
         }
         return session.boundRemote;
+    }
+
+    /**
+     * Resolve a short remote name (e.g. "home", "work") to a stored remote ID.
+     * Tries exact match, then suffix match (remote ID ending with "@shortname").
+     * Returns the default remote when shortname is null/undefined.
+     */
+    async resolveRemoteByShortname(shortname) {
+        if (!shortname) return this.currentRemote();
+        const remotes = await this.store.getRemotes();
+        const found = resolveRemoteByShortname(shortname, remotes);
+        if (found) return found;
+        throw new Error(
+            `Remote '${shortname}' not found. Available: ${Object.keys(remotes).join(', ') || 'none'}`
+        );
     }
 
     /**
