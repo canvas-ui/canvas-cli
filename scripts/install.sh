@@ -206,7 +206,7 @@ create_alias_wrappers() {
             ;;
     esac
 
-    local -a names=("ws" "ctx" "dot" "q")
+    local -a names=("ws" "ctx" "dot" "q" "hi")
     local created=()
 
     mkdir -p "$INSTALL_DIR" || error "Failed to create directory: $INSTALL_DIR"
@@ -316,5 +316,8 @@ echo
 log "Quick start:"
 log "  canvas --version"
 log "  canvas --help"
-log "  canvas config show"
+log "  canvas remote add user@home http://localhost:8001"
+log "  canvas agents list"
+log "  hi lucy \"what's the weather?\""
+log "  tail -n500 /var/log/syslog | hi linus \"any errors?\""
 

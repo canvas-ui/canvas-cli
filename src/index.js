@@ -15,7 +15,7 @@ import QCommand from './commands/q.js';
 import ServerCommand from './commands/server.js';
 import AgentCommand from './commands/agent.js';
 
-const VERSION = '2.0.0-alpha';
+const VERSION = '2.1.0';
 
 const COMMANDS = {
     workspace: WorkspaceCommand, ws: WorkspaceCommand, workspaces: WorkspaceCommand,
