@@ -3,6 +3,7 @@
 import chalk from 'chalk';
 import BaseCommand from './base.js';
 import { parseAgentAddress } from '../utils/address-parser.js';
+import { AgentFormatter } from '../utils/formatters.js';
 
 const SUBCOMMANDS = new Set([
     'list', 'show', 'get', 'create', 'update', 'delete',
@@ -187,7 +188,12 @@ export class AgentCommand extends BaseCommand {
         if (!spec) throw new Error('Agent name required');
         const { api, agentName } = await this._resolve(spec);
         const session = await api.get(`/agents/${encodeURIComponent(agentName)}/session`);
-        await this.output(session, 'generic');
+        if (parsed.options.raw || parsed.options.format === 'json') {
+            await this.output(session, 'agent');
+        } else {
+            const fmt = new AgentFormatter({ format: parsed.options.format });
+            console.log(fmt.formatSessionContext(session));
+        }
         return 0;
     }
 
@@ -195,8 +201,13 @@ export class AgentCommand extends BaseCommand {
         const spec = parsed.args[1];
         if (!spec) throw new Error('Agent name required');
         const { api, agentName } = await this._resolve(spec);
-        const sessions = await api.get(`/agents/${encodeURIComponent(agentName)}/sessions`);
-        await this.output(sessions, 'generic');
+        const data = await api.get(`/agents/${encodeURIComponent(agentName)}/sessions`);
+        if (parsed.options.raw || parsed.options.format === 'json') {
+            await this.output(data, 'generic');
+        } else {
+            const fmt = new AgentFormatter({ format: parsed.options.format });
+            console.log(fmt.formatSessionList(data));
+        }
         return 0;
     }
 
