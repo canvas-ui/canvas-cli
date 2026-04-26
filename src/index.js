@@ -29,6 +29,14 @@ const COMMANDS = {
     server: ServerCommand,
     agent: AgentCommand, agents: AgentCommand,
     hi: AgentCommand,
+    login: RemoteCommand,
+    logout: RemoteCommand,
+};
+
+// Top-level shorthands that map to a subcommand on another handler
+const COMMAND_INJECT = {
+    login:  'login',
+    logout: 'logout',
 };
 
 const PLURAL_ALIASES = ['remotes', 'contexts', 'workspaces'];
@@ -65,6 +73,11 @@ export async function main(argv = process.argv.slice(2)) {
         if (cmd && COMMANDS[cmd]) {
             const instance = new COMMANDS[cmd]();
             const parsed = parseInput(args);
+
+            // Inject subcommand for top-level shorthands (e.g. `canvas login` → remote login)
+            if (COMMAND_INJECT[cmd]) {
+                parsed.args = [COMMAND_INJECT[cmd], ...parsed.args];
+            }
 
             if (PLURAL_ALIASES.includes(cmd) && parsed.args.length === 0) {
                 parsed.args = ['list'];
@@ -118,6 +131,8 @@ function showHelp() {
     console.log('  workspace, ws     Manage workspaces');
     console.log('  context, ctx      Manage contexts');
     console.log('  auth              Authentication & tokens');
+    console.log('  login [remote]    Login to default or named remote');
+    console.log('  logout [remote]   Logout from default or named remote');
     console.log('  config            CLI configuration');
     console.log('  remote            Manage remote servers');
     console.log('  alias             Resource aliases');

@@ -238,14 +238,12 @@ export class RemoteCommand extends BaseCommand {
     // ── Login / Logout ──
 
     async handleLogin(parsed) {
-        const remoteId = parsed.args[1];
-        if (!remoteId) throw new Error('Remote identifier required');
+        const remoteId = parsed.args[1] || await this.client.currentRemote();
         return this._performLogin(remoteId, parsed.options);
     }
 
     async handleLogout(parsed) {
-        const remoteId = parsed.args[1];
-        if (!remoteId) throw new Error('Remote identifier required');
+        const remoteId = parsed.args[1] || await this.client.currentRemote();
         const remote = await this.client.store.getRemote(remoteId);
         if (!remote) throw new Error(`Remote '${remoteId}' not found`);
 
@@ -392,8 +390,8 @@ export class RemoteCommand extends BaseCommand {
         console.log('  sync [user@remote]         Sync (or all)');
         console.log('  ping <user@remote>         Test connectivity');
         console.log('  bind <user@remote>         Set as default');
-        console.log('  login <user@remote>        Login');
-        console.log('  logout <user@remote>       Logout');
+        console.log('  login [user@remote]        Login (default remote if omitted)');
+        console.log('  logout [user@remote]       Logout (default remote if omitted)');
         console.log('  rename <old> <new>         Rename');
         console.log('  show <user@remote>         Show details');
         console.log('  current                    Show current');
