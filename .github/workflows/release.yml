@@ -3,10 +3,10 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'  # Triggers on version tags like v1.0.0, v1.2.3-beta.1, etc.
+      - 'v*'
 
 permissions:
-  contents: write  # Required for creating releases and uploading assets
+  contents: write
 
 jobs:
   build-and-release:
@@ -14,216 +14,80 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v1
+    - uses: oven-sh/setup-bun@v1
       with:
         bun-version: latest
 
     - name: Install dependencies
       run: bun install
 
-    - name: Extract version from tag
-      id: extract_version
+    - name: Extract version
+      id: ver
       run: |
         VERSION=${GITHUB_REF#refs/tags/v}
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
-    - name: Update version in source
+    - name: Stamp version in package.json
       run: |
-        sed -i "s/version: '2.0.0-alpha'/version: '${{ steps.extract_version.outputs.version }}'/" src/index.js
+        node -e "
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
+          pkg.version = '${{ steps.ver.outputs.version }}';
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+        "
 
     - name: Build all platforms
       run: |
-        echo "Building for all platforms..."
-
-        # Ensure dist directory exists and has proper permissions
         mkdir -p dist
-        chmod 755 dist
+        bun run build:linux
+        bun run build:linux-arm
+        bun run build:macos
+        bun run build:macos-arm
+        bun run build:windows
 
-        echo "🔨 Building Linux x64..."
-        bun run build:linux || (echo "❌ Linux x64 build failed" && exit 1)
-
-        echo "🔨 Building Linux ARM64..."
-        bun run build:linux-arm || (echo "❌ Linux ARM64 build failed" && exit 1)
-
-        echo "🔨 Building macOS x64..."
-        bun run build:macos || (echo "❌ macOS x64 build failed" && exit 1)
-
-        echo "🔨 Building macOS ARM64..."
-        bun run build:macos-arm || (echo "❌ macOS ARM64 build failed" && exit 1)
-
-                echo "🔨 Building Windows x64..."
-        bun run build:windows || (echo "❌ Windows x64 build failed" && exit 1)
-
-        # Fix Windows binary permissions (Bun cross-compilation bug)
-        echo "🔧 Fixing Windows binary permissions..."
-        chmod 755 dist/canvas-windows.exe || (echo "❌ Failed to fix Windows binary permissions" && exit 1)
-
-        echo "✅ All builds completed successfully!"
-
-        # Verify all expected files exist
-        echo "🔍 Verifying build outputs..."
-        ls -la dist/
-
-        for file in canvas-linux canvas-linux-arm canvas-macos canvas-macos-arm canvas-windows.exe; do
-          if [ ! -f "dist/$file" ]; then
-            echo "❌ Missing expected build output: dist/$file"
-            exit 1
-          else
-            echo "✅ Found: dist/$file"
-          fi
-        done
-
-    - name: Test binaries
+    - name: Smoke Linux binary
       run: |
-        echo "Testing Linux binary..."
         ./dist/canvas-linux --version
-        echo "Binary tests passed!"
+        ./dist/canvas-linux --help
 
-    - name: Prepare release assets
+    - name: Package release assets
       run: |
+        V=${{ steps.ver.outputs.version }}
         mkdir -p release-assets
-
-        # Copy binaries with proper names
-        echo "📦 Copying binaries to release assets..."
-
-        echo "Copying Linux x64..."
-        cp dist/canvas-linux release-assets/canvas-linux-x64 || (echo "❌ Failed to copy Linux x64 binary" && exit 1)
-
-        echo "Copying Linux ARM64..."
-        cp dist/canvas-linux-arm release-assets/canvas-linux-arm64 || (echo "❌ Failed to copy Linux ARM64 binary" && exit 1)
-
-        echo "Copying macOS x64..."
-        cp dist/canvas-macos release-assets/canvas-macos-x64 || (echo "❌ Failed to copy macOS x64 binary" && exit 1)
-
-        echo "Copying macOS ARM64..."
-        cp dist/canvas-macos-arm release-assets/canvas-macos-arm64 || (echo "❌ Failed to copy macOS ARM64 binary" && exit 1)
-
-        echo "Copying Windows x64..."
-        cp dist/canvas-windows.exe release-assets/canvas-windows-x64.exe || (echo "❌ Failed to copy Windows x64 binary" && exit 1)
-
-        echo "✅ All binaries copied successfully!"
-
-        # Create compressed archives
+        cp dist/canvas-linux       release-assets/canvas-linux-x64
+        cp dist/canvas-linux-arm   release-assets/canvas-linux-arm64
+        cp dist/canvas-macos       release-assets/canvas-macos-x64
+        cp dist/canvas-macos-arm   release-assets/canvas-macos-arm64
+        cp dist/canvas-windows.exe release-assets/canvas-windows-x64.exe
         cd release-assets
-
-        # Linux
-        tar -czf canvas-${{ steps.extract_version.outputs.version }}-linux-x64.tar.gz canvas-linux-x64
-        tar -czf canvas-${{ steps.extract_version.outputs.version }}-linux-arm64.tar.gz canvas-linux-arm64
-
-        # macOS
-        tar -czf canvas-${{ steps.extract_version.outputs.version }}-macos-x64.tar.gz canvas-macos-x64
-        tar -czf canvas-${{ steps.extract_version.outputs.version }}-macos-arm64.tar.gz canvas-macos-arm64
-
-        # Windows
-        zip canvas-${{ steps.extract_version.outputs.version }}-windows-x64.zip canvas-windows-x64.exe
-
-        # Create checksums
+        tar -czf canvas-${V}-linux-x64.tar.gz    canvas-linux-x64
+        tar -czf canvas-${V}-linux-arm64.tar.gz  canvas-linux-arm64
+        tar -czf canvas-${V}-macos-x64.tar.gz    canvas-macos-x64
+        tar -czf canvas-${V}-macos-arm64.tar.gz  canvas-macos-arm64
+        zip      canvas-${V}-windows-x64.zip     canvas-windows-x64.exe
         sha256sum *.tar.gz *.zip > checksums.txt
 
-        ls -la
-
-    - name: Generate release notes
-      id: release_notes
-      run: |
-        cat > release_notes.md << 'EOF'
-        ## Canvas CLI ${{ steps.extract_version.outputs.tag }}
-
-        ### Download
-
-        Choose the appropriate binary for your platform:
-
-        | Platform | Architecture | Download |
-        |----------|-------------|----------|
-        | Linux | x64 | [canvas-${{ steps.extract_version.outputs.version }}-linux-x64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.extract_version.outputs.tag }}/canvas-${{ steps.extract_version.outputs.version }}-linux-x64.tar.gz) |
-        | Linux | ARM64 | [canvas-${{ steps.extract_version.outputs.version }}-linux-arm64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.extract_version.outputs.tag }}/canvas-${{ steps.extract_version.outputs.version }}-linux-arm64.tar.gz) |
-        | macOS | x64 | [canvas-${{ steps.extract_version.outputs.version }}-macos-x64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.extract_version.outputs.tag }}/canvas-${{ steps.extract_version.outputs.version }}-macos-x64.tar.gz) |
-        | macOS | ARM64 (Apple Silicon) | [canvas-${{ steps.extract_version.outputs.version }}-macos-arm64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.extract_version.outputs.tag }}/canvas-${{ steps.extract_version.outputs.version }}-macos-arm64.tar.gz) |
-        | Windows | x64 | [canvas-${{ steps.extract_version.outputs.version }}-windows-x64.zip](https://github.com/${{ github.repository }}/releases/download/${{ steps.extract_version.outputs.tag }}/canvas-${{ steps.extract_version.outputs.version }}-windows-x64.zip) |
-
-        ### Installation
-
-        1. Download the appropriate archive for your platform
-        2. Extract the binary
-        3. Make it executable (Linux/macOS): `chmod +x canvas-*`
-        4. Optionally, move to a directory in your PATH
-
-        ### Quick Start
-
-        ```bash
-        # Linux/macOS
-        ./canvas-linux-x64 --version
-        ./canvas-linux-x64 --help
-
-        # Windows
-        canvas-windows-x64.exe --version
-        canvas-windows-x64.exe --help
-        ```
-
-        ### Features
-
-        - ✅ Standalone binaries (no runtime dependencies)
-        - ✅ Cross-platform support
-        - ✅ Full Canvas CLI functionality
-        - ✅ AI assistant integration
-        - ✅ Context and workspace management
-
-        ### Verification
-
-        Verify download integrity using the provided checksums:
-        ```bash
-        sha256sum -c checksums.txt
-        ```
-        EOF
-
-        echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
-        cat release_notes.md >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
-
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
+    - name: Create release
+      uses: softprops/action-gh-release@v2
       with:
-        tag_name: ${{ steps.extract_version.outputs.tag }}
-        name: Canvas CLI ${{ steps.extract_version.outputs.tag }}
-        body: ${{ steps.release_notes.outputs.RELEASE_NOTES }}
+        tag_name: ${{ steps.ver.outputs.tag }}
+        name: Canvas CLI ${{ steps.ver.outputs.tag }}
         draft: false
-        prerelease: ${{ contains(steps.extract_version.outputs.version, '-') }}
+        prerelease: ${{ contains(steps.ver.outputs.version, '-') }}
+        generate_release_notes: true
         files: |
           release-assets/*.tar.gz
           release-assets/*.zip
           release-assets/checksums.txt
         token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Cleanup old releases
+    - name: Prune old releases (keep 5)
       run: |
-        echo "🧹 Cleaning up old releases (keeping last 5)..."
-
-        # Get all releases sorted by creation date (newest first)
         gh release list --limit 100 --json tagName,createdAt \
-          --jq 'sort_by(.createdAt) | reverse | .[5:] | .[].tagName' > old_releases.txt
-
-        # Count releases to delete
-        RELEASES_TO_DELETE=$(wc -l < old_releases.txt)
-
-        if [ "$RELEASES_TO_DELETE" -gt 0 ]; then
-          echo "Found $RELEASES_TO_DELETE old releases to delete:"
-          cat old_releases.txt
-
-          # Delete old releases
-          while IFS= read -r tag; do
-            if [ -n "$tag" ]; then
-              echo "🗑️  Deleting release: $tag"
-              gh release delete "$tag" --yes --cleanup-tag || echo "⚠️  Failed to delete $tag"
-            fi
-          done < old_releases.txt
-
-          echo "✅ Cleanup completed!"
-        else
-          echo "✅ No old releases to clean up (less than 5 total releases)"
-        fi
+          --jq 'sort_by(.createdAt) | reverse | .[5:] | .[].tagName' \
+          | xargs -I{} gh release delete {} --yes --cleanup-tag 2>/dev/null || true
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

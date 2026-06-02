@@ -2,7 +2,7 @@ name: Build and Test
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, dev ]
   pull_request:
     branches: [ main ]
 
@@ -12,53 +12,48 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v1
+    - uses: oven-sh/setup-bun@v1
       with:
         bun-version: latest
 
     - name: Install dependencies
       run: bun install
 
-    - name: Run linter
+    - name: Lint
       run: bun run lint
 
-    - name: Test CLI functionality
+    - name: Smoke CLI
       run: |
-        bun run src/index.js --version
-        bun run src/index.js --help
-        bun run src/index.js config show --format json
+        bun run bin/canvas.js --version
+        bun run bin/canvas.js --help
+        bun run bin/canvas.js config path
 
   build-dev:
-    name: Build Development Binary
+    name: Build dev binary
     runs-on: ubuntu-latest
     needs: test
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v1
+    - uses: oven-sh/setup-bun@v1
       with:
         bun-version: latest
 
     - name: Install dependencies
       run: bun install
 
-    - name: Build development binary
+    - name: Build
       run: bun run build:dev
 
-    - name: Test binary
+    - name: Smoke binary
       run: |
         ./dist/canvas-dev --version
         ./dist/canvas-dev --help
 
-    - name: Upload development binary
-      uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v4
       with:
         name: canvas-dev-linux
         path: dist/canvas-dev
