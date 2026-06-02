@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-// hi <agent[@remote]> [message...] → canvas agent <agent[@remote]> [message...]
-import { main } from '../src/index.js';
+import { main } from '../src/core/cli.js';
 
 const args = process.argv.slice(2);
 if (!args.length) {
@@ -12,8 +11,8 @@ if (!args.length) {
 }
 
 main(['agent', ...args])
-    .then(process.exit)
-    .catch((error) => {
-        console.error(error.message || error);
+    .then((code) => process.exit(code || 0))
+    .catch((err) => {
+        console.error(err.message || err);
         process.exit(1);
     });

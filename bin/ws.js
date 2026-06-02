@@ -1,18 +1,11 @@
 #!/usr/bin/env node
+'use strict';
 
-// Auto-prefix with 'workspace' command
-import { main } from '../src/index.js';
+import { main } from '../src/core/cli.js';
 
-// Get command line arguments, skip node and script name
-const args = process.argv.slice(2);
-
-// Prepend 'workspace' to the arguments
-const workspaceArgs = ['workspace', ...args];
-
-// Call main with the prefixed arguments
-main(workspaceArgs)
-    .then(process.exit)
-    .catch((error) => {
-        console.error(error);
+main(['workspace', ...process.argv.slice(2)])
+    .then((code) => process.exit(code || 0))
+    .catch((err) => {
+        console.error(err.message || err);
         process.exit(1);
     });
