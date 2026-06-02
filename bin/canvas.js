@@ -1,28 +1,17 @@
 #!/usr/bin/env node
+'use strict';
 
-import { main } from '../src/index.js';
+import { main } from '../src/core/cli.js';
 
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+process.on('unhandledRejection', (reason) => {
+    console.error('Unhandled rejection:', reason);
     process.exit(1);
 });
 
-// Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
-    console.error('Uncaught Exception:', error);
-    process.exit(1);
-});
-
-// Run the main CLI function and handle exit codes
 main(process.argv.slice(2))
-    .then((exitCode) => {
-        process.exit(exitCode || 0);
-    })
-    .catch((error) => {
-        console.error('CLI Error:', error.message);
-        if (process.env.DEBUG) {
-            console.error(error.stack);
-        }
+    .then((code) => process.exit(code || 0))
+    .catch((err) => {
+        console.error(err.message || err);
+        if (process.env.DEBUG) console.error(err.stack);
         process.exit(1);
     });

@@ -1,14 +1,8 @@
 #!/usr/bin/env node
+'use strict';
 
-// Auto-prefix with 'context' command
-import { main } from '../src/index.js';
+import { main } from '../src/core/cli.js';
 
-const args = process.argv.slice(2);
-const ctxArgs = ['context', ...args];
-
-main(ctxArgs)
-    .then(process.exit)
-    .catch((error) => {
-        console.error(error);
-        process.exit(1);
-    });
+main(['context', ...process.argv.slice(2)])
+    .then((code) => process.exit(code || 0))
+    .catch((err) => { console.error(err.message || err); process.exit(1); });
