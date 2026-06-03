@@ -17,7 +17,7 @@ warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 
 # Configuration
-REPO="canvas-ai/canvas-cli"
+REPO="canvas-ui/canvas-cli"
 INSTALL_DIR="$HOME/.local/bin"
 BINARY_NAME="canvas"
 
@@ -56,7 +56,7 @@ get_latest_release() {
     fi
 
     if [[ -z "$tag_name" ]]; then
-        error "Failed to get latest release information from GitHub"
+        return 1
     fi
 
     echo "$tag_name"
@@ -84,7 +84,8 @@ check_dependencies() {
 # Download and install binary
 install_canvas() {
     local platform=$(detect_platform)
-    local version=$(get_latest_release)
+    local version
+    version=$(get_latest_release) || error "Failed to get latest release information from GitHub"
     local extension="tar.gz"
     local filename="canvas-${version#v}-${platform}.${extension}"
     local download_url="https://github.com/${REPO}/releases/download/${version}/${filename}"
@@ -344,7 +345,7 @@ EXAMPLES:
     $0
 
     # Install via curl (GitHub release)
-    curl -sSL https://raw.githubusercontent.com/canvas-ai/canvas-cli/main/scripts/install.sh | bash
+    curl -sSL https://raw.githubusercontent.com/canvas-ui/canvas-cli/main/scripts/install.sh | bash
 
     # Dev install from this source tree
     $0 --local
