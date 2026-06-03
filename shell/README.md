@@ -1,7 +1,7 @@
 # Canvas Shell
 
 Simple set of command-line utilities for interacting with Canvas API from your terminal.
-For a more streamlined experience, use [canvas-cli](https://github.com/canvas-ai/canvas-cli) (assuming, its ready :)
+For a more streamlined experience, use [canvas-cli](https://github.com/canvas-ui/canvas-cli) (assuming, its ready :)
 
 ## CLI Functions
 
