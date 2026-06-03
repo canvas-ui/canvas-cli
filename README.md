@@ -10,20 +10,20 @@ A command-line interface for managing Canvas workspaces, contexts, dotfiles and 
 
 | Platform | Architecture | Download |
 | --- | --- | --- |
-| **Linux** | x64 | [📦 canvas-linux-x64.tar.gz](https://github.com/canvas-ai/canvas-cli/releases/latest) |
-| **Linux** | ARM64 | [📦 canvas-linux-arm64.tar.gz](https://github.com/canvas-ai/canvas-cli/releases/latest) |
-| **macOS** | x64 | [📦 canvas-macos-x64.tar.gz](https://github.com/canvas-ai/canvas-cli/releases/latest) |
-| **macOS** | ARM64 (Apple Silicon) | [📦 canvas-macos-arm64.tar.gz](https://github.com/canvas-ai/canvas-cli/releases/latest) |
+| **Linux** | x64 | [📦 canvas-linux-x64.tar.gz](https://github.com/canvas-ui/canvas-cli/releases/latest) |
+| **Linux** | ARM64 | [📦 canvas-linux-arm64.tar.gz](https://github.com/canvas-ui/canvas-cli/releases/latest) |
+| **macOS** | x64 | [📦 canvas-macos-x64.tar.gz](https://github.com/canvas-ui/canvas-cli/releases/latest) |
+| **macOS** | ARM64 (Apple Silicon) | [📦 canvas-macos-arm64.tar.gz](https://github.com/canvas-ui/canvas-cli/releases/latest) |
 
 **Quick install with our script:**
 
 ```bash
 # One-liner "trust-me-bro" installation (Linux/macOS)
-curl -sSL https://raw.githubusercontent.com/canvas-ai/canvas-cli/main/scripts/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/canvas-ui/canvas-cli/main/scripts/install.sh | bash
 
 # (Optional) Install prompt update script
 mkdir -p ~/.canvas/scripts
-curl -sSL https://raw.githubusercontent.com/canvas-ai/canvas-cli/refs/heads/main/scripts/update-prompt.sh -o ~/.canvas/scripts/update-prompt.sh
+curl -sSL https://raw.githubusercontent.com/canvas-ui/canvas-cli/refs/heads/main/scripts/update-prompt.sh -o ~/.canvas/scripts/update-prompt.sh
 chmod +x ~/.canvas/scripts/update-prompt.sh
 
 # Add to bashrc
@@ -47,7 +47,7 @@ sudo mv canvas-* ~/.local/bin/canvas
 
 #### Git clone this repository
 
-`git clone https://github.com/canvas-ai/canvas-cli ~/path/to/canvas-cli` `cd ~/path/to/canvas-cli`
+`git clone https://github.com/canvas-ui/canvas-cli ~/path/to/canvas-cli` `cd ~/path/to/canvas-cli`
 
 #### Linux/Mac
 
