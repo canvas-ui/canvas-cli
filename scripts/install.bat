@@ -5,7 +5,7 @@ setlocal enabledelayedexpansion
 :: Simple local installation with verification
 
 :: Configuration
-set "REPO=canvas-ai/canvas-cli"
+set "REPO=canvas-ui/canvas-cli"
 set "INSTALL_DIR=%USERPROFILE%\.local\bin"
 set "BINARY_NAME=canvas.exe"
 
@@ -49,7 +49,7 @@ echo     # Install Canvas CLI locally
 echo     %~nx0
 echo.
 echo     # Install via curl
-echo     curl -sSL https://raw.githubusercontent.com/canvas-ai/canvas-cli/main/scripts/install.bat ^| cmd
+echo     curl -sSL https://raw.githubusercontent.com/canvas-ui/canvas-cli/main/scripts/install.bat ^| cmd
 echo.
 goto :eof
 

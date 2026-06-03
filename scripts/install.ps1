@@ -21,7 +21,7 @@ function Write-Warning { param($Message) Write-Host "[WARNING] $Message" -Foregr
 function Write-Error { param($Message) Write-Host "[ERROR] $Message" -ForegroundColor $Red; exit 1 }
 
 # Configuration
-$Repo = "canvas-ai/canvas-cli"
+$Repo = "canvas-ui/canvas-cli"
 $DefaultInstallDir = "$env:USERPROFILE\.local\bin"
 $BinaryName = "canvas.exe"
 
