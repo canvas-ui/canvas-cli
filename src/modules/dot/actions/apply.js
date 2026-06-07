@@ -7,7 +7,6 @@ import { ensureCloned } from '../lib/repo.js';
 import { findByRepoPath } from '../lib/docs.js';
 import { expandHome, symlinkInto, isAppliedSymlink } from '../lib/fsops.js';
 import device from '../lib/device.js';
-import { CanvasError } from '../../../core/errors.js';
 
 export default {
     name: 'apply',

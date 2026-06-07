@@ -4,7 +4,7 @@ export default {
     name: 'current',
     description: 'Show workspace of current context',
     needsConnection: false,
-    async run({ client, session, io }) {
+    async run({ _client, session, io }) {
         const ctx = session.boundContext();
         if (!ctx) { io.warn('No context bound'); return; }
         const url = session.get('boundContextUrl');

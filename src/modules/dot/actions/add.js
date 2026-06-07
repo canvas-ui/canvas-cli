@@ -4,7 +4,6 @@ import { existsSync, lstatSync, copyFileSync, mkdirSync, cpSync, rmSync } from '
 import { dirname, basename, resolve, join } from 'node:path';
 import { resolveHandle } from '../lib/handle.js';
 import { ensureCloned } from '../lib/repo.js';
-import { localRepoDir } from '../lib/paths.js';
 import { expandHome, collapseHome } from '../lib/fsops.js';
 import { findByRepoPath } from '../lib/docs.js';
 import device from '../lib/device.js';

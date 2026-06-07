@@ -8,7 +8,7 @@ export default {
     aliases: ['switch'],
     description: 'Bind to a context',
     needsConnection: false,
-    async run({ parent, client, session, io }) {
+    async run({ parent, _client, session, io }) {
         if (!parent.context) throw new UsageError('Context address required');
         const { id, full, api } = parent.context;
         let url = null;
