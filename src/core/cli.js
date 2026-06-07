@@ -1,8 +1,5 @@
 'use strict';
 
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import chalk from 'chalk';
 
 import { parseGlobal } from './parser.js';
@@ -13,13 +10,10 @@ import { CanvasClient } from './transport/rest.js';
 import session from './session.js';
 import { remotes as remotesStore } from './storage.js';
 import { CanvasError, UsageError, AuthError } from './errors.js';
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-const PKG_PATH = join(HERE, '..', '..', 'package.json');
+import pkg from '../../package.json' with { type: 'json' };
 
 function readVersion() {
-    try { return JSON.parse(readFileSync(PKG_PATH, 'utf8')).version; }
-    catch { return '0.0.0'; }
+    return pkg.version || '0.0.0';
 }
 
 export async function main(argv = process.argv.slice(2)) {
