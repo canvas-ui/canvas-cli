@@ -11,7 +11,8 @@ import { loadRegistry } from './registry.js';
 import { dispatch } from './dispatcher.js';
 import { CanvasClient } from './transport/rest.js';
 import session from './session.js';
-import { CanvasError, UsageError } from './errors.js';
+import { remotes as remotesStore } from './storage.js';
+import { CanvasError, UsageError, AuthError } from './errors.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PKG_PATH = join(HERE, '..', '..', 'package.json');
@@ -64,7 +65,24 @@ export async function main(argv = process.argv.slice(2)) {
             console.error(chalk.dim('Run `canvas --help` for available commands.'));
             return 2;
         }
+        if (err instanceof AuthError) {
+            printNotConnected();
+            if (process.env.DEBUG) console.error(err.stack);
+            return 1;
+        }
         if (err instanceof CanvasError) {
+            const cause = err.cause;
+            const isNetErr = cause && (
+                cause.code === 'ECONNREFUSED' ||
+                cause.code === 'ENOTFOUND' ||
+                cause.code === 'ETIMEDOUT' ||
+                cause.code === 'ECONNRESET'
+            );
+            if (isNetErr) {
+                printConnectionFailed(err);
+                if (process.env.DEBUG) console.error(err.stack);
+                return 1;
+            }
             console.error(chalk.red(`Error: ${err.message}`));
             if (process.env.DEBUG) console.error(err.stack);
             return 1;
@@ -73,6 +91,59 @@ export async function main(argv = process.argv.slice(2)) {
         if (process.env.DEBUG) console.error(err.stack);
         return 1;
     }
+}
+
+function printNotConnected() {
+    const allRemotes = remotesStore.read();
+    const remoteList = Object.entries(allRemotes);
+    const boundId = session.boundRemote();
+
+    console.error('');
+    if (remoteList.length === 0) {
+        console.error(chalk.yellow('Not connected — no remotes configured.'));
+        console.error('');
+        console.error('Get started by adding a remote server:');
+        console.error('  ' + chalk.cyan('canvas remote add <name> <url>'));
+        console.error('  ' + chalk.cyan('canvas remote bind <name>'));
+    } else if (!boundId) {
+        console.error(chalk.yellow('Not connected — no active remote.'));
+        console.error('');
+        console.error(chalk.bold('Available remotes:'));
+        for (const [id, cfg] of remoteList) {
+            console.error(`  ${id.padEnd(20)} ${chalk.dim(cfg.url || '')}`);
+        }
+        console.error('');
+        console.error('Connect with: ' + chalk.cyan('canvas remote bind <name>'));
+    } else {
+        console.error(chalk.yellow(`Not connected to remote '${boundId}'.`));
+        console.error('');
+        console.error('  ' + chalk.cyan('canvas remote ping') + '    Test the connection');
+        console.error('  ' + chalk.cyan('canvas remote list') + '    List all remotes');
+    }
+    console.error('');
+}
+
+function printConnectionFailed(err) {
+    const allRemotes = remotesStore.read();
+    const boundId = session.boundRemote();
+    const remote = boundId ? allRemotes[boundId] : null;
+
+    console.error('');
+    if (remote) {
+        console.error(chalk.yellow(`Cannot reach remote '${boundId}' (${remote.url})`));
+        console.error(chalk.dim(err.message));
+    } else {
+        console.error(chalk.yellow(`Connection failed: ${err.message}`));
+    }
+    console.error('');
+    console.error('Troubleshooting:');
+    console.error('  ' + chalk.cyan('canvas remote ping') + '    Test the connection');
+    console.error('  ' + chalk.cyan('canvas remote list') + '    List all remotes');
+    const url = remote?.url || '';
+    if (url.includes('localhost') || url.includes('127.0.0.1')) {
+        console.error('  ' + chalk.cyan('canvas server start') + '   Start the local server');
+    }
+    console.error('');
 }
 
 function showHelp(registry, io) {
