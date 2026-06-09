@@ -53,6 +53,12 @@ async function walk({ mod, remaining, argv, ctx, parent, isPlural }) {
         });
     }
 
+    // Resource resolved but no action token → show module help.
+    const resourceWasConsumed = mod.resourceArg && parent[mod.resourceArg.name || mod.name];
+    if (resourceWasConsumed && tokens.length === 0) {
+        return { kind: 'help', module: mod.name };
+    }
+
     const defaultAction = isPlural && mod.defaultPluralAction
         ? mod.defaultPluralAction
         : (mod.defaultAction || 'help');

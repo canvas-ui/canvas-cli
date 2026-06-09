@@ -46,12 +46,16 @@ export async function main(argv = process.argv.slice(2)) {
             return showCommandHelp(registry, parsed._[0], io);
         }
 
-        await dispatch({
+        const result = await dispatch({
             tokens: parsed._.map(String),
             argv,
             registry,
             ctx: { client, session, io, stdin },
         });
+        if (result?.kind === 'help') {
+            if (result.module) return showCommandHelp(registry, result.module, io);
+            showHelp(registry, io);
+        }
         return 0;
     } catch (err) {
         if (err instanceof UsageError) {
