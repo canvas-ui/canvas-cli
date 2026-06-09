@@ -30,7 +30,7 @@ export function parseWithSchema(argv, actionSchema = {}) {
     return minimist(argv, {
         string,
         boolean,
-        alias: { ...GLOBAL_ALIASES, ...(actionSchema.aliases || {}) },
+        alias: { ...GLOBAL_ALIASES, ...(actionSchema.flagAliases || {}) },
     });
 }
 

@@ -86,6 +86,7 @@ function makeWorkspacesApi(c) {
         tree: (id) => c.get(`/workspaces/${id}/tree`),
         trees: (id) => c.get(`/workspaces/${id}/trees`),
         documents: (id, params) => c.get(`/workspaces/${id}/documents`, { params }),
+        insertDocuments: (id, body) => c.post(`/workspaces/${id}/documents`, body),
         dotfiles: {
             list: (id, params) => c.get(`/workspaces/${id}/dotfiles`, { params }),
             create: (id, dotfiles, opts = {}) =>
