@@ -24,7 +24,7 @@ export default {
     description: 'Manage workspaces',
     aliases: ['ws'],
     pluralAlias: 'workspaces',
-    defaultAction: 'current',
+    defaultAction: 'list',
     defaultPluralAction: 'list',
     needsConnection: true,
     resourceArg: { name: 'workspace', resolve, optional: true },

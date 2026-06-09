@@ -1,16 +1,21 @@
 'use strict';
 
 import { UsageError } from '../../../core/errors.js';
-import { resolveAlias } from '../../../core/storage.js';
 
 export default {
     name: 'bind',
     aliases: ['switch'],
     description: 'Bind to a context',
     needsConnection: false,
-    async run({ parent, _client, session, io }) {
-        if (!parent.context) throw new UsageError('Context address required');
-        const { id, full, api } = parent.context;
+    positional: [{ name: 'id' }],
+    async run({ parent, args, rest, client, session, io }) {
+        let handle = parent.context;
+        if (!handle) {
+            const raw = args.id || (rest && rest[0]);
+            if (!raw) throw new UsageError('Context address required (id or user@remote:id)');
+            handle = client.resolve(raw);
+        }
+        const { id, full, api } = handle;
         let url = null;
         try {
             const ctx = await api.contexts.get(id);
@@ -26,6 +31,5 @@ export default {
             boundAt: new Date().toISOString(),
         });
         io.success(`Switched to context '${full}'`);
-        void resolveAlias;
     },
 };
