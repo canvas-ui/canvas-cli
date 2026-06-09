@@ -2,6 +2,7 @@
 
 import { input, password } from '../../../core/prompt.js';
 import { UsageError, NotFoundError } from '../../../core/errors.js';
+import { ensureDeviceRegistered } from '../../../core/device-registration.js';
 
 export default {
     name: 'login',
@@ -19,6 +20,7 @@ export default {
                 auth: { method: 'token', tokenType: 'jwt', token: flags.token },
             });
             io.success(`Logged into '${id}' with token`);
+            await _registerDevice(id, client, io);
             return;
         }
 
@@ -40,5 +42,14 @@ export default {
             auth: { method: 'token', tokenType: 'jwt', token },
         });
         io.success(`Logged in as ${user?.name || user?.email || email}`);
+        await _registerDevice(id, client, io);
     },
 };
+
+async function _registerDevice(remoteId, client, io) {
+    try {
+        await ensureDeviceRegistered(remoteId, client, io);
+    } catch (e) {
+        io.warn(`Device registration skipped: ${e.message}`);
+    }
+}
