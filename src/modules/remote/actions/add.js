@@ -1,7 +1,7 @@
 'use strict';
 
 import { parseRemoteIdentifier } from '../../../core/transport/address.js';
-import { password } from '../../../core/prompt.js';
+import { input, password } from '../../../core/prompt.js';
 import { UsageError, CanvasError } from '../../../core/errors.js';
 import { ensureDeviceRegistered } from '../../../core/device-registration.js';
 
@@ -56,6 +56,12 @@ export default {
             io.success('Set as default remote (first remote)');
         }
 
+        if (!token) {
+            // No token supplied — run login flow automatically.
+            io.print('');
+            token = await _login(args.id, client, io);
+        }
+
         if (token) {
             try {
                 await ensureDeviceRegistered(args.id, client, io);
@@ -65,3 +71,25 @@ export default {
         }
     },
 };
+
+async function _login(remoteId, client, io) {
+    io.print('Login required. Use --token to skip interactive login.');
+    const email = await input('Email: ');
+    if (!email) { io.warn('Login skipped'); return null; }
+    const pw = await password('Password: ');
+    if (!pw) { io.warn('Login skipped'); return null; }
+
+    try {
+        client.clearCache(remoteId);
+        const result = await client.client(remoteId).auth.login({ email, password: pw });
+        const token = result?.token;
+        const user = result?.user;
+        if (!token) { io.warn('Login failed: no token in response'); return null; }
+        client.updateRemote(remoteId, { auth: { method: 'token', tokenType: 'jwt', token } });
+        io.success(`Logged in as ${user?.name || user?.email || email}`);
+        return token;
+    } catch (e) {
+        io.warn(`Login failed: ${e.message}`);
+        return null;
+    }
+}
