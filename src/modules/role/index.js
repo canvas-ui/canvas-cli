@@ -1,5 +1,8 @@
 'use strict';
 
+import list from './actions/list.js';
+import show from './actions/show.js';
+
 export default {
     name: 'role',
     description: 'Container/role orchestration (placeholder)',
@@ -8,4 +11,6 @@ export default {
     defaultAction: 'list',
     defaultPluralAction: 'list',
     needsConnection: true,
+    actions: [list, show],
+    submodules: [],
 };
