@@ -3,9 +3,8 @@
 import { stat } from 'node:fs';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
-import { resolveWorkspaceHandle } from '../lib/handle.js';
-import { walkFiles, ingestFile } from '../lib/ingest.js';
-import { buildNoteDoc, buildTabDoc, tagsToFeatures, parseTargets } from '../lib/docbuilders.js';
+import { walkFiles, ingestFile } from '../../workspace/lib/ingest.js';
+import { buildNoteDoc, buildTabDoc, tagsToFeatures, parseTargets } from '../../workspace/lib/docbuilders.js';
 import device from '../../dot/lib/device.js';
 import { UsageError } from '../../../core/errors.js';
 
@@ -17,9 +16,9 @@ const LINK_TYPES = new Set(['link', 'tab', 'url']);
 
 // Flags:
 //   -c / --context     tree context path(s) to place under (repeatable)
-//   -d / --directory   directory-tree path (flagAliases overrides global -d:debug)
+//   -d / --directory   directory-tree path
 //   -t / --tag         tag(s) as custom/tag/<t> features (repeatable)
-//   --title            document title (note/link)
+//   --title            document title
 //   --exclude          extra names to exclude from directory scan (comma-separated)
 //   --no-defaults      skip default exclusion list
 //   --dry-run          scan only, no network (files only)
@@ -27,7 +26,7 @@ const LINK_TYPES = new Set(['link', 'tab', 'url']);
 
 export default {
     name: 'add',
-    description: 'Index a note, link, or local file/directory into a workspace',
+    description: 'Add a note, link, or local file to a context',
     positional: [
         { name: 'type', required: true },
         { name: 'body', variadic: true },
@@ -45,22 +44,22 @@ export default {
     async run(ctx) {
         const { args } = ctx;
         if (!args.type) throw new UsageError('Type or path required (note, link, /path/to/file)');
-
         if (NOTE_TYPES.has(args.type)) return _addNote(ctx);
         if (LINK_TYPES.has(args.type)) return _addLink(ctx);
         return _addFiles(ctx);
     },
 };
 
-async function _resolveTargetsAndHandle(ctx) {
-    const handle = resolveWorkspaceHandle(ctx);
-    const targets = parseTargets(ctx.flags);
-    return { handle, targets };
+function _resolveHandle({ parent, client, session }) {
+    if (parent.context) return parent.context;
+    const bound = session.boundContext();
+    if (bound) return client.resolve(bound);
+    throw new UsageError('Context required — bind one with `ctx bind` or address it directly');
 }
 
 async function _insertToTargets(api, id, docs, features, targets) {
     const primary = targets[0];
-    const created = await api.workspaces.insertDocuments(id, {
+    const created = await api.contexts.insertDocuments(id, {
         documents: docs,
         features,
         context: primary.context,
@@ -69,7 +68,7 @@ async function _insertToTargets(api, id, docs, features, targets) {
     const ids = (Array.isArray(created) ? created : created?.documents || [])
         .map(d => d.id).filter(Boolean);
     for (const target of targets.slice(1)) {
-        await api.workspaces.insertDocuments(id, {
+        await api.contexts.insertDocuments(id, {
             documentIds: ids,
             context: target.context,
             treeType: target.treeType,
@@ -80,7 +79,8 @@ async function _insertToTargets(api, id, docs, features, targets) {
 
 async function _addNote(ctx) {
     const { args, flags, io } = ctx;
-    const { handle, targets } = await _resolveTargetsAndHandle(ctx);
+    const handle = _resolveHandle(ctx);
+    const targets = parseTargets(flags);
 
     const bodyTokens = Array.isArray(args.body) ? args.body : (args.body ? [args.body] : []);
     const content = bodyTokens.join(' ').trim();
@@ -93,7 +93,8 @@ async function _addNote(ctx) {
 
 async function _addLink(ctx) {
     const { args, flags, io } = ctx;
-    const { handle, targets } = await _resolveTargetsAndHandle(ctx);
+    const handle = _resolveHandle(ctx);
+    const targets = parseTargets(flags);
 
     const bodyTokens = Array.isArray(args.body) ? args.body : (args.body ? [args.body] : []);
     const url = bodyTokens[0];
@@ -110,7 +111,7 @@ async function _addLink(ctx) {
 
 async function _addFiles(ctx) {
     const { args, flags, io } = ctx;
-    const handle = resolveWorkspaceHandle(ctx);
+    const handle = _resolveHandle(ctx);
     const targets = parseTargets(flags);
     const absPath = resolve(args.type);
     const deviceId = device.id;
@@ -120,7 +121,7 @@ async function _addFiles(ctx) {
         : [];
     const noDefaults = Boolean(flags['no-defaults']);
     const isDryRun = Boolean(flags['dry-run']);
-    const batchSize = parseInt(flags['batch-size'] ?? String(BATCH_SIZE), 10) || BATCH_SIZE;
+    const batchSize = parseInt(flags['batch-size'] || String(BATCH_SIZE), 10) || BATCH_SIZE;
 
     let pathStat;
     try { pathStat = await statAsync(absPath); }
@@ -150,15 +151,13 @@ async function _addFiles(ctx) {
         return;
     }
 
-    try { await handle.api.workspaces.start(handle.id); } catch { /* already started */ }
-
     let indexed = 0;
     let failed = 0;
     let batch = [];
 
     const flush = async (docs) => {
         const primary = targets[0];
-        const created = await handle.api.workspaces.insertDocuments(handle.id, {
+        const created = await handle.api.contexts.insertDocuments(handle.id, {
             documents: docs,
             features: ['data/abstraction/file'],
             context: primary.context,
@@ -167,7 +166,7 @@ async function _addFiles(ctx) {
         const ids = (Array.isArray(created) ? created : created?.documents || [])
             .map(d => d.id).filter(Boolean);
         for (const target of targets.slice(1)) {
-            await handle.api.workspaces.insertDocuments(handle.id, {
+            await handle.api.contexts.insertDocuments(handle.id, {
                 documentIds: ids,
                 context: target.context,
                 treeType: target.treeType,

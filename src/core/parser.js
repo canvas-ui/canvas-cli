@@ -7,7 +7,7 @@ const GLOBAL_STRINGS = ['remote', 'context', 'workspace', 'format', 'title', 'ta
 const GLOBAL_BOOLEANS = ['help', 'version', 'raw', 'verbose', 'debug', 'quiet', 'force', 'json'];
 const GLOBAL_ALIASES = {
     h: 'help', v: 'version', c: 'context', w: 'workspace',
-    f: 'format', r: 'raw', d: 'debug', q: 'quiet',
+    f: 'format', r: 'raw', d: 'debug', q: 'quiet', t: 'tag',
 };
 
 export function parseGlobal(argv) {
