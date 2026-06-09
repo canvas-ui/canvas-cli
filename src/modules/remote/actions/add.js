@@ -3,6 +3,7 @@
 import { parseRemoteIdentifier } from '../../../core/transport/address.js';
 import { password } from '../../../core/prompt.js';
 import { UsageError, CanvasError } from '../../../core/errors.js';
+import { ensureDeviceRegistered } from '../../../core/device-registration.js';
 
 export default {
     name: 'add',
@@ -53,6 +54,14 @@ export default {
         if (isFirst) {
             session.bindRemote(args.id);
             io.success('Set as default remote (first remote)');
+        }
+
+        if (token) {
+            try {
+                await ensureDeviceRegistered(args.id, client, io);
+            } catch (e) {
+                io.warn(`Device registration skipped: ${e.message}`);
+            }
         }
     },
 };

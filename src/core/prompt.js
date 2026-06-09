@@ -22,3 +22,17 @@ export async function yesNo(prompt, defaultVal = false) {
     if (a === '') return defaultVal;
     return a === 'y' || a === 'yes';
 }
+
+/**
+ * @param {string} prompt
+ * @param {Array<{label: string, value: *}>} options
+ * @returns {Promise<*>} selected value
+ */
+export async function select(prompt, options) {
+    process.stdout.write(`\n${prompt}\n`);
+    options.forEach((opt, i) => process.stdout.write(`  ${i + 1}. ${opt.label}\n`));
+    const raw = (await input(`Choice [1-${options.length}]: `)).trim();
+    const idx = parseInt(raw, 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= options.length) return options[0].value;
+    return options[idx].value;
+}
