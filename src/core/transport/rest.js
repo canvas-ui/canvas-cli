@@ -113,6 +113,7 @@ function makeContextsApi(c) {
         delete: (id) => c.delete(`/contexts/${id}`),
         tree: (id) => c.get(`/contexts/${id}/tree`),
         documents: (id, params) => c.get(`/contexts/${id}/documents`, { params }),
+        insertDocuments: (id, body) => c.post(`/contexts/${id}/documents`, body),
         dotfiles: (id) => c.get(`/contexts/${id}/dotfiles`),
     };
 }
