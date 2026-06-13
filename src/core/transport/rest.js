@@ -101,6 +101,12 @@ function makeWorkspacesApi(c) {
             status: (id) => c.get(`/workspaces/${id}/dotfiles/status`),
             init: (id) => c.post(`/workspaces/${id}/dotfiles/init`),
         },
+        hooks: {
+            list: (id) => c.get(`/workspaces/${id}/hooks`),
+            get: (id, hookPath) => c.get(`/workspaces/${id}/hooks/${hookPath}`),
+            set: (id, hookPath, content) => c.put(`/workspaces/${id}/hooks/${hookPath}`, { content }),
+            delete: (id, hookPath) => c.delete(`/workspaces/${id}/hooks/${hookPath}`),
+        },
     };
 }
 

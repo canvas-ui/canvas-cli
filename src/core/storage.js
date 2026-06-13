@@ -23,7 +23,7 @@ class JsonFile {
     }
 
     read() {
-        try { return JSON.parse(readFileSync(this.path, 'utf8')); }
+        try { return { ...this.defaults, ...JSON.parse(readFileSync(this.path, 'utf8')) }; }
         catch { return { ...this.defaults }; }
     }
 
@@ -67,7 +67,10 @@ export const session = new JsonFile(FILE_SESSION, {
     boundAt: null,
 });
 export const aliases = new JsonFile(FILE_ALIASES, {});
-export const config = new JsonFile(FILE_CONFIG, {});
+export const config = new JsonFile(FILE_CONFIG, {
+    dotfilesDir: 'dotfiles',
+    hooksDir: 'hooks',
+});
 export const contexts = new JsonFile(FILE_CONTEXTS, {});
 export const workspaces = new JsonFile(FILE_WORKSPACES, {});
 export const agents = new JsonFile(FILE_AGENTS, {});

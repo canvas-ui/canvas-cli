@@ -16,6 +16,7 @@ import tabs from './actions/tabs.js';
 import tree from './actions/tree.js';
 import update from './actions/update.js';
 
+import hooks from './hooks/index.js';
 import agent from './agent/index.js';
 import resolve from './resolve.js';
 
@@ -29,5 +30,5 @@ export default {
     needsConnection: true,
     resourceArg: { name: 'workspace', resolve, optional: true },
     actions: [add, create, current, del, documents, dotfiles, list, notes, show, start, status, stop, tabs, tree, update],
-    submodules: [agent],
+    submodules: [agent, hooks],
 };

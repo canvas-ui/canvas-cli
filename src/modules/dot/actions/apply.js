@@ -1,7 +1,7 @@
 'use strict';
 
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { repoFilePath } from '../lib/paths.js';
 import { resolveHandle } from '../lib/handle.js';
 import { ensureCloned } from '../lib/repo.js';
 import { findByRepoPath } from '../lib/docs.js';
@@ -16,7 +16,7 @@ export default {
     async run(ctx) {
         const { args, flags, io } = ctx;
         const handle = resolveHandle(ctx);
-        const repoDir = await ensureCloned(handle);
+        await ensureCloned(handle);
         const docs = await handle.api.workspaces.dotfiles.list(handle.id);
         const list = Array.isArray(docs) ? docs : docs?.documents || [];
         const targets = args.repoPath
@@ -35,7 +35,7 @@ export default {
                 rows.push({ repoPath: doc.data.repoPath, status: 'skip (not linked)' });
                 continue;
             }
-            const source = join(repoDir, doc.data.repoPath);
+            const source = repoFilePath(handle, doc.data.repoPath);
             if (!existsSync(source)) {
                 rows.push({ repoPath: doc.data.repoPath, status: 'missing-in-repo' });
                 continue;
