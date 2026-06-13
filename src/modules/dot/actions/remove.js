@@ -1,9 +1,8 @@
 'use strict';
 
-import { join } from 'node:path';
 import { existsSync, rmSync } from 'node:fs';
 import { resolveHandle } from '../lib/handle.js';
-import { localRepoDir } from '../lib/paths.js';
+import { repoFilePath } from '../lib/paths.js';
 import { findByRepoPath } from '../lib/docs.js';
 import { UsageError, NotFoundError } from '../../../core/errors.js';
 
@@ -25,11 +24,8 @@ export default {
         const doc = findByRepoPath(docs, args.repoPath);
         if (!doc) throw new NotFoundError(`No dotfile '${args.repoPath}'`);
         await handle.api.workspaces.dotfiles.delete(handle.id, [doc.id]);
-        const dir = localRepoDir(handle);
-        if (existsSync(dir)) {
-            const target = join(dir, args.repoPath);
-            if (existsSync(target)) rmSync(target, { recursive: true, force: true });
-        }
+        const target = repoFilePath(handle, args.repoPath);
+        if (existsSync(target)) rmSync(target, { recursive: true, force: true });
         io.success(`Removed '${args.repoPath}'. Run \`canvas dot push\` to publish deletion.`);
     },
 };

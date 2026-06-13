@@ -1,9 +1,10 @@
 'use strict';
 
 import { existsSync, lstatSync, copyFileSync, mkdirSync, cpSync, rmSync } from 'node:fs';
-import { dirname, basename, resolve, join } from 'node:path';
+import { dirname, basename, resolve } from 'node:path';
 import { resolveHandle } from '../lib/handle.js';
 import { ensureCloned } from '../lib/repo.js';
+import { repoFilePath } from '../lib/paths.js';
 import { expandHome, collapseHome } from '../lib/fsops.js';
 import { findByRepoPath } from '../lib/docs.js';
 import device from '../lib/device.js';
@@ -37,8 +38,8 @@ export default {
             .replace(/^\/+/, '');
         if (!repoPath) throw new UsageError('repoPath required');
 
-        const repoDir = await ensureCloned(handle);
-        const target = join(repoDir, repoPath);
+        await ensureCloned(handle);
+        const target = repoFilePath(handle, repoPath);
 
         if (type === 'folder') {
             // Replace any existing folder in the repo with the new contents.
