@@ -14,6 +14,7 @@ import status from './actions/status.js';
 import stop from './actions/stop.js';
 import tabs from './actions/tabs.js';
 import tree from './actions/tree.js';
+import treeRm from './actions/tree-rm.js';
 import update from './actions/update.js';
 
 import hooks from './hooks/index.js';
@@ -29,6 +30,6 @@ export default {
     defaultPluralAction: 'list',
     needsConnection: true,
     resourceArg: { name: 'workspace', resolve, optional: true },
-    actions: [add, create, current, del, documents, dotfiles, list, notes, show, start, status, stop, tabs, tree, update],
+    actions: [add, create, current, del, documents, dotfiles, list, notes, show, start, status, stop, tabs, tree, treeRm, update],
     submodules: [agent, hooks],
 };
