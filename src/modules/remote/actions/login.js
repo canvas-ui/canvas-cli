@@ -21,6 +21,7 @@ export default {
             });
             io.success(`Logged into '${id}' with token`);
             await _registerDevice(id, client, io);
+            await _postLoginSync(id, client, io);
             return;
         }
 
@@ -43,6 +44,7 @@ export default {
         });
         io.success(`Logged in as ${user?.name || user?.email || email}`);
         await _registerDevice(id, client, io);
+        await _postLoginSync(id, client, io);
     },
 };
 
@@ -51,5 +53,43 @@ async function _registerDevice(remoteId, client, io) {
         await ensureDeviceRegistered(remoteId, client, io);
     } catch (e) {
         io.warn(`Device registration skipped: ${e.message}`);
+    }
+}
+
+async function _postLoginSync(remoteId, client, io) {
+    try {
+        client.clearCache(remoteId);
+        const info = await client.ping(remoteId);
+        client.updateRemote(remoteId, {
+            version: info?.version || null,
+            lastSynced: new Date().toISOString(),
+        });
+        io.info(`Synced${info?.version ? ` (v${info.version})` : ''}`);
+    } catch (e) {
+        io.warn(`Sync failed: ${e.message}`);
+    }
+
+    try {
+        const wList = await client.client(remoteId).workspaces.list();
+        const workspaces = (Array.isArray(wList) ? wList : wList?.workspaces || [])
+            .map((w) => ({ id: w.id || w.name, label: w.label || w.name, type: w.type, status: w.status }));
+        if (workspaces.length) {
+            io.print('');
+            io.output(workspaces, { columns: ['id', 'label', 'type', 'status'] });
+        }
+    } catch (e) {
+        io.warn(`Could not list workspaces: ${e.message}`);
+    }
+
+    try {
+        const cList = await client.client(remoteId).contexts.list();
+        const contexts = (Array.isArray(cList) ? cList : cList?.contexts || [])
+            .map((c) => ({ id: c.id, description: c.description, url: c.url }));
+        if (contexts.length) {
+            io.print('');
+            io.output(contexts, { columns: ['id', 'description', 'url'] });
+        }
+    } catch (e) {
+        io.warn(`Could not list contexts: ${e.message}`);
     }
 }
