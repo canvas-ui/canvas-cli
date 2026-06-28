@@ -31,7 +31,7 @@ export function createIO({ format = 'table', raw = false, quiet = false } = {}) 
                 }
                 return;
             }
-            const table = new Table({ head: cols.map((c) => chalk.cyan.bold(c)) });
+            const table = new Table({ head: cols.map((c) => chalk.cyan.bold(c)), style: { border: ['cyan'] } });
             for (const r of rows) {
                 table.push(cols.map((c) => formatCell(r?.[c])));
             }
