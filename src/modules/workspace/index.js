@@ -1,6 +1,7 @@
 'use strict';
 
 import add from './actions/add.js';
+import insert from './actions/insert.js';
 import create from './actions/create.js';
 import current from './actions/current.js';
 import del from './actions/delete.js';
@@ -30,6 +31,6 @@ export default {
     defaultPluralAction: 'list',
     needsConnection: true,
     resourceArg: { name: 'workspace', resolve, optional: true },
-    actions: [add, create, current, del, documents, dotfiles, list, notes, show, start, status, stop, tabs, tree, treeRm, update],
+    actions: [add, insert, create, current, del, documents, dotfiles, list, notes, show, start, status, stop, tabs, tree, treeRm, update],
     submodules: [agent, hooks],
 };

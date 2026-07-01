@@ -34,9 +34,9 @@ export class RemoteClient {
 
     token() { return this.remote?.auth?.token || null; }
 
-    async request(method, path, { params, data, headers } = {}) {
+    async request(method, path, { params, data, headers, ...rest } = {}) {
         try {
-            const res = await this.http.request({ method, url: path, params, data, headers });
+            const res = await this.http.request({ method, url: path, params, data, headers, ...rest });
             return unwrap(res.data);
         } catch (err) {
             throw toCanvasError(err);
@@ -96,6 +96,15 @@ function makeWorkspacesApi(c) {
         },
         documents: (id, params) => c.get(`/workspaces/${id}/documents`, { params }),
         insertDocuments: (id, body) => c.post(`/workspaces/${id}/documents`, body),
+        // Upload raw bytes (Buffer or a Readable stream) into the workspace blob
+        // store; returns { url: 'stored://workspace:data/<key>', key, checksum, size }.
+        // Streams avoid loading large files into memory client-side too.
+        uploadBlob: (id, data) => c.request('POST', `/workspaces/${id}/blobs`, {
+            data,
+            headers: { 'Content-Type': 'application/octet-stream' },
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity,
+        }),
         dotfiles: {
             list: (id, params) => c.get(`/workspaces/${id}/dotfiles`, { params }),
             create: (id, dotfiles, opts = {}) =>
