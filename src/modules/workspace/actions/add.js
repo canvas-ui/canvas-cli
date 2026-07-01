@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { resolveWorkspaceHandle } from '../lib/handle.js';
 import { walkFiles, ingestFile } from '../lib/ingest.js';
-import { buildNoteDoc, buildTabDoc, tagsToFeatures, parseTargets } from '../lib/docbuilders.js';
+import { buildNoteDoc, buildTabDoc, tagsToFeatures, parseTargets, targetBody } from '../lib/docbuilders.js';
 import device from '../../dot/lib/device.js';
 import { UsageError } from '../../../core/errors.js';
 
@@ -16,8 +16,9 @@ const NOTE_TYPES = new Set(['note']);
 const LINK_TYPES = new Set(['link', 'tab', 'url']);
 
 // Flags:
-//   -c / --context     tree context path(s) to place under (repeatable)
-//   -d / --directory   directory-tree path (flagAliases overrides global -d:debug)
+//   --path             target as treeName:/path or /path (default context tree), repeatable
+//   -c / --context     [legacy] context-tree path(s) to place under (repeatable)
+//   -d / --directory   [legacy] directory-tree path (flagAliases overrides global -d:debug)
 //   -t / --tag         tag(s) as custom/tag/<t> features (repeatable)
 //   --title            document title (note/link)
 //   --exclude          extra names to exclude from directory scan (comma-separated)
@@ -33,6 +34,7 @@ export default {
         { name: 'body', variadic: true },
     ],
     flags: {
+        path: 'string',
         directory: 'string',
         exclude: 'string',
         'no-defaults': 'boolean',
@@ -63,16 +65,14 @@ async function _insertToTargets(api, id, docs, features, targets) {
     const created = await api.workspaces.insertDocuments(id, {
         documents: docs,
         features,
-        context: primary.context,
-        treeType: primary.treeType,
+        ...targetBody(primary),
     });
     const ids = (Array.isArray(created) ? created : created?.documents || [])
         .map(d => d.id).filter(Boolean);
     for (const target of targets.slice(1)) {
         await api.workspaces.insertDocuments(id, {
             documentIds: ids,
-            context: target.context,
-            treeType: target.treeType,
+            ...targetBody(target),
         });
     }
     return ids;
@@ -161,16 +161,14 @@ async function _addFiles(ctx) {
         const created = await handle.api.workspaces.insertDocuments(handle.id, {
             documents: docs,
             features: ['data/abstraction/file'],
-            context: primary.context,
-            treeType: primary.treeType,
+            ...targetBody(primary),
         });
         const ids = (Array.isArray(created) ? created : created?.documents || [])
             .map(d => d.id).filter(Boolean);
         for (const target of targets.slice(1)) {
             await handle.api.workspaces.insertDocuments(handle.id, {
                 documentIds: ids,
-                context: target.context,
-                treeType: target.treeType,
+                ...targetBody(target),
             });
         }
     };
@@ -196,7 +194,7 @@ async function _addFiles(ctx) {
         indexed += batch.length;
     }
 
-    const targetDesc = targets.map(t => `${t.treeType}:${t.context}`).join(', ');
+    const targetDesc = targets.map(t => `${t.treeNameOrTreeId || t.treeType || 'context'}:${t.context}`).join(', ');
     io.success(
         `Indexed ${indexed} file(s) into ${handle.id} [${targetDesc}]` +
         (failed ? `  (${failed} skipped)` : ''),
