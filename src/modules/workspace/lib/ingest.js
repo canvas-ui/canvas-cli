@@ -158,6 +158,54 @@ export function guessMime(filePath) {
     return MIME_MAP[ext] || 'application/octet-stream';
 }
 
+// ─── Client-side filesystem metadata ───────────────────────────────────────────
+
+function _clean(obj) {
+    const out = {};
+    for (const [k, v] of Object.entries(obj)) {
+        if (v !== undefined && v !== null && v !== '' && !(typeof v === 'number' && Number.isNaN(v))) { out[k] = v; }
+    }
+    return out;
+}
+
+/** Structured filesystem stat → metadata.fs (birthtime/ctime/mode/uid/gid). */
+export function fsMeta(stat) {
+    const iso = (d) => (d instanceof Date && !Number.isNaN(d.getTime())) ? d.toISOString() : undefined;
+    return _clean({
+        birthtime: iso(stat.birthtime),
+        ctime: iso(stat.ctime),
+        mode: stat.mode,
+        uid: stat.uid,
+        gid: stat.gid,
+    });
+}
+
+// Lazy, optional native xattr reader. Absent lib (not installed / unsupported
+// platform) → {}. Never throws.
+let _xattr;
+let _xattrLoaded = false;
+async function _loadXattr() {
+    if (_xattrLoaded) { return; }
+    _xattrLoaded = true;
+    try { _xattr = await import('fs-xattr'); } catch { /* optional dep */ }
+}
+
+/** Extended attributes as a flat {key: utf8-value} map. {} if unavailable. */
+export async function readXattrs(filePath) {
+    await _loadXattr();
+    const list = _xattr?.list || _xattr?.default?.list;
+    const get = _xattr?.get || _xattr?.default?.get;
+    if (!list || !get) { return {}; }
+    try {
+        const keys = await list(filePath);
+        const out = {};
+        for (const k of keys) {
+            try { out[k] = (await get(filePath, k)).toString('utf8'); } catch { /* skip unreadable */ }
+        }
+        return out;
+    } catch { return {}; }
+}
+
 // ─── Document builder ─────────────────────────────────────────────────────────
 
 /**
@@ -166,19 +214,21 @@ export function guessMime(filePath) {
  * @param {{ deviceId: string, sha256: string, md5: string, size: number, mimeType: string, mtime?: Date }} opts
  * @returns {object}
  */
-export function buildFileDoc(absPath, { deviceId, sha256, md5, size, mimeType, mtime }) {
+export function buildFileDoc(absPath, { deviceId, sha256, md5, size, mimeType, mtime, fs, xattrs }) {
     // file://<deviceId>/<absolute-path-without-leading-slash>
     const fileUrl = `file://${deviceId}/${absPath.replace(/^\//, '')}`;
     return {
         schema: 'data/abstraction/file',
         schemaVersion: '3.0',
-        checksumArray: [`sha256:${sha256}`, `md5:${md5}`],
+        checksumArray: [`sha256/${sha256}`, `md5/${md5}`],
         locations: [{ url: fileUrl }],
         metadata: {
             contentType: mimeType,
             size,
             filename: basename(absPath),
             mtime: mtime ? mtime.toISOString() : undefined,
+            ...(fs && Object.keys(fs).length ? { fs } : {}),
+            ...(xattrs && Object.keys(xattrs).length ? { xattrs } : {}),
         },
         data: {},
     };
@@ -186,6 +236,8 @@ export function buildFileDoc(absPath, { deviceId, sha256, md5, size, mimeType, m
 
 /**
  * Stat + hash + build a File document for a single local path.
+ * `add` indexes in place (file://device) — bytes stay on the device, so no
+ * server-side EXIF extraction; we still capture client stat + xattrs.
  * @param {string} absPath
  * @param {string} deviceId
  * @returns {Promise<object>}
@@ -194,5 +246,6 @@ export async function ingestFile(absPath, deviceId) {
     const fstat = await statAsync(absPath);
     const { sha256, md5, size } = await hashFile(absPath);
     const mimeType = guessMime(absPath);
-    return buildFileDoc(absPath, { deviceId, sha256, md5, size, mimeType, mtime: fstat.mtime });
+    const xattrs = await readXattrs(absPath);
+    return buildFileDoc(absPath, { deviceId, sha256, md5, size, mimeType, mtime: fstat.mtime, fs: fsMeta(fstat), xattrs });
 }
