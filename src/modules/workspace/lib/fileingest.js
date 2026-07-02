@@ -26,13 +26,18 @@ const BATCH_SIZE = 50;
  *   insertDocuments(body): Promise,        // POST documents/documentIds
  *   uploadBlob(streamOrBuffer): Promise,   // upload path only
  * }
+ *
+ * useTargets: workspace ingest targets trees/paths via --path/-c/-d (multi-target,
+ * link into each). A CONTEXT is conservative — it points at one focused path with a
+ * preconfigured backend, so context ingest sets useTargets=false: documents land at
+ * the context's current path (no path flags, no multi-target linking).
  */
-export async function ingestPath(ctx, { mode, adapter }) {
+export async function ingestPath(ctx, { mode, adapter, useTargets = true }) {
     const { args, flags, io } = ctx;
     const srcRaw = args.source ?? args.type;
     if (!srcRaw) { throw new UsageError('Path required (e.g. /path/to/file-or-dir)'); }
 
-    const targets = parseTargets(flags);
+    const targets = useTargets ? parseTargets(flags) : null;
     const absPath = resolve(srcRaw);
     const extraExclude = flags.exclude
         ? String(flags.exclude).split(',').map(s => s.trim()).filter(Boolean)
@@ -70,6 +75,12 @@ export async function ingestPath(ctx, { mode, adapter }) {
     if (mode === 'upload') { try { await adapter.start(); } catch { /* already started */ } }
 
     const flush = async (docs) => {
+        // Context: insert at the context's own focused path — no path targeting.
+        if (!useTargets) {
+            await adapter.insertDocuments({ documents: docs, features: ['data/abstraction/file'] });
+            return;
+        }
+        // Workspace: place under the primary tree target, link into the rest.
         const primary = targets[0];
         const created = await adapter.insertDocuments({ documents: docs, features: ['data/abstraction/file'], ...targetBody(primary) });
         const ids = (Array.isArray(created) ? created : created?.documents || []).map(d => d.id).filter(Boolean);
@@ -124,9 +135,11 @@ export async function ingestPath(ctx, { mode, adapter }) {
     }
     if (batch.length > 0) { await flush(batch); done += batch.length; }
 
-    const targetDesc = targets.map(t => `${t.treeNameOrTreeId || t.treeType || 'context'}:${t.context}`).join(', ');
+    const targetDesc = useTargets
+        ? ` [${targets.map(t => `${t.treeNameOrTreeId || t.treeType || 'context'}:${t.context}`).join(', ')}]`
+        : '';
     io.success(
-        `${mode === 'upload' ? 'Uploaded' : 'Indexed'} ${done} file(s) into ${adapter.label} [${targetDesc}]` +
+        `${mode === 'upload' ? 'Uploaded' : 'Indexed'} ${done} file(s) into ${adapter.label}${targetDesc}` +
         (failed ? `  (${failed} skipped)` : ''),
     );
 }

@@ -1,6 +1,8 @@
 'use strict';
 
 import add from './actions/add.js';
+import upload from './actions/upload.js';
+import indexAction from './actions/index.js';
 import bind from './actions/bind.js';
 import create from './actions/create.js';
 import current from './actions/current.js';
@@ -30,6 +32,6 @@ export default {
     defaultPluralAction: 'list',
     needsConnection: true,
     resourceArg: { name: 'context', resolve, optional: true },
-    actions: [add, bind, create, current, destroy, documents, dotfiles, list, notes, path, paths, set, show, tabs, tree, update, url, workspace],
+    actions: [add, upload, indexAction, bind, create, current, destroy, documents, dotfiles, list, notes, path, paths, set, show, tabs, tree, update, url, workspace],
     submodules: [],
 };
