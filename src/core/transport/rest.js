@@ -138,6 +138,14 @@ function makeContextsApi(c) {
         tree: (id) => c.get(`/contexts/${id}/tree`),
         documents: (id, params) => c.get(`/contexts/${id}/documents`, { params }),
         insertDocuments: (id, body) => c.post(`/contexts/${id}/documents`, body),
+        // Upload raw bytes into the context's backing workspace blob store; returns
+        // { url: 'stored://workspace:data/<key>', key, checksum, size, metadata }.
+        uploadBlob: (id, data) => c.request('POST', `/contexts/${id}/blobs`, {
+            data,
+            headers: { 'Content-Type': 'application/octet-stream' },
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity,
+        }),
         dotfiles: (id) => c.get(`/contexts/${id}/dotfiles`),
     };
 }
