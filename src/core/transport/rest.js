@@ -85,13 +85,15 @@ function makeWorkspacesApi(c) {
         stats: (id) => c.get(`/workspaces/${id}/stats`),
         tree: (id) => c.get(`/workspaces/${id}/tree`),
         trees: (id) => c.get(`/workspaces/${id}/trees`),
-        // Remove a path from a tree. `purge` only takes effect on the /.incoming
+        // Remove a path from a tree. `purge` only takes effect on the /.backends
         // subtree of a directory tree (deletes the ingested docs under it);
-        // elsewhere/by default the documents are kept and only the folder is dropped.
-        removeTreePath: (id, treeName, path, { recursive = false, purge = false } = {}) => {
+        // `destroy` (implies purge) additionally deletes the mirrored resources
+        // ON the backend (rw backends only). Elsewhere/by default the documents
+        // are kept and only the folder is dropped.
+        removeTreePath: (id, treeName, path, { recursive = false, purge = false, destroy = false } = {}) => {
             const p = String(path || '/').startsWith('/') ? path : `/${path}`;
             return c.delete(`/workspaces/${id}/trees/${encodeURIComponent(treeName)}/path${p}`, {
-                params: { recursive, ...(purge ? { purge: true } : {}) },
+                params: { recursive, ...(purge ? { purge: true } : {}), ...(destroy ? { destroy: true } : {}) },
             });
         },
         documents: (id, params) => c.get(`/workspaces/${id}/documents`, { params }),
