@@ -8,6 +8,10 @@ import clone from './actions/clone.js';
 import pull from './actions/pull.js';
 import push from './actions/push.js';
 import edit from './actions/edit.js';
+import runs from './actions/runs.js';
+import explain from './actions/explain.js';
+import backfill from './actions/backfill.js';
+import replay from './actions/replay.js';
 
 export default {
     name: 'hooks',
@@ -15,6 +19,6 @@ export default {
     aliases: ['hook'],
     defaultAction: 'list',
     needsConnection: true,
-    actions: [list, get, set, del, clone, pull, push, edit],
+    actions: [list, get, set, del, clone, pull, push, edit, runs, explain, backfill, replay],
     submodules: [],
 };
