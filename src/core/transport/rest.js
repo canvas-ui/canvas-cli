@@ -126,6 +126,10 @@ function makeWorkspacesApi(c) {
             get: (id, hookPath) => c.get(`/workspaces/${id}/hooks/${hookPath}`),
             set: (id, hookPath, content) => c.put(`/workspaces/${id}/hooks/${hookPath}`, { content }),
             delete: (id, hookPath) => c.delete(`/workspaces/${id}/hooks/${hookPath}`),
+            runs: (id, params = {}) => c.get(`/workspaces/${id}/hooks/runs`, { params }),
+            explain: (id, body) => c.post(`/workspaces/${id}/hooks/explain`, body),
+            backfill: (id, body) => c.post(`/workspaces/${id}/hooks/backfill`, body),
+            replay: (id, runId) => c.post(`/workspaces/${id}/hooks/runs/${runId}/replay`),
         },
     };
 }
