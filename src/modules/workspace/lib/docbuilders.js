@@ -22,7 +22,7 @@ export function buildTabDoc(url, { title } = {}) {
 
 export function tagsToFeatures(tags) {
     const list = Array.isArray(tags) ? tags : (tags ? [tags] : []);
-    return list.filter(Boolean).map(t => `custom/tag/${t}`);
+    return list.filter(Boolean).map(t => `tag/${t}`);
 }
 
 /**
