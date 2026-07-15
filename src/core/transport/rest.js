@@ -121,6 +121,19 @@ function makeWorkspacesApi(c) {
             status: (id) => c.get(`/workspaces/${id}/dotfiles/status`),
             init: (id) => c.post(`/workspaces/${id}/dotfiles/init`),
         },
+        // Unified backend/connector API (/:id/backends). Storage drivers:
+        // 'file' (local folder; 'fs' is accepted as an alias server-side),
+        // 'cacache', 's3'; message connectors: 'imap'.
+        backends: {
+            list: (id, driver = null) => c.get(`/workspaces/${id}/backends${driver ? `/${encodeURIComponent(driver)}` : ''}`),
+            get: (id, driver, address) => c.get(`/workspaces/${id}/backends/${encodeURIComponent(driver)}/${encodeURIComponent(address)}`),
+            add: (id, driver, body) => c.post(`/workspaces/${id}/backends/${encodeURIComponent(driver)}`, body),
+            update: (id, driver, address, body) => c.patch(`/workspaces/${id}/backends/${encodeURIComponent(driver)}/${encodeURIComponent(address)}`, body),
+            remove: (id, driver, address) => c.delete(`/workspaces/${id}/backends/${encodeURIComponent(driver)}/${encodeURIComponent(address)}`),
+            sync: (id, driver, address) => c.post(`/workspaces/${id}/backends/${encodeURIComponent(driver)}/${encodeURIComponent(address)}/sync`),
+            usage: (id, driver, address) => c.get(`/workspaces/${id}/backends/${encodeURIComponent(driver)}/${encodeURIComponent(address)}/usage`),
+            documents: (id, driver, address, params = {}) => c.get(`/workspaces/${id}/backends/${encodeURIComponent(driver)}/${encodeURIComponent(address)}/documents`, { params }),
+        },
         hooks: {
             list: (id) => c.get(`/workspaces/${id}/hooks`),
             get: (id, hookPath) => c.get(`/workspaces/${id}/hooks/${hookPath}`),
