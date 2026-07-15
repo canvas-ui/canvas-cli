@@ -21,6 +21,7 @@ import update from './actions/update.js';
 
 import hooks from './hooks/index.js';
 import agent from './agent/index.js';
+import backends from './backends/index.js';
 import resolve from './resolve.js';
 
 export default {
@@ -33,5 +34,5 @@ export default {
     needsConnection: true,
     resourceArg: { name: 'workspace', resolve, optional: true },
     actions: [add, upload, indexAction, create, current, del, documents, dotfiles, list, notes, show, start, status, stop, tabs, tree, treeRm, update],
-    submodules: [agent, hooks],
+    submodules: [agent, hooks, backends],
 };
