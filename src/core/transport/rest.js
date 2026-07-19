@@ -85,8 +85,8 @@ function makeWorkspacesApi(c) {
         stats: (id) => c.get(`/workspaces/${id}/stats`),
         tree: (id) => c.get(`/workspaces/${id}/tree`),
         trees: (id) => c.get(`/workspaces/${id}/trees`),
-        // Remove a path from a tree. `purge` only takes effect on the /.backends
-        // subtree of a directory tree (deletes the ingested docs under it);
+        // Remove a path from a tree. `purge` only takes effect inside the
+        // backends tree (deletes the ingested docs under the path);
         // `destroy` (implies purge) additionally deletes the mirrored resources
         // ON the backend (rw backends only). Elsewhere/by default the documents
         // are kept and only the folder is dropped.
