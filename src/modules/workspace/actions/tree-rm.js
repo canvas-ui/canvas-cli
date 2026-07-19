@@ -6,17 +6,17 @@ import { UsageError } from '../../../core/errors.js';
 // Remove a path from a workspace tree.
 //
 // Flags:
-//   --tree         tree name/id (default: directory — that's where /.backends lives)
+//   --tree         tree name/id (default: directory; backend mirrors live in the 'backends' tree)
 //   -r/--recursive remove children too
 //   --purge        also delete the documents under the folder from the index.
-//                  Only effective on the /.backends subtree of a directory tree;
-//                  elsewhere documents are kept and only the folder is dropped.
+//                  Only effective inside the backends tree; elsewhere documents
+//                  are kept and only the folder is dropped.
 //   --destroy      like --purge, but ALSO deletes the mirrored files/messages on
 //                  the backend itself (rw backends only; read-only locations are
-//                  reference-dropped). Only effective under /.backends.
+//                  reference-dropped). Only effective inside the backends tree.
 export default {
     name: 'tree-rm',
-    description: 'Remove a path from a workspace tree (--purge deletes ingested docs under /.backends; --destroy also deletes them on the backend)',
+    description: 'Remove a path from a workspace tree (--purge deletes ingested docs in the backends tree; --destroy also deletes them on the backend)',
     positional: [
         { name: 'address' },
         { name: 'path', required: true },
