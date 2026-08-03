@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { repoFilePath } from '../lib/paths.js';
 import { resolveHandle } from '../lib/handle.js';
 import { ensureCloned } from '../lib/repo.js';
-import { findByRepoPath } from '../lib/docs.js';
+import { findByRepoPath, entryPath } from '../lib/docs.js';
 import { expandHome, symlinkInto, isAppliedSymlink } from '../lib/fsops.js';
 import device from '../lib/device.js';
 
@@ -32,26 +32,26 @@ export default {
         for (const doc of targets) {
             const localRel = doc.data.links?.[device.id];
             if (!localRel) {
-                rows.push({ repoPath: doc.data.repoPath, status: 'skip (not linked)' });
+                rows.push({ repoPath: entryPath(doc), status: 'skip (not linked)' });
                 continue;
             }
-            const source = repoFilePath(handle, doc.data.repoPath);
+            const source = repoFilePath(handle, entryPath(doc));
             if (!existsSync(source)) {
-                rows.push({ repoPath: doc.data.repoPath, status: 'missing-in-repo' });
+                rows.push({ repoPath: entryPath(doc), status: 'missing-in-repo' });
                 continue;
             }
             const local = expandHome(localRel);
             if (isAppliedSymlink(local, source)) {
-                rows.push({ repoPath: doc.data.repoPath, status: 'already-applied', local });
+                rows.push({ repoPath: entryPath(doc), status: 'already-applied', local });
                 continue;
             }
             if (flags.copy) {
                 const { copyInto } = await import('../lib/fsops.js');
                 copyInto(source, local);
-                rows.push({ repoPath: doc.data.repoPath, status: 'copied', local });
+                rows.push({ repoPath: entryPath(doc), status: 'copied', local });
             } else {
                 symlinkInto(source, local);
-                rows.push({ repoPath: doc.data.repoPath, status: 'linked', local });
+                rows.push({ repoPath: entryPath(doc), status: 'linked', local });
             }
         }
         io.output(rows);

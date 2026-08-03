@@ -6,7 +6,7 @@ import { resolveHandle } from '../lib/handle.js';
 import { ensureCloned } from '../lib/repo.js';
 import { repoFilePath } from '../lib/paths.js';
 import { expandHome, collapseHome } from '../lib/fsops.js';
-import { findByRepoPath } from '../lib/docs.js';
+import { findByRepoPath, toWorkspaceUrl } from '../lib/docs.js';
 import device from '../lib/device.js';
 import { UsageError } from '../../../core/errors.js';
 
@@ -61,7 +61,9 @@ export default {
             [device.id]: collapseHome(localAbs),
         };
         const data = {
-            repoPath,
+            // v3 identity: a normalized URI. The CLI targets the workspace's own
+            // repo; the server normalizes and rejects traversal.
+            url: toWorkspaceUrl(repoPath),
             type,
             links,
             description: flags.description ?? existing?.data?.description,

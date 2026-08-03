@@ -1,5 +1,7 @@
 'use strict';
 
+import { entryPath } from '../lib/docs.js';
+
 import device from '../lib/device.js';
 
 export default {
@@ -24,7 +26,7 @@ export default {
         const rows = (Array.isArray(docs) ? docs : docs?.documents || []).flatMap((doc) =>
             Object.entries(doc.data?.links || {}).map(([deviceId, localPath]) => ({
                 here: deviceId === info.deviceId ? '*' : '',
-                repoPath: doc.data.repoPath,
+                repoPath: entryPath(doc),
                 deviceId,
                 localPath,
             })),

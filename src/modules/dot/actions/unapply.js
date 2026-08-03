@@ -3,7 +3,7 @@
 import { existsSync } from 'node:fs';
 import { resolveHandle } from '../lib/handle.js';
 import { localRepoDir, repoFilePath } from '../lib/paths.js';
-import { findByRepoPath } from '../lib/docs.js';
+import { findByRepoPath, entryPath } from '../lib/docs.js';
 import { expandHome, isAppliedSymlink, unlinkSafe } from '../lib/fsops.js';
 import device from '../lib/device.js';
 
@@ -27,12 +27,12 @@ export default {
             const localRel = doc.data.links?.[device.id];
             if (!localRel) continue;
             const local = expandHome(localRel);
-            const source = repoFilePath(handle, doc.data.repoPath);
+            const source = repoFilePath(handle, entryPath(doc));
             if (isAppliedSymlink(local, source)) {
                 unlinkSafe(local);
-                rows.push({ repoPath: doc.data.repoPath, status: 'unlinked', local });
+                rows.push({ repoPath: entryPath(doc), status: 'unlinked', local });
             } else {
-                rows.push({ repoPath: doc.data.repoPath, status: 'not-a-canvas-link', local });
+                rows.push({ repoPath: entryPath(doc), status: 'not-a-canvas-link', local });
             }
         }
         io.output(rows);
