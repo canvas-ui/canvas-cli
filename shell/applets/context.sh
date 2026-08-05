@@ -357,7 +357,7 @@ function context_note_add() {
     local context_id=$(get_value "$CANVAS_SESSION" "context_id")
 
     # Build the feature array with note abstraction and tags
-    local feature_array='["data/abstraction/note"'
+    local feature_array='["data/schema/note"'
     if [ -n "$tags" ]; then
         IFS=',' read -ra TAG_ARRAY <<< "$tags"
         for tag in "${TAG_ARRAY[@]}"; do
@@ -370,7 +370,7 @@ function context_note_add() {
     local tmpjson
     tmpjson=$(mktemp)
     jq --arg content "$content" --arg title "$title" --argjson featureArray "$feature_array" '
-        {featureArray: $featureArray, documents: {schema: "data/abstraction/note", data: {content: $content} } }
+        {featureArray: $featureArray, documents: {schema: "data/schema/note", data: {content: $content} } }
         | if $title != "" then .documents.data.title = $title else . end
     ' <<< '{}' > "$tmpjson"
     canvas_http_post "/contexts/$context_id/documents" "$tmpjson" | jq .
@@ -380,13 +380,13 @@ function context_note_add() {
 # List notes
 function context_notes() {
     local context_id=$(get_value "$CANVAS_SESSION" "context_id")
-    canvas_http_get "/contexts/$context_id/documents?featureArray=data/abstraction/note" | jq .
+    canvas_http_get "/contexts/$context_id/documents?featureArray=data/schema/note" | jq .
 }
 
 # List tabs
 function context_tabs() {
     local context_id=$(get_value "$CANVAS_SESSION" "context_id")
-    canvas_http_get "/contexts/$context_id/documents?featureArray=data/abstraction/tab" | jq .
+    canvas_http_get "/contexts/$context_id/documents?featureArray=data/schema/tab" | jq .
 }
 
 # Add a tab
@@ -423,7 +423,7 @@ function context_tab_add() {
     local context_id=$(get_value "$CANVAS_SESSION" "context_id")
 
     # Build the feature array with tab abstraction and tags
-    local feature_array='["data/abstraction/tab"'
+    local feature_array='["data/schema/tab"'
     for tag in "${tags[@]}"; do
         feature_array="$feature_array, \"tag/$tag\""
     done
@@ -437,7 +437,7 @@ function context_tab_add() {
     data_obj="$data_obj}"
 
     # Build the complete request data with the new schema under 'documents'
-    local data="{\"featureArray\": $feature_array, \"documents\": {\"schema\": \"data/abstraction/tab\", \"data\": $data_obj}}"
+    local data="{\"featureArray\": $feature_array, \"documents\": {\"schema\": \"data/schema/tab\", \"data\": $data_obj}}"
 
     canvas_http_post "/contexts/$context_id/documents" "$data" | jq .
 }
