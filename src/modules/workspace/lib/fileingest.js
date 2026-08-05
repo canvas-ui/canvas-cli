@@ -77,12 +77,12 @@ export async function ingestPath(ctx, { mode, adapter, useTargets = true }) {
     const flush = async (docs) => {
         // Context: insert at the context's own focused path — no path targeting.
         if (!useTargets) {
-            await adapter.insertDocuments({ documents: docs, features: ['data/abstraction/file'] });
+            await adapter.insertDocuments({ documents: docs, features: ['data/schema/file'] });
             return;
         }
         // Workspace: place under the primary tree target, link into the rest.
         const primary = targets[0];
-        const created = await adapter.insertDocuments({ documents: docs, features: ['data/abstraction/file'], ...targetBody(primary) });
+        const created = await adapter.insertDocuments({ documents: docs, features: ['data/schema/file'], ...targetBody(primary) });
         const ids = (Array.isArray(created) ? created : created?.documents || []).map(d => d.id).filter(Boolean);
         for (const target of targets.slice(1)) {
             await adapter.insertDocuments({ documentIds: ids, ...targetBody(target) });
@@ -96,7 +96,7 @@ export async function ingestPath(ctx, { mode, adapter, useTargets = true }) {
         const fs = fsMeta(fstat);
         const capturedAt = up.metadata?.exif?.capturedAt;
         const doc = {
-            schema: 'data/abstraction/file',
+            schema: 'data/schema/file',
             schemaVersion: '3.0',
             checksumArray: up.checksum ? [`sha256/${up.checksum}`] : [],
             locations: [{ url: up.url }],

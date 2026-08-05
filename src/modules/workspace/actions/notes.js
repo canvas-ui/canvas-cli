@@ -11,7 +11,7 @@ export default {
         const handle = resolveWorkspaceHandle(ctx);
         const docs = await handle.api.workspaces.documents(
             handle.id,
-            buildListDocumentsParams({ feature: 'data/abstraction/note' }),
+            buildListDocumentsParams({ feature: 'data/schema/note' }),
         );
         ctx.io.output(normalizeDocumentList(docs));
     },

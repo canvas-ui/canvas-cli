@@ -218,7 +218,7 @@ export function buildFileDoc(absPath, { deviceId, sha256, md5, size, mimeType, m
     // file://<deviceId>/<absolute-path-without-leading-slash>
     const fileUrl = `file://${deviceId}/${absPath.replace(/^\//, '')}`;
     return {
-        schema: 'data/abstraction/file',
+        schema: 'data/schema/file',
         schemaVersion: '3.0',
         checksumArray: [`sha256/${sha256}`, `md5/${md5}`],
         locations: [{ url: fileUrl }],

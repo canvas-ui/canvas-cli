@@ -12,7 +12,7 @@ export default {
         if (!handle) throw new UsageError('Context required');
         const docs = await handle.api.contexts.documents(
             handle.id,
-            buildListDocumentsParams({ feature: 'data/abstraction/dotfile' }),
+            buildListDocumentsParams({ feature: 'data/schema/dotfile' }),
         );
         io.output(normalizeDocumentList(docs));
     },

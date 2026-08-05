@@ -16,7 +16,7 @@ export default {
         if (op === 'list' || !['add', 'get', 'delete', 'remove'].includes(op)) {
             const docs = await handle.api.contexts.documents(
                 handle.id,
-                buildListDocumentsParams({ feature: 'data/abstraction/tab' }),
+                buildListDocumentsParams({ feature: 'data/schema/tab' }),
             );
             io.output(normalizeDocumentList(docs));
             return;
@@ -24,7 +24,7 @@ export default {
         if (op === 'add') {
             if (!args.value) throw new UsageError('URL required');
             const doc = {
-                schema: 'data/abstraction/tab',
+                schema: 'data/schema/tab',
                 data: {
                     url: args.value,
                     title: flags.title || args.value,
@@ -33,7 +33,7 @@ export default {
             };
             await handle.api.post(`/contexts/${handle.id}/documents`, {
                 documents: [doc],
-                features: ['data/abstraction/tab', 'client/app/canvas-cli'],
+                features: ['data/schema/tab', 'client/app/canvas-cli'],
             });
             io.success('Tab added');
             return;

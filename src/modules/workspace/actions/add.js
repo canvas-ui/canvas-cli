@@ -67,7 +67,7 @@ async function _addNote(ctx) {
     if (!content) throw new UsageError('Note content required');
 
     const doc = buildNoteDoc(content, flags.title);
-    const ids = await _insertToTargets(handle.api, handle.id, [doc], ['data/abstraction/note'], targets);
+    const ids = await _insertToTargets(handle.api, handle.id, [doc], ['data/schema/note'], targets);
     io.success(`Note created (${ids[0] || '?'})`);
 }
 
@@ -82,7 +82,7 @@ async function _addLink(ctx) {
 
     const rawTags = flags.tag;
     const tags = Array.isArray(rawTags) ? rawTags : (rawTags ? [rawTags] : []);
-    const features = ['data/abstraction/tab', ...tagsToFeatures(tags)];
+    const features = ['data/schema/tab', ...tagsToFeatures(tags)];
 
     const doc = buildTabDoc(url, { title: flags.title });
     const ids = await _insertToTargets(handle.api, handle.id, [doc], features, targets);

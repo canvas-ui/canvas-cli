@@ -16,7 +16,7 @@ export default {
         if (op === 'list' || !['add', 'get', 'delete', 'remove'].includes(op)) {
             const docs = await handle.api.contexts.documents(
                 handle.id,
-                buildListDocumentsParams({ feature: 'data/abstraction/note' }),
+                buildListDocumentsParams({ feature: 'data/schema/note' }),
             );
             io.output(normalizeDocumentList(docs));
             return;
@@ -24,7 +24,7 @@ export default {
         if (op === 'add') {
             if (!args.value) throw new UsageError('Note text required');
             const doc = {
-                schema: 'data/abstraction/note',
+                schema: 'data/schema/note',
                 data: {
                     content: args.value,
                     title: flags.title || `Note - ${new Date().toLocaleString()}`,
@@ -33,7 +33,7 @@ export default {
             };
             await handle.api.post(`/contexts/${handle.id}/documents`, {
                 documents: [doc],
-                features: ['data/abstraction/note', 'client/app/canvas-cli'],
+                features: ['data/schema/note', 'client/app/canvas-cli'],
             });
             io.success('Note added');
             return;

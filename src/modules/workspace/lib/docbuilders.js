@@ -2,7 +2,7 @@
 
 export function buildNoteDoc(content, title) {
     const doc = {
-        schema: 'data/abstraction/note',
+        schema: 'data/schema/note',
         schemaVersion: '2.0',
         data: { content },
     };
@@ -12,7 +12,7 @@ export function buildNoteDoc(content, title) {
 
 export function buildTabDoc(url, { title } = {}) {
     const doc = {
-        schema: 'data/abstraction/tab',
+        schema: 'data/schema/tab',
         schemaVersion: '2.0',
         data: { url },
     };
