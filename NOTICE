@@ -1,0 +1,78 @@
+Canvas CLI
+Copyright (C) 2024-2026 Jozef Melich
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE.  See the GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License along
+with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Contact:
+    lic@augmentd.eu       licensing
+    contrib@augmentd.eu   contributions
+    security@augmentd.eu   security
+
+PART OF CANVAS
+--------------
+
+The Canvas command-line client.
+
+This repository is one component of the Canvas project. It is developed and
+released as part of Canvas, but it lives in its own repository:
+
+    this component   https://github.com/canvas-ui/canvas-cli
+    the project      https://github.com/canvas-ui/canvas-server
+
+Canvas components are not all licensed the same way. The server runtime and the
+services it embeds are dual-licensed. The standalone clients are AGPL-only. The
+COMPONENTS section of the project NOTICE lists which is which.
+
+DISTRIBUTION
+------------
+
+This component is a client that runs on the user's own machine, so the network
+clause in section 13 of the AGPL is rarely the one that applies to it. Sections
+4 to 6 are. If you convey this program, modified or not, through an app store,
+an extension gallery, a package registry, a distribution image or an appliance,
+recipients must receive this licence and an offer of the corresponding source.
+
+If you build against a modified Canvas server, section 13 still reaches that
+server. See the project NOTICE.
+
+COPYRIGHT AND LICENSING
+-----------------------
+
+Copyright in this codebase is held by Jozef Melich.
+
+This component is available under the AGPL-3.0-or-later and under no other
+terms. No commercial licence is offered for it and none is planned. The Canvas
+clients stay free software in all cases, including for anyone who holds a
+commercial licence to the Canvas server runtime and its services.
+
+A commercial licence to another Canvas component does not extend to this one. If
+you modify this client and convey it, the AGPL applies to you in full, whatever
+other Canvas licences you hold.
+
+Commercial licensing of the dual-licensed components is described at
+https://github.com/canvas-ui/canvas-server/blob/main/COMMERCIAL.md
+Enquiries: lic@augmentd.eu
+
+    Augmentd s.r.o.
+    DUETT Business Center
+    Námestie Osloboditeľov 3/A
+    040 01 Košice, Slovakia
+    Company ID: 45331936
+    VAT ID: SK2022968717
+    https://augmentd.eu
+
+THIRD-PARTY CODE
+----------------
+
+Third-party dependencies keep their own licences. See the dependency manifests
+and lockfiles for their terms. This notice covers Canvas code only.

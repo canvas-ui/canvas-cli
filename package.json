@@ -1,8 +1,8 @@
 {
   "name": "canvas-cli",
-  "version": "2.1.8",
+  "version": "2.1.9",
   "description": "Canvas CLI",
-  "author": "me@idnc.sk",
+  "author": "Jozef Melich <me@idnc.sk>",
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "bin": {
