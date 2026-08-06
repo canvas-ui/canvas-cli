@@ -111,9 +111,17 @@ default_context="default"
 default_session="default"
 ```
 
-## License
+## Licence
 
-Licensed under AGPL-3.0-or-later. See main project LICENSE file.
+Copyright (C) 2023-2026 Jozef Melich.
+
+Canvas Shell is licensed under the **[AGPL-3.0-or-later](LICENSE)** and under no
+other terms. No commercial exemption is offered for this component, to anyone.
+The Canvas clients stay free software in all cases.
+
+Contributing needs no CLA here, only a DCO sign-off (`git commit -s`). See
+[CONTRIBUTING.md](CONTRIBUTING.md). The dual-licensed Canvas components are
+listed in [NOTICE](NOTICE).
 
 ---
 This project is funded by [Augmentd Labs](https://augmentd.eu/en/labs)
