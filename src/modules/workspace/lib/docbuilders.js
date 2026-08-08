@@ -1,28 +1,14 @@
 'use strict';
 
+// Document construction lives in @canvas/schemas; this module keeps the
+// CLI-flag plumbing (path specs, insert targets) and the historical
+// cli signature of buildNoteDoc (bare string title).
+import { buildNoteDoc as buildNote } from '@canvas/schemas';
+
+export { buildTabDoc, tagsToFeatures } from '@canvas/schemas';
+
 export function buildNoteDoc(content, title) {
-    const doc = {
-        schema: 'data/schema/note',
-        schemaVersion: '2.0',
-        data: { content },
-    };
-    if (title) doc.data.title = title;
-    return doc;
-}
-
-export function buildTabDoc(url, { title } = {}) {
-    const doc = {
-        schema: 'data/schema/tab',
-        schemaVersion: '2.0',
-        data: { url },
-    };
-    if (title) doc.data.title = title;
-    return doc;
-}
-
-export function tagsToFeatures(tags) {
-    const list = Array.isArray(tags) ? tags : (tags ? [tags] : []);
-    return list.filter(Boolean).map(t => `tag/${t}`);
+    return buildNote(content, { title });
 }
 
 /**

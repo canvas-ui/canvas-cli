@@ -2,8 +2,9 @@
 
 import { stat, readdir, createReadStream } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { join, extname, basename } from 'node:path';
+import { join, extname } from 'node:path';
 import { promisify } from 'node:util';
+import { buildFileDoc } from '@canvas/schemas';
 
 const statAsync = promisify(stat);
 const readdirAsync = promisify(readdir);
@@ -208,31 +209,9 @@ export async function readXattrs(filePath) {
 
 // ─── Document builder ─────────────────────────────────────────────────────────
 
-/**
- * Build a File document object ready for the workspace documents API.
- * @param {string} absPath
- * @param {{ deviceId: string, sha256: string, md5: string, size: number, mimeType: string, mtime?: Date }} opts
- * @returns {object}
- */
-export function buildFileDoc(absPath, { deviceId, sha256, md5, size, mimeType, mtime, fs, xattrs }) {
-    // file://<deviceId>/<absolute-path-without-leading-slash>
-    const fileUrl = `file://${deviceId}/${absPath.replace(/^\//, '')}`;
-    return {
-        schema: 'data/schema/file',
-        schemaVersion: '3.0',
-        checksumArray: [`sha256/${sha256}`, `md5/${md5}`],
-        locations: [{ url: fileUrl }],
-        metadata: {
-            contentType: mimeType,
-            size,
-            filename: basename(absPath),
-            mtime: mtime ? mtime.toISOString() : undefined,
-            ...(fs && Object.keys(fs).length ? { fs } : {}),
-            ...(xattrs && Object.keys(xattrs).length ? { xattrs } : {}),
-        },
-        data: {},
-    };
-}
+// Moved to @canvas/schemas (verbatim, wire-identical); re-exported for the
+// action files that import it from here.
+export { buildFileDoc };
 
 /**
  * Stat + hash + build a File document for a single local path.

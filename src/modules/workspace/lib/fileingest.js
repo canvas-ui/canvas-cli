@@ -12,6 +12,14 @@ const statAsync = promisify(stat);
 const BATCH_SIZE = 50;
 
 /**
+ * Streaming upload body for a local file. Under Bun (the compiled binary),
+ * Bun.file() is a Blob with known size — Bun fetch's best-supported body;
+ * under node a Readable streams via fetch duplex:'half'. Both avoid
+ * buffering whole files in memory.
+ */
+const blobBodyForPath = (fp) => (typeof Bun !== 'undefined' ? Bun.file(fp) : createReadStream(fp));
+
+/**
  * Shared file ingestion for the `add`(=upload) / `upload` / `index` verbs, over a
  * workspace OR context handle (via `adapter`).
  *
@@ -91,7 +99,7 @@ export async function ingestPath(ctx, { mode, adapter, useTargets = true }) {
 
     const buildUpload = async (fp) => {
         const fstat = await statAsync(fp);
-        const up = await adapter.uploadBlob(createReadStream(fp));
+        const up = await adapter.uploadBlob(blobBodyForPath(fp));
         const xattrs = await readXattrs(fp);
         const fs = fsMeta(fstat);
         const capturedAt = up.metadata?.exif?.capturedAt;

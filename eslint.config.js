@@ -10,6 +10,9 @@ export default [
             globals: {
                 ...globals.node,
                 ...globals.es2022,
+                // The compiled binary runs under Bun; Bun.file() is used on
+                // that path (see workspace/lib/fileingest.js).
+                Bun: 'readonly',
             },
         },
         rules: {

@@ -10,6 +10,7 @@ import { CanvasClient } from './transport/rest.js';
 import session from './session.js';
 import { remotes as remotesStore } from './storage.js';
 import { CanvasError, UsageError, AuthError } from './errors.js';
+import { isNetworkError } from '@canvas/api-client';
 import pkg from '../../package.json' with { type: 'json' };
 
 function readVersion() {
@@ -69,14 +70,10 @@ export async function main(argv = process.argv.slice(2)) {
             return 1;
         }
         if (err instanceof CanvasError) {
-            const cause = err.cause;
-            const isNetErr = cause && (
-                cause.code === 'ECONNREFUSED' ||
-                cause.code === 'ENOTFOUND' ||
-                cause.code === 'ETIMEDOUT' ||
-                cause.code === 'ECONNRESET'
-            );
-            if (isNetErr) {
+            // isNetworkError covers node/undici codes AND Bun's fetch codes —
+            // the compiled binary runs under Bun, where ECONNREFUSED-style
+            // codes never appear.
+            if (isNetworkError(err)) {
                 printConnectionFailed(err);
                 if (process.env.DEBUG) console.error(err.stack);
                 return 1;
