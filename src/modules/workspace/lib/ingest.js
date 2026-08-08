@@ -4,7 +4,7 @@ import { stat, readdir, createReadStream } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, extname } from 'node:path';
 import { promisify } from 'node:util';
-import { buildFileDoc } from '@canvas/schemas';
+import { buildFileDoc } from '@canvas-os/schemas';
 
 const statAsync = promisify(stat);
 const readdirAsync = promisify(readdir);
@@ -209,7 +209,7 @@ export async function readXattrs(filePath) {
 
 // ─── Document builder ─────────────────────────────────────────────────────────
 
-// Moved to @canvas/schemas (verbatim, wire-identical); re-exported for the
+// Moved to @canvas-os/schemas (verbatim, wire-identical); re-exported for the
 // action files that import it from here.
 export { buildFileDoc };
 

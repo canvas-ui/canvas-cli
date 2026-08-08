@@ -1,11 +1,11 @@
 'use strict';
 
-// Document construction lives in @canvas/schemas; this module keeps the
+// Document construction lives in @canvas-os/schemas; this module keeps the
 // CLI-flag plumbing (path specs, insert targets) and the historical
 // cli signature of buildNoteDoc (bare string title).
-import { buildNoteDoc as buildNote } from '@canvas/schemas';
+import { buildNoteDoc as buildNote } from '@canvas-os/schemas';
 
-export { buildTabDoc, tagsToFeatures } from '@canvas/schemas';
+export { buildTabDoc, tagsToFeatures } from '@canvas-os/schemas';
 
 export function buildNoteDoc(content, title) {
     return buildNote(content, { title });

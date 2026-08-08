@@ -31,7 +31,9 @@ function isValidRoot(dir) {
         const script = path.join(dir, 'src/Server.js');
         if (!existsSync(pkg) || !existsSync(script)) return false;
         const j = JSON.parse(readFileSync(pkg, 'utf8'));
-        return j.name === 'canvas-server' || j.name === '@canvas/server';
+        // Historical process names stay matched — running servers registered
+        // under the old names must remain recognizable.
+        return j.name === 'canvas-server' || j.name === '@canvas/server' || j.name === '@canvas-os/server';
     } catch { return false; }
 }
 
