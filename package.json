@@ -44,9 +44,9 @@
     "shell"
   ],
   "dependencies": {
-    "@canvas-os/api-client": "workspace:*",
-    "@canvas-os/protocol": "workspace:*",
-    "@canvas-os/schemas": "workspace:*",
+    "@augmentd-labs/canvas-api-client": "workspace:*",
+    "@augmentd-labs/canvas-protocol": "workspace:*",
+    "@augmentd-labs/canvas-schemas": "workspace:*",
     "chalk": "^5.6.2",
     "cli-table3": "^0.6.5",
     "date-fns": "^4.1.0",

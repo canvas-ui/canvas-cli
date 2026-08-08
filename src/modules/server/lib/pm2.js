@@ -33,7 +33,7 @@ function isValidRoot(dir) {
         const j = JSON.parse(readFileSync(pkg, 'utf8'));
         // Historical process names stay matched — running servers registered
         // under the old names must remain recognizable.
-        return j.name === 'canvas-server' || j.name === '@canvas/server' || j.name === '@canvas-os/server';
+        return j.name === 'canvas-server' || j.name === '@canvas/server' || j.name === '@augmentd-labs/canvas-server';
     } catch { return false; }
 }
 

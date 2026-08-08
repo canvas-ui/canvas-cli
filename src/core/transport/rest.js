@@ -1,7 +1,7 @@
 'use strict';
 
-import { CanvasApiClient } from '@canvas-os/api-client';
-import { API_BASE, DEFAULT_TIMEOUT_MS } from '@canvas-os/protocol';
+import { CanvasApiClient } from '@augmentd-labs/canvas-api-client';
+import { API_BASE, DEFAULT_TIMEOUT_MS } from '@augmentd-labs/canvas-protocol';
 import session from '../session.js';
 import { remotes as remotesStore, resolveAlias } from '../storage.js';
 import { CanvasError, AuthError, UsageError } from '../errors.js';
@@ -11,7 +11,7 @@ import {
 } from './address.js';
 
 /**
- * Thin remote-aware wrapper over the shared @canvas-os/api-client. The namespace
+ * Thin remote-aware wrapper over the shared @augmentd-labs/canvas-api-client. The namespace
  * surface (.auth/.workspaces/.contexts/.agents/.roles, get/post/put/patch/
  * delete, ping) comes from CanvasApiClient; this class only binds it to a
  * remote registry entry. Token freshness: getToken closes over the same

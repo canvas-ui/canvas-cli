@@ -10,7 +10,7 @@ import { CanvasClient } from './transport/rest.js';
 import session from './session.js';
 import { remotes as remotesStore } from './storage.js';
 import { CanvasError, UsageError, AuthError } from './errors.js';
-import { isNetworkError } from '@canvas-os/api-client';
+import { isNetworkError } from '@augmentd-labs/canvas-api-client';
 import pkg from '../../package.json' with { type: 'json' };
 
 function readVersion() {
