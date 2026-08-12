@@ -1,8 +1,25 @@
 # TODO
 
-- Complete refactor of this vibe-coded mess!
-- Modular, built on top of the battle-tested shell.js codebase
-  - Data abstractions (notes, emails, chat messages, files etc) should have the logic in separate files/folders to keep the whole implementation easily extendible, not in one "god" class
+## Dotfile encryption (`dot` module; moved from canvas-server dotfile service TODO)
+
+Ref: https://chatgpt.com/c/6886b6b2-a264-832f-8906-2bf6d7741bec
+
+The server-side dotfile service ships the git hooks (`.dot/hooks/`, `install-hooks.sh`,
+`encrypted.index`) — the CLI half is missing:
+
+- `dot install-hooks` — run the shipped installer so 90% of users never execute the
+  script manually.
+- `dot add ~/.bashrc user@remote:workspace/shell/bashrc --encrypt` — register
+  `shell/bashrc` in `.dot/encrypted.index` (paths relative to repo root),
+  auto-gitignore the decrypted versions.
+- `dot encrypt <file>` / `dot decrypt <file>` — auto-update the index so it stays
+  consistent. Make the whole flow as transparent to the user as possible.
+- [ ] FIX FIRST: the shipped hook scripts in canvas-server
+      (`src/core/workspace/services/dotfile/files/.dot/`) are broken end-to-end —
+      `openssl enc -aes-256-gcm` fails at runtime (enc rejects AEAD modes; pick
+      aes-256-cbc + HMAC or use `openssl pkeyutl`/age), and the `'\\.encrypted$'`
+      grep patterns are double-escaped so they never match real `*.encrypted` files.
+
 - Auto-install ./scripts/update-prompt.sh on *nix
 - Fix BUN icons
 - Fix windoze builds
@@ -13,30 +30,11 @@
 
 ## Main modules
 
-- `canvas`
 - `canvas workspace`, alias `canvas ws`, command alias `ws`
   - Subcommands:
-    - list
     - bind
-- `canvas context`, alias `canvas ctx`, command alias `ctx`
-  - Subcommands:
-    - list
-    - bind
-- `canvas agent`, alias `canvas ag`, command alias `ag` and `hi`
-  - Subcommands:
-    - list: list agents
-    - 
-  - Examples:
-    - hi lucy "whats the weather today" 
-    - hi carmack "any new PRs to review?"
-    - ws work hi lucy "do we have any new emails for this customer?" # Workspace bound query
-    - ctx hi lucy "draft a reply to that email from operations please" # Context bound query
-    - tail -n500 /var/log/syslog | hi linus any idea what those ACPI errors are
 - `canvas role`: # Docker/container based role orcherstration
 - `canvas remote`: Might get merged with `device`
-  - Subcommands:
-    - list
-    - bind
 - `canvas device`:
 - `canvas settings`, alias `canvas config` and `canvas cfg`
   - Subcommands:
@@ -44,12 +42,6 @@
     - set configName var.path
     - get configName var.path
     - test configName
-
-## Output formats
-
-- table (default where applicable)
-- json
-- csv
 
 ## Utilities
 
@@ -60,38 +52,4 @@
 
 ## Aliases
 
-- contexts: ctx list
-- workspaces: ws list
-- agents: agent list
-- roles: role list
 - devices: device list
-- remotes: remote list
-
-
-### Remotes
-
-Remote examples:
-
-```
-Remote #1:
-URL: https://canvas.idnc.sk
-User: me@idnc.sk
-UserName: idnc_sk
-Auth: {}
-RemoteId: idnc_sk@canvas.idnc.sk
-RemoteName: idnc_sk@canvas (or remoteAlias?)
-
-Remote #2:
-URL: https://canvas.idnc.sk
-UserName: user2
-Auth: {}
-RemoteId: user2@canvas.idnc.sk
-RemoteName: user2@canvas
-
-Remote #3:
-URL: http://127.0.0.1:8001
-UserName: admin
-Auth: {}
-RemoteId: admin@127.0.0.1:8001
-RemoteName: admin@dev 
-```

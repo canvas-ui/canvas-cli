@@ -60,8 +60,11 @@ sudo mv canvas-* ~/.local/bin/canvas
 # Create symlinks to your local bin directory
 ln -sf $(pwd)/bin/canvas.js ~/.local/bin/canvas
 ln -sf $(pwd)/bin/context.js ~/.local/bin/context
+ln -sf $(pwd)/bin/ctx.js ~/.local/bin/ctx
 ln -sf $(pwd)/bin/ws.js ~/.local/bin/ws
-ln -sf $(pwd)/bin/q.js ~/.local/bin/q
+ln -sf $(pwd)/bin/dot.js ~/.local/bin/dot
+ln -sf $(pwd)/bin/agent.js ~/.local/bin/agent
+ln -sf $(pwd)/bin/hi.js ~/.local/bin/hi
 
 # Make binaries executable
 chmod +x bin/*
@@ -99,7 +102,7 @@ setx PATH "%PATH%;%CD%\bin"
 node bin/canvas.js --help
 node bin/context.js list
 node bin/ws.js list
-node bin/q.js "test query"
+node bin/hi.js lucy "test query"
 ```
 
 ### Method 3: Global NPM Installation
@@ -115,10 +118,10 @@ npm link
 This creates global symlinks:
 
 - `canvas` → Canvas CLI main command
-- `context` → Context management shortcut
-- `dot` → Dotfile Manager
-- `q` → AI assistant shortcut
+- `context`, `ctx` → Context management shortcuts
 - `ws` → Workspace management shortcut
+- `dot` → Dotfile Manager
+- `agent`, `hi` → AI agent shortcuts
 
 ### Method 4: Direct Execution (Development)
 
@@ -138,51 +141,80 @@ node bin\canvas.js --help
 canvas --help
 ```
 
+### Commands
+
+Functionality is organized into modules: `workspace` (alias `ws`), `context` (alias `ctx`), `agent` (aliases `ag`, `hi`), `role`, `remote`, `dot`, `auth`, `alias`, `server` and `config` (aliases `cfg`, `settings`). The `ws`, `ctx`, `context`, `hi`, `agent` and `dot` binaries are standalone shortcuts for their respective modules.
+
+```bash
+# Workspaces
+canvas ws list
+ws list                        # standalone shortcut
+
+# Contexts
+canvas ctx list
+canvas ctx bind <context>
+
+# Plural shortcuts expand to "<module> list"
+canvas workspaces
+canvas contexts
+canvas agents
+canvas roles
+canvas remotes
+
+# Config (list | show | get | set | delete | edit | validate)
+canvas config show
+canvas config get server.url
+canvas config set server.url http://localhost:8001
+```
+
+### AI assistance
+
+```bash
+# Prompt an agent (default action, so no subcommand needed)
+hi lucy "whats the weather today"
+canvas agent lucy "any new PRs to review?"
+
+# Pipe stdin into the prompt
+tail -n500 /var/log/syslog | hi linus "any idea what those ACPI errors are?"
+
+# Workspace-bound queries
+canvas ws work agent prompt lucy "do we have any new emails for this customer?"
+hi lucy --workspace work --context foo "draft a reply please"
+```
+
+### Remotes
+
+Remotes are identified as `user@remote-name`. The first remote added becomes the default; `bind` switches between them.
+
+```bash
+canvas remote add idnc_sk@canvas https://canvas.idnc.sk    # prompts for login if no --token
+canvas remote add admin@dev http://127.0.0.1:8001 --token <api-token>
+canvas remotes                                              # list remotes
+canvas remote bind admin@dev
+```
+
+### Output formats
+
+List-style commands accept `-f, --format` with `table` (default), `json` or `csv`:
+
+```bash
+canvas ws list -f json
+canvas contexts -f csv
+```
+
 ## Configuration
 
-Configuration is stored in `~/.canvas/config/canvas-cli.json`:
+The CLI keeps its state in `~/.canvas/config/`:
 
-```json
-{
-    "server": {
-        "url": "http://localhost:8001/rest/v2",
-        "auth": {
-            "type": "token",
-            "token": "canvas-server-token"
-        }
-    },
-    "session": {
-        "context": {
-            "id": "default",
-            "clientArray": ["client/app/canvas-cli", "..."]
-        }
-    },
-    "connectors": {
-        "anthropic": {
-            "driver": "anthropic",
-            "apiKey": "",
-            "model": "claude-3-5-sonnet-20241022",
-            "maxTokens": 4096
-        },
-        "openai": {
-            "driver": "openai",
-            "apiKey": "",
-            "model": "gpt-4o",
-            "maxTokens": 4096
-        },
-        "ollama": {
-            "driver": "ollama",
-            "host": "http://localhost:11434",
-            "model": "qwen2.5-coder:latest"
-        }
-    },
-    "ai": {
-        "defaultConnector": "anthropic",
-        "priority": ["anthropic", "openai", "ollama"],
-        "contextTemplate": "canvas-assistant"
-    }
-}
-```
+| File | Contents |
+| --- | --- |
+| `cli.json` | General settings (`canvas config list \| get \| set \| edit`) |
+| `remotes.json` | Registered remotes with their URLs and auth tokens — managed via `canvas remote add \| bind \| rename`, not by hand |
+| `cli-session.json` | The current session: bound remote, bound context, default workspace |
+| `cli-aliases.json` | User-defined command aliases (`canvas alias`) |
+
+AI prompts (`hi`, `canvas agent`) run against agents hosted on the bound
+Canvas server — model/provider configuration lives server-side, not in the CLI.
 
 ## Licence
 
