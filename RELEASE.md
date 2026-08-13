@@ -1,193 +1,117 @@
 # Canvas CLI Release Guide
 
-This document explains how to create and manage releases for Canvas CLI.
+Releases are driven from the monorepo root by `scripts/update-releases.sh`.
+CI does the building and publishing; you only decide the version.
 
-## Release Strategy
-
-We use **GitHub Actions** for automated builds and releases, triggered by Git tags. This ensures consistent, reproducible builds across all platforms.
-
-### Release Types
-
-- **Stable releases**: `v1.0.0`, `v1.2.3` - Full releases
-- **Pre-releases**: `v1.0.0-alpha.1`, `v1.2.0-beta.2` - Automatically marked as pre-release
-- **Development builds**: Built on every push to `main`/`develop` (available as artifacts)
-
-## Creating a Release
-
-### 1. Prepare for Release
+## The whole thing
 
 ```bash
-# Ensure you're on main branch and up to date
-git checkout main
-git pull origin main
-
-# Run tests and build locally
-npm run lint
-npm run build:dev
-./dist/canvas-dev --version
-
-# Update version in package.json if needed
-npm version patch  # or minor, major
+# from the monorepo root, on a clean main
+npm run release:cli -- --bump patch     # or minor / major
 ```
 
-### 2. Create and Push Tag
+That bumps `apps/cli/package.json`, commits it, pushes `main`, pushes the tag
+`cli-v<version>`, and stops. Everything after that happens in
+`.github/workflows/release.yml`.
+
+If the version is already what you want, drop `--bump` and it just tags.
+
+**You usually don't need to run anything.** `auto-release.yml` runs the same
+script on every push to `main` and releases any app whose current version has
+no tag yet. So bumping `apps/cli/package.json` in an ordinary commit is enough
+— the release follows by itself.
+
+Useful flags: `--no-push` prints what would happen and stops; `--allow-dirty`
+skips the clean-tree check (hacking only).
+
+## What CI does with the tag
+
+The `cli` job in `.github/workflows/release.yml`:
+
+1. **Asserts** `cli-v<X>` matches `apps/cli/package.json`. A stray tag fails
+   here rather than publishing mislabeled artifacts.
+2. **Builds five binaries** — bun cross-compiles every target from one Linux
+   runner: `canvas-linux`, `canvas-linux-arm`, `canvas-macos`,
+   `canvas-macos-arm`, `canvas-windows.exe`.
+3. **Writes `SHA256SUMS`** over all five.
+4. **Creates the GitHub Release** for the tag with the binaries attached.
+5. **Publishes to npm**, in dependency order, skipping any version already on
+   the registry:
+   `@augmentd-labs/canvas-protocol` → `canvas-schemas` → `canvas-api-client` →
+   `@augmentd-labs/canvas-cli`.
+
+npm publishing runs *after* the GitHub Release on purpose: a registry outage
+costs you the npm publish, never the binaries. Re-run the job once npm is back
+— the skip-if-published check makes it safe to repeat.
+
+Watch it: `gh run list --workflow=release.yml --limit 1`
+
+## Versions and names
+
+The version lives in **one** place: `apps/cli/package.json`. Nothing else
+carries it; `--version` reads it at runtime.
+
+The npm package is **`@augmentd-labs/canvas-cli`** — the unscoped `canvas-cli`
+name belongs to an unrelated package on npmjs. This affects the install
+command only. The binary is still `canvas`, and the `client/app/canvas-cli`
+protocol identifiers are unchanged.
 
 ```bash
-# Create a new tag (this triggers the release workflow)
-git tag v1.0.0
-
-# Push the tag to GitHub
-git push origin v1.0.0
+npx @augmentd-labs/canvas-cli
+npm install -g @augmentd-labs/canvas-cli
 ```
 
-### 3. Automated Release Process
+The npm package ships **only the `canvas` command**, via `publishConfig.bin`.
+The other six (`context`, `ctx`, `dot`, `ws`, `agent`, `hi`) are too generic to
+put on a global PATH silently; they remain available in the standalone
+binaries and in local development.
 
-Once you push a tag, GitHub Actions will automatically:
+The three `packages/*` dependencies are published because the CLI depends on
+them — `pnpm` rewrites `workspace:*` to real versions when it packs, so those
+versions must exist on the registry before the CLI lands. They bump far less
+often than the CLI, which is why the publish loop skips versions already there.
 
-1. ✅ **Extract version** from the tag
-2. ✅ **Update version** in source code
-3. ✅ **Build binaries** for all platforms:
-    - Linux x64 & ARM64
-    - macOS x64 & ARM64 (Apple Silicon)
-    - Windows x64
-4. ✅ **Test binaries** to ensure they work
-5. ✅ **Create archives** (.tar.gz for Unix, .zip for Windows)
-6. ✅ **Generate checksums** for verification
-7. ✅ **Create GitHub Release** with:
-    - Professional release notes
-    - Download links for all platforms
-    - Installation instructions
-    - Checksum verification
+## One-time setup
 
-### 4. Post-Release
+Publishing needs an **`NPM_TOKEN`** repository secret — a granular token with
+publish rights on the `@augmentd-labs` scope. Without it, the publish step
+fails and the GitHub Release still succeeds.
 
-After the automated release:
+Once all four packages exist on npmjs, switch each to **Trusted Publishing**
+(OIDC) in its npmjs settings and delete the secret; the `id-token: write`
+permission the job already has is all that needs. Publishes are attested with
+provenance either way.
 
-1. **Verify the release** on GitHub
-2. **Test downloads** on different platforms
-3. **Update documentation** if needed
-4. **Announce the release** (social media, Discord, etc.)
+## Not automated yet
 
-## Manual Release (Emergency/Testing)
+- **Code signing** for macOS and Windows binaries. Downloads trip Gatekeeper
+  and SmartScreen today.
+- **Homebrew tap / Scoop manifests.** Cheap to add on top of the existing
+  release assets when there's demand.
+- **Changelog generation.** `.changeset/` exists but nothing consumes it;
+  versions are bumped by the release script.
 
-If you need to create a release manually:
+## Rollback
+
+npm forbids republishing a version, so **roll forward**: fix, `--bump patch`,
+release again. `npm deprecate` warns people off a bad version:
 
 ```bash
-# Build all platforms
-npm run build:all
-
-# Create release directory
-mkdir -p release-assets
-
-# Copy and rename binaries
-cp dist/canvas-linux release-assets/canvas-linux-x64
-cp dist/canvas-linux-arm release-assets/canvas-linux-arm64
-cp dist/canvas-macos release-assets/canvas-macos-x64
-cp dist/canvas-macos-arm release-assets/canvas-macos-arm64
-cp dist/canvas-windows.exe release-assets/canvas-windows-x64.exe
-
-# Create archives
-cd release-assets
-tar -czf canvas-1.0.0-linux-x64.tar.gz canvas-linux-x64
-tar -czf canvas-1.0.0-linux-arm64.tar.gz canvas-linux-arm64
-tar -czf canvas-1.0.0-macos-x64.tar.gz canvas-macos-x64
-tar -czf canvas-1.0.0-macos-arm64.tar.gz canvas-macos-arm64
-zip canvas-1.0.0-windows-x64.zip canvas-windows-x64.exe
-
-# Generate checksums
-sha256sum *.tar.gz *.zip > checksums.txt
-
-# Upload to GitHub manually via web interface
+npm deprecate @augmentd-labs/canvas-cli@2.1.9 "broken, use 2.1.10"
 ```
 
-## Version Numbering
+Unpublishing is only possible within 72 hours and breaks anyone who installed
+in the meantime — prefer deprecation.
 
-We follow [Semantic Versioning](https://semver.org/):
-
-- **MAJOR.MINOR.PATCH** (e.g., `v1.2.3`)
-- **MAJOR**: Breaking changes
-- **MINOR**: New features (backwards compatible)
-- **PATCH**: Bug fixes (backwards compatible)
-
-### Pre-release Versions
-
-- **Alpha**: `v1.0.0-alpha.1` - Early testing
-- **Beta**: `v1.0.0-beta.1` - Feature complete, testing
-- **RC**: `v1.0.0-rc.1` - Release candidate
-
-## Release Checklist
-
-Before creating a release:
-
-- [ ] All tests pass locally
-- [ ] Version number updated in `package.json`
-- [ ] CHANGELOG updated (if maintained)
-- [ ] Documentation updated
-- [ ] No critical issues in GitHub Issues
-- [ ] Main branch is stable
-
-After release:
-
-- [ ] GitHub release created successfully
-- [ ] All binary downloads work
-- [ ] Binaries are executable and functional
-- [ ] Checksums verify correctly
-- [ ] Release notes are accurate
-
-## Hotfix Releases
-
-For critical bug fixes:
-
-1. Create a hotfix branch from the release tag
-2. Apply the minimal fix
-3. Test thoroughly
-4. Create a new patch version tag
-5. The automation will handle the rest
+For the GitHub side, mark the release as a pre-release to bury it, or delete
+the tag if it was never consumed:
 
 ```bash
-git checkout v1.0.0
-git checkout -b hotfix/v1.0.1
-# Make fixes
-git commit -m "Fix critical bug"
-git tag v1.0.1
-git push origin v1.0.1
+git tag -d cli-v2.1.9 && git push origin :refs/tags/cli-v2.1.9
 ```
 
-## Rollback Strategy
+## Legacy
 
-If a release has critical issues:
-
-1. **Immediate**: Mark the GitHub release as "Pre-release" to reduce visibility
-2. **Short-term**: Create a new hotfix release
-3. **Long-term**: Delete the problematic release if necessary
-
-```bash
-# Delete a tag locally and remotely (use carefully!)
-git tag -d v1.0.0
-git push origin :refs/tags/v1.0.0
-```
-
-## Monitoring Releases
-
-- **GitHub Actions**: Monitor build status at `/actions`
-- **Downloads**: Track download stats on the releases page
-- **Issues**: Watch for reports of broken binaries
-- **Feedback**: Monitor community channels for release feedback
-
-## Security Considerations
-
-- **Code signing**: Future enhancement for macOS/Windows
-- **Checksums**: Always verify with provided SHA256 hashes
-- **Supply chain**: All builds happen in clean GitHub Actions environments
-- **Provenance**: Full build logs available in GitHub Actions
-
-## Future Enhancements
-
-Planned improvements to the release process:
-
-- [ ] **Automated changelog generation**
-- [ ] **Code signing** for macOS and Windows binaries
-- [ ] **Auto-update mechanism** in the CLI
-- [ ] **Release candidates** workflow
-- [ ] **Homebrew formula** auto-update
-- [ ] **Package manager integrations** (APT, Chocolatey, etc.)
+`scripts/release.sh` and `scripts/cleanup-releases.sh` in this directory are
+leftovers from when the CLI lived in its own repository. They describe a flow
+that no longer exists — do not use them.

@@ -10,36 +10,54 @@ A command-line interface for managing Canvas workspaces, contexts, dotfiles and 
 
 ### Method 1: Download Standalone Binary (Recommended)
 
-**No dependencies required!** Download the latest release for your platform:
+**No dependencies required!** Each release attaches single-file binaries —
+downloaded as-is, not archived:
 
 | Platform | Architecture | Download |
 | --- | --- | --- |
-| **Linux** | x64 | [📦 canvas-linux-x64.tar.gz](https://github.com/canvas-ui/canvas-cli/releases/latest) |
-| **Linux** | ARM64 | [📦 canvas-linux-arm64.tar.gz](https://github.com/canvas-ui/canvas-cli/releases/latest) |
-| **macOS** | x64 | [📦 canvas-macos-x64.tar.gz](https://github.com/canvas-ui/canvas-cli/releases/latest) |
-| **macOS** | ARM64 (Apple Silicon) | [📦 canvas-macos-arm64.tar.gz](https://github.com/canvas-ui/canvas-cli/releases/latest) |
+| **Linux** | x64 | [📦 canvas-linux](https://github.com/canvas-ui/canvas/releases/latest) |
+| **Linux** | ARM64 | [📦 canvas-linux-arm](https://github.com/canvas-ui/canvas/releases/latest) |
+| **macOS** | x64 | [📦 canvas-macos](https://github.com/canvas-ui/canvas/releases/latest) |
+| **macOS** | ARM64 (Apple Silicon) | [📦 canvas-macos-arm](https://github.com/canvas-ui/canvas/releases/latest) |
+| **Windows** | x64 | [📦 canvas-windows.exe](https://github.com/canvas-ui/canvas/releases/latest) |
 
-**Quick install with our script:**
+Every release also ships `SHA256SUMS`; verify with
+`sha256sum -c SHA256SUMS --ignore-missing`.
+
+macOS and Windows binaries are **not code-signed yet**, so Gatekeeper and
+SmartScreen will warn on first run.
 
 ```bash
-# One-liner "trust-me-bro" installation (Linux/macOS)
-curl -sSL https://raw.githubusercontent.com/canvas-ui/canvas-cli/main/scripts/install.sh | bash
+# Manual installation (Linux/macOS)
+chmod +x canvas-linux
+mv canvas-linux ~/.local/bin/canvas
 
 # (Optional) Install prompt update script
 mkdir -p ~/.canvas/scripts
-curl -sSL https://raw.githubusercontent.com/canvas-ui/canvas-cli/refs/heads/main/scripts/update-prompt.sh -o ~/.canvas/scripts/update-prompt.sh
+cp scripts/update-prompt.sh ~/.canvas/scripts/update-prompt.sh
 chmod +x ~/.canvas/scripts/update-prompt.sh
 
 # Add to bashrc
 if [ -f $HOME/.canvas/scripts/update-prompt.sh ]; then
   . $HOME/.canvas/scripts/update-prompt.sh
-fi; 
-
-# Manual installation
-tar -xzf canvas-*.tar.gz
-chmod +x canvas-*
-sudo mv canvas-* ~/.local/bin/canvas
+fi;
 ```
+
+`scripts/install.sh`, `install.ps1` and `install.bat` in this directory are
+from the pre-monorepo layout and still expect the old standalone repository —
+they need updating before the one-liner install is advertised again.
+
+### Method 1b: npm
+
+```bash
+npx @augmentd-labs/canvas-cli          # one-off
+npm install -g @augmentd-labs/canvas-cli   # installs the `canvas` command
+```
+
+The unscoped `canvas-cli` name on npmjs is an unrelated package — use the
+scoped name. The npm package installs only the `canvas` command; the other
+entry points (`ctx`, `context`, `dot`, `ws`, `agent`, `hi`) ship with the
+standalone binaries.
 
 ### Method 2: Manual Install (Cross-Platform)
 
@@ -51,7 +69,7 @@ sudo mv canvas-* ~/.local/bin/canvas
 
 #### Git clone this repository
 
-`git clone https://github.com/canvas-ui/canvas-cli ~/path/to/canvas-cli` `cd ~/path/to/canvas-cli`
+`git clone https://github.com/canvas-ui/canvas ~/path/to/canvas` `cd ~/path/to/canvas/apps/cli`
 
 #### Linux/Mac
 

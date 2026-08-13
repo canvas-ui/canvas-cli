@@ -1,5 +1,5 @@
 {
-  "name": "canvas-cli",
+  "name": "@augmentd-labs/canvas-cli",
   "version": "2.1.9",
   "description": "Canvas CLI",
   "author": "Jozef Melich <me@idnc.sk>",
@@ -31,9 +31,22 @@
     "generate:icons": "scripts/generate-icons.sh",
     "clean": "rm -rf dist"
   },
+  "files": [
+    "bin",
+    "src",
+    "NOTICE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "bin": {
+      "canvas": "bin/canvas.js"
+    }
+  },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/canvas-ui/canvas-cli.git"
+    "url": "git+https://github.com/canvas-ui/canvas.git",
+    "directory": "apps/cli"
   },
   "keywords": [
     "cli",
