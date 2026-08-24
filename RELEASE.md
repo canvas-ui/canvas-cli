@@ -27,9 +27,21 @@ an explicit `--bump` always wins over the auto-bump.
 
 The auto-bump commit is pushed to `main` as `github-actions[bot]` (runners have
 no git identity of their own; a local run keeps yours). `main` is protected by
-a required `cla` check that admins bypass but the bot does not — if that push
-is ever rejected, add a **`RELEASE_TOKEN`** secret (an admin PAT with
-`contents: write`) and `auto-release.yml` picks it up automatically.
+a required `cla` status check, and because `cla.yml` only runs on pull requests,
+a commit pushed straight to `main` never receives that status at all — admins
+bypass the rule, the bot does not. So the push authenticates with the
+**`RELEASE_TOKEN`** secret (an admin PAT with `contents: write`), which
+`auto-release.yml` prefers over `GITHUB_TOKEN` automatically:
+
+```yaml
+token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+```
+
+If that secret is ever removed, the fallback silently becomes `GITHUB_TOKEN`
+and every auto-bump fails at the push with `protected branch hook declined`.
+Note it must be a **repository** secret (or an org secret whose repository-access
+list includes this repo) — an org secret scoped to "private repositories only"
+does not reach this public repo.
 
 The auto-bump commit re-runs `auto-release.yml`
 once. That second run finds nothing changed since the new tag and stops — no
