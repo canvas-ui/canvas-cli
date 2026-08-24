@@ -25,7 +25,13 @@ releases. Merge CLI work to `main` and the binaries publish themselves.
 Use `--bump minor|major` explicitly when the change deserves more than a patch;
 an explicit `--bump` always wins over the auto-bump.
 
-The auto-bump commit is pushed to `main`, which re-runs `auto-release.yml`
+The auto-bump commit is pushed to `main` as `github-actions[bot]` (runners have
+no git identity of their own; a local run keeps yours). `main` is protected by
+a required `cla` check that admins bypass but the bot does not — if that push
+is ever rejected, add a **`RELEASE_TOKEN`** secret (an admin PAT with
+`contents: write`) and `auto-release.yml` picks it up automatically.
+
+The auto-bump commit re-runs `auto-release.yml`
 once. That second run finds nothing changed since the new tag and stops — no
 loop. Only the CLI opts in, via `AUTOBUMP_APPS` in `scripts/update-releases.sh`
 (desktop would fire a 3-OS Tauri build on every touch; web republishes its
