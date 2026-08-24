@@ -22,6 +22,10 @@ same script on every push to `main` with `--autobump`: if `apps/cli/**` — or a
 `cli-v` tag, it patch-bumps `apps/cli/package.json`, commits it, tags, and
 releases. Merge CLI work to `main` and the binaries publish themselves.
 
+Markdown is excluded: editing a README or this file does not cut a release,
+since none of it ends up in a binary. A commit that touches both docs and code
+still releases — the exclusion drops files from the check, not commits.
+
 Use `--bump minor|major` explicitly when the change deserves more than a patch;
 an explicit `--bump` always wins over the auto-bump.
 
