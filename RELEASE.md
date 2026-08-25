@@ -1,12 +1,21 @@
 # Canvas CLI Release Guide
 
-Releases are driven from the monorepo root by `scripts/update-releases.sh`.
-CI does the building and publishing; you only decide the version.
+Releases are cut locally. CI builds and publishes from the tag; it never
+bumps a version and never writes to `main`.
 
 ## The whole thing
 
+From the stack root, ship whatever actually moved (CLI included if its code
+changed since the last `cli-v*` tag):
+
 ```bash
-# from the monorepo root, on a clean main
+./canvas-release.sh
+./canvas-release.sh --apps cli --bump minor
+```
+
+From the monorepo root, one app:
+
+```bash
 npm run release:cli -- --bump patch     # or minor / major
 ```
 
@@ -15,46 +24,14 @@ That bumps `apps/cli/package.json`, commits it, pushes `main`, pushes the tag
 `.github/workflows/release.yml`.
 
 If the version is already what you want, drop `--bump` and it just tags.
+`--if-needed` (what `canvas-release.sh` passes) skips the app when nothing
+shippable moved, and patch-bumps when the current version is already tagged.
 
-**You usually don't need to run anything at all.** `auto-release.yml` runs the
-same script on every push to `main` with `--autobump`: if `apps/cli/**` — or a
-`packages/*` workspace package the CLI depends on — changed since the last
-`cli-v` tag, it patch-bumps `apps/cli/package.json`, commits it, tags, and
-releases. Merge CLI work to `main` and the binaries publish themselves.
+Markdown is excluded from the "did it move?" check: editing a README does not
+cut a release. A commit that touches both docs and code still does.
 
-Markdown is excluded: editing a README or this file does not cut a release,
-since none of it ends up in a binary. A commit that touches both docs and code
-still releases — the exclusion drops files from the check, not commits.
-
-Use `--bump minor|major` explicitly when the change deserves more than a patch;
-an explicit `--bump` always wins over the auto-bump.
-
-The auto-bump commit is pushed to `main` as `github-actions[bot]` (runners have
-no git identity of their own; a local run keeps yours). `main` is protected by
-a required `cla` status check, and because `cla.yml` only runs on pull requests,
-a commit pushed straight to `main` never receives that status at all — admins
-bypass the rule, the bot does not. So the push authenticates with the
-**`RELEASE_TOKEN`** secret (an admin PAT with `contents: write`), which
-`auto-release.yml` prefers over `GITHUB_TOKEN` automatically:
-
-```yaml
-token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
-```
-
-If that secret is ever removed, the fallback silently becomes `GITHUB_TOKEN`
-and every auto-bump fails at the push with `protected branch hook declined`.
-Note it must be a **repository** secret (or an org secret whose repository-access
-list includes this repo) — an org secret scoped to "private repositories only"
-does not reach this public repo.
-
-The auto-bump commit re-runs `auto-release.yml`
-once. That second run finds nothing changed since the new tag and stops — no
-loop. Only the CLI opts in, via `AUTOBUMP_APPS` in `scripts/update-releases.sh`
-(desktop would fire a 3-OS Tauri build on every touch; web republishes its
-branch every push regardless of version).
-
-Useful flags: `--no-push` prints what would happen and stops; `--allow-dirty`
-skips the clean-tree check (hacking only).
+Useful flags on the per-app script: `--no-push` / `--dry-run` print what would
+happen; `--allow-dirty` skips the clean-tree check (hacking only).
 
 ## What CI does with the tag
 
