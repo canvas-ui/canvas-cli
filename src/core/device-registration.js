@@ -5,9 +5,10 @@ import device from '../modules/dot/lib/device.js';
 
 /**
  * Ensure this machine is registered as a device on the given remote.
- * - If already registered (token stored in remote config): no-op.
+ * - If this host already holds the token cached in the remote config: no-op.
  * - If local deviceId matches one on the server: re-register to refresh token.
- * - If machine is new to this remote: prompt to pick existing device or register new.
+ * - If machine is new to this remote: prompt to pick existing device or register
+ *   new, then adopt the resulting id as this host's identity.
  *
  * @param {string} remoteId
  * @param {import('./transport/rest.js').CanvasClient} client
@@ -16,12 +17,18 @@ import device from '../modules/dot/lib/device.js';
  */
 export async function ensureDeviceRegistered(remoteId, client, io, { force = false } = {}) {
     const remote = client.getRemote(remoteId);
-    if (!force && remote?.device?.token) {
+    const local = device.info();
+
+    // The token is cached in remotes.json, which lives under CANVAS_HOME and may
+    // therefore have arrived on portable media from another machine. Identity
+    // does not travel, so a token minted for a different device is not this
+    // device's to reuse — without this check the new host writes
+    // file://<previous-host>/… for everything it indexes.
+    if (!force && remote?.device?.token && remote.device.deviceId === local.deviceId) {
         return remote.device;
     }
 
     const rc = client.client(remoteId);
-    const local = device.info();
 
     // List existing devices to detect collisions or match known device.
     let existing = [];
@@ -54,8 +61,7 @@ export async function ensureDeviceRegistered(remoteId, client, io, { force = fal
         choices,
     );
 
-    const targetId = chosen === '__new__' ? local.deviceId : chosen;
-    return _register(remoteId, client, rc, io, targetId, local);
+    return _register(remoteId, client, rc, io, chosen === '__new__' ? local.deviceId : chosen, local);
 }
 
 async function _register(remoteId, client, rc, io, deviceId, localInfo) {
@@ -64,6 +70,8 @@ async function _register(remoteId, client, rc, io, deviceId, localInfo) {
         name: localInfo.hostname,
         hostname: localInfo.hostname,
         platform: localInfo.platform,
+        osDistro: localInfo.osDistro,
+        osVersion: localInfo.osVersion,
         arch: localInfo.arch,
         type: 'cli',
     });
@@ -74,6 +82,12 @@ async function _register(remoteId, client, rc, io, deviceId, localInfo) {
         name: result.name || localInfo.hostname,
         platform: result.platform || localInfo.platform,
     };
+
+    // Adopt whatever id the exchange settled on — the one the user picked out of
+    // the registry, or the server's override. The host file is the only piece of
+    // this that outlives a travelling remotes.json, so it has to agree, or the
+    // staleness check above re-prompts on every command.
+    if (devInfo.deviceId !== device.id) { device.bind(devInfo.deviceId); }
 
     client.updateRemote(remoteId, { device: devInfo });
     io.success(`Device '${devInfo.name}' registered (${devInfo.deviceId})`);

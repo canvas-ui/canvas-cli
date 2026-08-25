@@ -65,8 +65,7 @@
     "cli-table3": "^0.6.5",
     "date-fns": "^4.1.0",
     "debug": "^4.4.3",
-    "minimist": "^1.2.8",
-    "node-machine-id": "^1.1.12"
+    "minimist": "^1.2.8"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
