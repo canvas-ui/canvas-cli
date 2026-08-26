@@ -266,7 +266,12 @@ hundreds. `ctx show` prints it as `filter`, and `--all` lists past it:
 ctx show                         # filter  any: text, text/plain, note
 ctx tabs                         # (empty) — this context filters to …
 ctx tabs --all                   # every tab in the context
+ctx update --clear-filter        # drop the saved view for good
 ```
+
+`--clear-filter` clears the binding and the toolbox chips the web renders from
+it, so the filter does not come back on the next toolbox save. Sort order and
+the other view settings are left alone.
 
 ### AI assistance
 
