@@ -79,15 +79,28 @@ async function walk({ mod, remaining, argv, ctx, parent, isPlural, path }) {
     }
 
     const resourceWasConsumed = mod.resourceArg && parent[mod.resourceArg.name || mod.name];
+    // A bare resource runs the module's own default for a named resource
+    // (`ws universe` → `ws universe show`). Printing generic module help was a
+    // strictly worse answer to a strictly more specific question.
+    const usesResourceDefault = resourceWasConsumed && !isPlural
+        && !(tokens[0] && mod.actions.has(tokens[0]))
+        && Boolean(mod.defaultResourceAction);
     const defaultAction = isPlural && mod.defaultPluralAction
         ? mod.defaultPluralAction
-        // A bare resource runs the module's own default for a named resource
-        // (`ws universe` → `ws universe show`). Printing generic module help
-        // was a strictly worse answer to a strictly more specific question.
-        : (resourceWasConsumed && mod.defaultResourceAction) || mod.defaultAction || 'help';
+        : (usesResourceDefault ? mod.defaultResourceAction : mod.defaultAction) || 'help';
 
     if (resourceWasConsumed && tokens.length === 0 && !mod.defaultResourceAction && !isPlural) {
         return { kind: 'help', path };
+    }
+
+    // `ws <name> <junk>` can only ever be a noun or a verb — never free text —
+    // so a leftover token here is a typo, not an argument. Falling through to
+    // the default action would answer a question nobody asked.
+    if (usesResourceDefault && tokens.length > 0) {
+        throw new UsageError(
+            `Unknown noun or verb '${tokens[0]}' for ${mod.name}. ` +
+            `Try \`canvas ${path.join(' ')} --help\`.`,
+        );
     }
 
     const hasActionToken = tokens[0] && mod.actions.has(tokens[0]);

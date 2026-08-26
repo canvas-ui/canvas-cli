@@ -1,27 +1,21 @@
 'use strict';
 
-import add from './actions/add.js';
-import upload from './actions/upload.js';
-import indexAction from './actions/index.js';
 import bind from './actions/bind.js';
 import create from './actions/create.js';
 import current from './actions/current.js';
 import destroy from './actions/destroy.js';
-import documents from './actions/documents.js';
-import dotfiles from './actions/dotfiles.js';
 import list from './actions/list.js';
-import notes from './actions/notes.js';
 import path from './actions/path.js';
 import paths from './actions/paths.js';
 import set from './actions/set.js';
 import show from './actions/show.js';
-import tabs from './actions/tabs.js';
 import tree from './actions/tree.js';
 import update from './actions/update.js';
 import url from './actions/url.js';
 import workspace from './actions/workspace.js';
 
 import resolve from './resolve.js';
+import { documentNouns } from '../../core/nouns.js';
 
 export default {
     name: 'context',
@@ -34,6 +28,6 @@ export default {
     defaultResourceAction: 'show',
     needsConnection: true,
     resourceArg: { name: 'context', resolve, optional: true },
-    actions: [add, upload, indexAction, bind, create, current, destroy, documents, dotfiles, list, notes, path, paths, set, show, tabs, tree, update, url, workspace],
-    submodules: [],
+    actions: [bind, create, current, destroy, list, path, paths, set, show, tree, update, url, workspace],
+    submodules: documentNouns('context'),
 };

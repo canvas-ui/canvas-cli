@@ -1,6 +1,5 @@
 'use strict';
 
-import { ingestPath } from '../../workspace/lib/fileingest.js';
 import { UsageError } from '../../../core/errors.js';
 
 /** Resolve the active context handle (addressed, or the bound one). */
@@ -22,28 +21,3 @@ export function contextAdapter(handle) {
         uploadBlob: (data) => handle.api.contexts.uploadBlob(handle.id, data),
     };
 }
-
-// `upload` = UPLOAD bytes into the context's workspace blob store (stored://,
-// embeddable) and link the File doc into the context. Contrast `index`.
-export default {
-    name: 'upload',
-    description: 'Upload local file(s)/dir into a context (bytes stored server-side, embeddable)',
-    positional: [
-        { name: 'source', required: true },
-        { name: 'rest', variadic: true },
-    ],
-    // No path/tree flags — a context inserts at its own focused path (conservative).
-    flags: {
-        exclude: 'string',
-        timeline: 'string',
-        'no-defaults': 'boolean',
-        'dry-run': 'boolean',
-        'batch-size': 'string',
-    },
-    needsConnection: false,
-
-    async run(ctx) {
-        const handle = resolveContextHandle(ctx);
-        return ingestPath(ctx, { mode: 'upload', adapter: contextAdapter(handle), useTargets: false });
-    },
-};
