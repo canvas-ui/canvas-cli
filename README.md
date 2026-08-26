@@ -150,6 +150,37 @@ There is no PowerShell equivalent yet.
 canvas --help
 ```
 
+### The grammar
+
+One shape, at every level:
+
+```
+canvas <module> [<resource>] [<noun>] <verb> [<term>…] [--flags]
+```
+
+```bash
+ctx note add "buy milk" --title Groceries    # noun, then verb
+ctx note list
+ctx notes                                    # plural noun == "<noun> list"
+ctx note rm <docId>                          # unlink from this context
+ws universe file list                        # same grammar, workspace scope
+ws universe note add ./notes.md --title X
+ag lucy sessions                             # and for agents
+```
+
+Three rules cover the rest:
+
+- **A plural noun lists it.** `ctx notes` is `ctx note list`, at any depth.
+- **`rm` unlinks, `delete` destroys.** `ctx note rm <id>` drops the document
+  from this context and leaves it in the workspace; `ctx note delete <id>`
+  destroys it and demands `--force`.
+- **An address beats a noun, a noun beats a resource.** `ctx note list` is the
+  note noun even if you own a context called `note` — address that one as
+  `ctx user@remote:note`.
+
+`--help` works at every level and prints the usage line for what you asked
+about: `canvas ws --help`, `canvas ctx note --help`, `canvas ctx note add --help`.
+
 ### Modules
 
 | Module | Aliases | What it does |
@@ -170,42 +201,73 @@ shortcuts for their module. `ag` and `hi` are the same thing — two spellings o
 `canvas agent`, kept until usage settles on one.
 
 ```bash
-# Workspaces
-canvas ws list
-ws list                        # standalone shortcut
-
-# Contexts
-canvas ctx list
+# Workspaces and contexts
+canvas ws list                 # or: canvas workspaces
+canvas ws universe             # a named resource shows itself
 canvas ctx bind <context>
-canvas ctx                     # summary of the bound context
-canvas ctx show                # the full context document
-canvas ctx -f json             # summary + document as JSON
-
-# Plural shortcuts expand to "<module> list"
-canvas workspaces
+canvas ctx                     # the bound context
 canvas contexts
-canvas agents
-canvas roles
-canvas remotes
 
 # Config (list | show | get | set | delete | edit | validate)
-canvas config show
 canvas config get server.url
 canvas config set server.url http://127.0.0.1:8001
 ```
 
+### Nouns
+
+A noun is a document schema, so the vocabulary is the same one the web and the
+server use. Both `ctx` and `ws` carry the full set:
+
+| Noun | Plural | Schema | Verbs |
+| --- | --- | --- | --- |
+| `note` | `notes` | `data/schema/note` | list, add, get, rm, delete |
+| `tab` | `tabs` | `data/schema/tab` | list, add, get, rm, delete |
+| `todo` (`task`) | `todos` | `data/schema/task` | list, add, get, rm, delete |
+| `link` | `links` | `data/schema/link` | list, add, get, rm, delete |
+| `file` | `files` | `data/schema/file` | list, add, upload, index, get, rm, delete |
+| `email` | `emails` | `data/schema/message/email` | list, get, rm, delete |
+| `identity` | `identities` | `data/schema/identity` | list, get, rm, delete |
+| `dotfile` | `dotfiles` | `data/schema/dotfile` | list, get (writes belong to `canvas dot`) |
+| `doc` | `docs` | *any* | list, get, rm, delete |
+
+```bash
+ctx todo add "ship the refactor" --due 2026-09-01T09:00:00Z --task-priority 2
+ctx tab add https://example.com --title "Example"
+ctx link add git+ssh://git@github.com/canvas-ui/canvas --title monorepo
+ctx file add ./report.pdf        # uploads the bytes (embeddable)
+ctx file index ~/Photos          # records a device pointer, bytes stay put
+ws work note add "meeting recap" --path notes:/standup
+ctx doc list --feature data/schema/event    # any schema, by feature
+```
+
+Lists are rendered per schema — a note shows its preview and tags, a file its
+size, type and whether the bytes are `stored` or on a `device:<id>`, a todo its
+status, due date and priority. `-f json` always carries the whole document,
+`-f csv` the same columns unclipped.
+
 ### AI assistance
 
 ```bash
-# Prompt an agent (default action, so no subcommand needed)
+# Prompt an agent (the default verb, so it can be elided)
 hi lucy "whats the weather today"
 canvas agent lucy "any new PRs to review?"
 
 # Pipe stdin into the prompt
 tail -n500 /var/log/syslog | hi linus "any idea what those ACPI errors are?"
 
+# Conversations
+ag lucy sessions                        # * marks the one it is talking in
+ag lucy session new "refactor spike"
+ag lucy session use <sessionId>
+hi lucy --session <sessionId> "back to this one"
+
+# What can it actually do?
+ag lucy tools                           # tools the runtime exposes to it
+ag lucy skills
+ag lucy skill add ./my-skill            # a path or URL, or --name for inline
+
 # Workspace-bound queries
-canvas ws work agent prompt lucy "do we have any new emails for this customer?"
+canvas ws work agent prompt lucy "any new emails for this customer?"
 hi lucy --workspace work --context foo "draft a reply please"
 ```
 
@@ -223,12 +285,15 @@ canvas remote bind admin@dev
 
 ### Output formats
 
-List-style commands accept `-f, --format` with `table` (default), `json` or
-`csv`; `-r, --raw` dumps the raw API JSON.
+Lists accept `-f, --format` with `table` (default), `json` or `csv`; `-r, --raw`
+dumps the raw API JSON. Tables show the columns that matter for what you asked
+about and clip long values; `json` is always the complete record, and `csv`
+carries the table's columns unclipped with ISO timestamps.
 
 ```bash
 canvas ws list -f json
-canvas contexts -f csv
+canvas ctx notes -f csv
+canvas ctx note get <docId>       # one record, down the page
 ```
 
 ## Configuration

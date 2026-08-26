@@ -151,7 +151,11 @@ function showHelp(registry, io) {
     io.print(chalk.bold(`canvas-cli v${v}`));
     io.print('');
     io.print(chalk.bold('Usage:'));
-    io.print('  canvas <command> [action] [options]');
+    io.print('  canvas <module> [<resource>] [<noun>] <verb> [args] [--flags]');
+    io.print('');
+    io.print(chalk.dim('  ctx note add "buy milk" --title Groceries'));
+    io.print(chalk.dim('  ctx notes                       # plural == "note list"'));
+    io.print(chalk.dim('  ws universe file list'));
     io.print('');
     io.print(chalk.bold('Modules:'));
     if (registry.modules.length === 0) {
