@@ -51,15 +51,49 @@ The `cli` job in `.github/workflows/release.yml`:
 4. **Writes `SHA256SUMS`** over all five.
 5. **Creates the GitHub Release** for the tag with the binaries attached.
 6. **Publishes to npm**, in dependency order, skipping any version already on
-   the registry:
-   `@augmentd-labs/canvas-protocol` → `canvas-schemas` → `canvas-api-client` →
+   the registry: `@augmentd-labs/canvas-protocol` →
+   `@augmentd-labs/canvas-schemas` → `@augmentd-labs/canvas-api-client` →
    `@augmentd-labs/canvas-cli`.
 
 npm publishing runs *after* the GitHub Release on purpose: a registry outage
 costs you the npm publish, never the binaries. Re-run the job once npm is back
 — the skip-if-published check makes it safe to repeat.
 
-Watch it: `gh run list --workflow=release.yml --limit 1`
+Watch it: `gh run list --workflow=release.yml --limit 1`. A pushed `cli-v*`
+tag with no matching Release means the job failed or never ran — check before
+telling anyone the version is out.
+
+## What the installers depend on
+
+`scripts/install.sh` (Linux/macOS) and `scripts/install.ps1` (Windows) are the
+`curl | bash` / `irm | iex` entry points documented in the README. They are
+served straight from `main` over `raw.githubusercontent.com`, so a change to
+either is live the moment it lands on `main` — there is no separate publish
+step, and no version pinning for the installer itself.
+
+They make three assumptions about a release; break any of them and every fresh
+install breaks with it:
+
+- **Asset names are exact and unarchived** — `canvas-linux`,
+  `canvas-linux-arm`, `canvas-macos`, `canvas-macos-arm`,
+  `canvas-windows.exe`. No tarballs, no version in the filename.
+- **`SHA256SUMS` is attached** and lists those names. The installers verify
+  against it and abort on mismatch (they warn and continue if the file is
+  missing, so a release without it silently loses that check).
+- **The newest `cli-v*` tag is the one to install.** This is a monorepo with a
+  single release feed carrying `cli-v*`, `web-v*`, `extension-v*` and
+  `desktop-v*`, so `/releases/latest` is usually *not* a CLI release — the
+  installers list releases and take the first `cli-v*`. Don't "simplify" that
+  back to `latest`.
+
+Smoke-test after a release:
+
+```bash
+bash apps/cli/scripts/install.sh --dir /tmp/canvas-test --no-prompt && /tmp/canvas-test/canvas --version
+```
+
+`scripts/update-prompt.sh` is fetched from `main` the same way by
+`install.sh --prompt`.
 
 ## Versions and names
 
@@ -79,7 +113,7 @@ npm install -g @augmentd-labs/canvas-cli
 The npm package ships **only the `canvas` command**, via `publishConfig.bin`.
 The other six (`context`, `ctx`, `dot`, `ws`, `agent`, `hi`) are too generic to
 put on a global PATH silently; they remain available in the standalone
-binaries and in local development.
+binaries (as wrappers written by `install.sh`) and in local development.
 
 The three `packages/*` dependencies are published because the CLI depends on
 them — `pnpm` rewrites `workspace:*` to real versions when it packs, so those
@@ -103,7 +137,7 @@ provenance either way.
 ## Not automated yet
 
 - **Code signing** for macOS and Windows binaries. Downloads trip Gatekeeper
-  and SmartScreen today.
+  and SmartScreen today, and the installers say so.
 - **Homebrew tap / Scoop manifests.** Cheap to add on top of the existing
   release assets when there's demand.
 - **Changelog generation.** `.changeset/` exists but nothing consumes it;
@@ -128,8 +162,6 @@ the tag if it was never consumed:
 git tag -d cli-v2.1.9 && git push origin :refs/tags/cli-v2.1.9
 ```
 
-## Legacy
-
-`scripts/release.sh` and `scripts/cleanup-releases.sh` in this directory are
-leftovers from when the CLI lived in its own repository. They describe a flow
-that no longer exists — do not use them.
+Deleting a `cli-v*` tag that *was* the newest one also changes what a fresh
+`install.sh` run resolves to — the installer then picks the next `cli-v*`
+release down the feed.

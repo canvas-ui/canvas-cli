@@ -4,164 +4,164 @@
 
 # Canvas CLI
 
-A command-line interface for managing Canvas workspaces, contexts, dotfiles and documents with integrated AI assistance.
+A command-line interface for managing Canvas workspaces, contexts, dotfiles and
+documents with integrated AI assistance.
 
-## Installation
+## Install
 
-### Method 1: Download Standalone Binary (Recommended)
+### One-liner (Linux / macOS)
 
-**No dependencies required!** Each release attaches single-file binaries —
-downloaded as-is, not archived:
+```bash
+curl -fsSL https://raw.githubusercontent.com/canvas-ui/canvas/main/apps/cli/scripts/install.sh | bash
+```
 
-| Platform | Architecture | Download |
+This resolves the newest `cli-v*` GitHub Release, downloads the single-file
+binary for your platform, verifies it against the release's `SHA256SUMS`,
+installs it to `~/.local/bin/canvas` together with the shortcut wrappers
+(`ws`, `ctx`, `context`, `dot`, `agent`, `hi`) and offers to wire the shell
+prompt integration into your rc file.
+
+No runtime is required — the binaries are bun-compiled and self-contained.
+
+Flags can be passed through the pipe:
+
+```bash
+# Non-interactive, prompt integration wired into ~/.bashrc (or ~/.zshrc)
+curl -fsSL .../install.sh | bash -s -- --prompt
+
+# Pin a version, install elsewhere, skip the extras
+curl -fsSL .../install.sh | bash -s -- --version 2.1.11 --dir ~/bin --no-prompt --no-shortcuts
+```
+
+| Flag | Effect |
+| --- | --- |
+| `--version <ver>` | Install a specific release (`2.1.11` or `cli-v2.1.11`) |
+| `--dir <path>` | Install directory (default `~/.local/bin`, or `$CANVAS_INSTALL_DIR`) |
+| `--prompt` / `--no-prompt` | Wire / skip the prompt integration without being asked |
+| `--no-shortcuts` | Install only `canvas` |
+| `--local [dir]` | Dev install: wrappers around a source checkout (see below) |
+
+Run `scripts/install.sh` again at any time to upgrade in place.
+
+### One-liner (Windows)
+
+```powershell
+irm https://raw.githubusercontent.com/canvas-ui/canvas/main/apps/cli/scripts/install.ps1 | iex
+```
+
+Installs `canvas.exe` into `%LOCALAPPDATA%\Programs\canvas`, writes `.cmd`
+shims for the shortcuts and adds the directory to your user PATH.
+
+### Manual binary download
+
+Every `cli-v*` release attaches single-file binaries, downloaded as-is, not
+archived:
+
+| Platform | Architecture | Asset |
 | --- | --- | --- |
-| **Linux** | x64 | [📦 canvas-linux](https://github.com/canvas-ui/canvas/releases/latest) |
-| **Linux** | ARM64 | [📦 canvas-linux-arm](https://github.com/canvas-ui/canvas/releases/latest) |
-| **macOS** | x64 | [📦 canvas-macos](https://github.com/canvas-ui/canvas/releases/latest) |
-| **macOS** | ARM64 (Apple Silicon) | [📦 canvas-macos-arm](https://github.com/canvas-ui/canvas/releases/latest) |
-| **Windows** | x64 | [📦 canvas-windows.exe](https://github.com/canvas-ui/canvas/releases/latest) |
+| **Linux** | x64 | `canvas-linux` |
+| **Linux** | ARM64 | `canvas-linux-arm` |
+| **macOS** | x64 | `canvas-macos` |
+| **macOS** | ARM64 (Apple Silicon) | `canvas-macos-arm` |
+| **Windows** | x64 | `canvas-windows.exe` |
 
-Every release also ships `SHA256SUMS`; verify with
-`sha256sum -c SHA256SUMS --ignore-missing`.
+Grab them from the [releases page](https://github.com/canvas-ui/canvas/releases?q=cli-v)
+— the repository is a monorepo, so look for a tag starting with `cli-v`, not
+just "latest".
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing   # every release ships SHA256SUMS
+chmod +x canvas-linux
+mv canvas-linux ~/.local/bin/canvas
+```
 
 macOS and Windows binaries are **not code-signed yet**, so Gatekeeper and
 SmartScreen will warn on first run.
 
-```bash
-# Manual installation (Linux/macOS)
-chmod +x canvas-linux
-mv canvas-linux ~/.local/bin/canvas
-
-# (Optional) Install prompt update script
-mkdir -p ~/.canvas/scripts
-cp scripts/update-prompt.sh ~/.canvas/scripts/update-prompt.sh
-chmod +x ~/.canvas/scripts/update-prompt.sh
-
-# Add to bashrc
-if [ -f $HOME/.canvas/scripts/update-prompt.sh ]; then
-  . $HOME/.canvas/scripts/update-prompt.sh
-fi;
-```
-
-`scripts/install.sh`, `install.ps1` and `install.bat` in this directory are
-from the pre-monorepo layout and still expect the old standalone repository —
-they need updating before the one-liner install is advertised again.
-
-### Method 1b: npm
+### npm
 
 ```bash
-npx @augmentd-labs/canvas-cli          # one-off
+npx @augmentd-labs/canvas-cli              # one-off
 npm install -g @augmentd-labs/canvas-cli   # installs the `canvas` command
 ```
 
 The unscoped `canvas-cli` name on npmjs is an unrelated package — use the
-scoped name. The npm package installs only the `canvas` command; the other
-entry points (`ctx`, `context`, `dot`, `ws`, `agent`, `hi`) ship with the
-standalone binaries.
+scoped name. The npm package installs only the `canvas` command; the shortcuts
+(`ctx`, `context`, `dot`, `ws`, `agent`, `hi`) ship with the standalone
+binaries and the source install. Node.js v20 LTS or newer.
 
-### Method 2: Manual Install (Cross-Platform)
-
-**Platform Requirements:**
-
-- **Node.js**: v20 LTS or higher
-- **Operating Systems**: Linux, macOS, Windows 10/11
-- **Optional**: PM2 for local server management (`npm install -g pm2`)
-
-#### Git clone this repository
-
-`git clone https://github.com/canvas-ui/canvas ~/path/to/canvas` `cd ~/path/to/canvas/apps/cli`
-
-#### Linux/Mac
+### From source (development)
 
 ```bash
+git clone https://github.com/canvas-ui/canvas ~/Code/canvas
+cd ~/Code/canvas/apps/cli
+pnpm install                 # from the monorepo root
 
-# Create symlinks to your local bin directory
-ln -sf $(pwd)/bin/canvas.js ~/.local/bin/canvas
-ln -sf $(pwd)/bin/context.js ~/.local/bin/context
-ln -sf $(pwd)/bin/ctx.js ~/.local/bin/ctx
-ln -sf $(pwd)/bin/ws.js ~/.local/bin/ws
-ln -sf $(pwd)/bin/dot.js ~/.local/bin/dot
-ln -sf $(pwd)/bin/agent.js ~/.local/bin/agent
-ln -sf $(pwd)/bin/hi.js ~/.local/bin/hi
+# Wrappers in ~/.local/bin pointing at this checkout (bun if present, else node)
+scripts/install.sh --local
 
-# Make binaries executable
-chmod +x bin/*
-
-# Ensure ~/.local/bin is in your PATH
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-
-# Install PM2 for server management (optional)
-npm install -g pm2
-```
-
-#### Windows
-
-```powershell
-# Option 1: PowerShell (Run as Administrator)
-# Add Canvas CLI bin directory to your PATH
-$CanvasPath = (Get-Location).Path + "\bin"
-[Environment]::SetEnvironmentVariable("PATH", $env:PATH + ";$CanvasPath", [EnvironmentVariableTarget]::User)
-
-# Restart your terminal for PATH changes to take effect
-```
-
-```batch
-:: Option 2: Command Prompt (Run as Administrator)
-:: Add Canvas CLI bin directory to your PATH
-setx PATH "%PATH%;%CD%\bin"
-
-:: Restart your terminal for PATH changes to take effect
-```
-
-```powershell
-# Option 3: Development Environment
-# For development, you can run directly:
+# …or run it directly
 node bin/canvas.js --help
-node bin/context.js list
-node bin/ws.js list
-node bin/hi.js lucy "test query"
 ```
 
-### Method 3: Global NPM Installation
+`--local` writes small `exec`-wrappers, so edits to the checkout take effect
+immediately without reinstalling.
+
+## Shell prompt integration
+
+`scripts/update-prompt.sh` prefixes your prompt with the Canvas connection
+state and the bound context URL:
+
+```
+[● (work) admin@dev://universe://work/reports] user@host:~$
+```
+
+A green dot means the bound remote is connected, red means it is not. The
+context URL is read from `~/.canvas/config/cli-session.json` and refreshed from
+the server at most every 30 seconds (`CANVAS_CONTEXT_UPDATE_TIMEOUT`), with a
+0.5s timeout so a dead remote never stalls your prompt.
+
+The installer sets this up for you (`--prompt`). Manually:
 
 ```bash
-# Install dependencies
-npm install
+mkdir -p ~/.canvas/scripts
+curl -fsSL https://raw.githubusercontent.com/canvas-ui/canvas/main/apps/cli/scripts/update-prompt.sh \
+  -o ~/.canvas/scripts/update-prompt.sh
 
-# Link globally (works on all platforms)
-npm link
+# ~/.bashrc or ~/.zshrc
+[ -f "$HOME/.canvas/scripts/update-prompt.sh" ] && . "$HOME/.canvas/scripts/update-prompt.sh"
 ```
 
-This creates global symlinks:
+It hooks `PROMPT_COMMAND` on bash and `precmd_functions` on zsh, keeping your
+existing `PS1` intact behind the status block. Colour codes are marked
+non-printing, so line editing and wrapping stay correct.
 
-- `canvas` → Canvas CLI main command
-- `context`, `ctx` → Context management shortcuts
-- `ws` → Workspace management shortcut
-- `dot` → Dotfile Manager
-- `agent`, `hi` → AI agent shortcuts
-
-### Method 4: Direct Execution (Development)
-
-```bash
-# Linux/Mac
-node bin/canvas.js --help
-./bin/canvas.js workspace list
-
-# Windows
-node bin\canvas.js --help
-```
+Requires `jq` and `curl`; without `jq` the script leaves your prompt untouched.
+There is no PowerShell equivalent yet.
 
 ## Usage
 
 ```bash
-# Show help
 canvas --help
 ```
 
-### Commands
+### Modules
 
-Functionality is organized into modules: `workspace` (alias `ws`), `context` (alias `ctx`), `agent` (aliases `ag`, `hi`), `role`, `remote`, `dot`, `auth`, `alias`, `server` and `config` (aliases `cfg`, `settings`). The `ws`, `ctx`, `context`, `hi`, `agent` and `dot` binaries are standalone shortcuts for their respective modules.
+| Module | Aliases | What it does |
+| --- | --- | --- |
+| `workspace` | `ws` | Manage workspaces |
+| `context` | `ctx` | Manage contexts |
+| `agent` | `ag`, `hi` | Manage agents and prompt them |
+| `remote` | `remotes` | Manage remote Canvas servers |
+| `dot` | | Workspace-backed dotfile manager (per-device link map) |
+| `role` | `ag-role` | Container/role orchestration (placeholder) |
+| `auth` | | Authentication & API tokens |
+| `alias` | | Resource aliases |
+| `config` | `cfg`, `settings` | CLI configuration |
+| `server` | | Manage a local Canvas server (PM2) |
+
+The `ws`, `ctx`, `context`, `dot`, `agent` and `hi` binaries are standalone
+shortcuts for their module.
 
 ```bash
 # Workspaces
@@ -182,7 +182,7 @@ canvas remotes
 # Config (list | show | get | set | delete | edit | validate)
 canvas config show
 canvas config get server.url
-canvas config set server.url http://localhost:8001
+canvas config set server.url http://127.0.0.1:8001
 ```
 
 ### AI assistance
@@ -202,7 +202,8 @@ hi lucy --workspace work --context foo "draft a reply please"
 
 ### Remotes
 
-Remotes are identified as `user@remote-name`. The first remote added becomes the default; `bind` switches between them.
+Remotes are identified as `user@remote-name`. The first remote added becomes
+the default; `bind` switches between them.
 
 ```bash
 canvas remote add idnc_sk@canvas https://canvas.idnc.sk    # prompts for login if no --token
@@ -213,7 +214,8 @@ canvas remote bind admin@dev
 
 ### Output formats
 
-List-style commands accept `-f, --format` with `table` (default), `json` or `csv`:
+List-style commands accept `-f, --format` with `table` (default), `json` or
+`csv`; `-r, --raw` dumps the raw API JSON.
 
 ```bash
 canvas ws list -f json
@@ -222,17 +224,23 @@ canvas contexts -f csv
 
 ## Configuration
 
-The CLI keeps its state in `~/.canvas/config/`:
+The CLI keeps its state in `~/.canvas/` (`%USERPROFILE%\Canvas\` on Windows,
+overridable with `CANVAS_USER_HOME`):
 
 | File | Contents |
 | --- | --- |
-| `cli.json` | General settings (`canvas config list \| get \| set \| edit`) |
-| `remotes.json` | Registered remotes with their URLs and auth tokens — managed via `canvas remote add \| bind \| rename`, not by hand |
-| `cli-session.json` | The current session: bound remote, bound context, default workspace |
-| `cli-aliases.json` | User-defined command aliases (`canvas alias`) |
+| `config/cli.json` | General settings (`canvas config list \| get \| set \| edit`) |
+| `config/remotes.json` | Registered remotes with their URLs and auth tokens — managed via `canvas remote add \| bind \| rename`, not by hand |
+| `config/cli-session.json` | The current session: bound remote and its status, bound context and URL |
+| `config/cli-aliases.json` | User-defined command aliases (`canvas alias`) |
+| `scripts/update-prompt.sh` | Prompt integration, if installed |
 
-AI prompts (`hi`, `canvas agent`) run against agents hosted on the bound
-Canvas server — model/provider configuration lives server-side, not in the CLI.
+AI prompts (`hi`, `canvas agent`) run against agents hosted on the bound Canvas
+server — model/provider configuration lives server-side, not in the CLI.
+
+## Releasing
+
+See [RELEASE.md](RELEASE.md).
 
 ## Licence
 

@@ -10,25 +10,34 @@
 ## Settings
 
 # Paths
-CANVAS_SESSION="$HOME/.canvas/config/cli-session.json"
-CANVAS_REMOTES="$HOME/.canvas/config/remotes.json"
+_canvas_home="${CANVAS_USER_HOME:-$HOME/.canvas}"
+CANVAS_SESSION="$_canvas_home/config/cli-session.json"
+CANVAS_REMOTES="$_canvas_home/config/remotes.json"
 
 # How often to refresh the context URL via network if the session file is older than this
 CANVAS_CONTEXT_UPDATE_TIMEOUT=30
 
-# Colors (fallback to empty if tput unavailable or terminal lacks color)
+# Colors (fallback to empty if tput unavailable or terminal lacks color).
+# Escape sequences must be marked non-printing or the shell miscounts the
+# prompt width and mangles line editing: \[ \] in bash, %{ %} in zsh.
 CANVAS_PROMPT_YELLOW=""
 CANVAS_PROMPT_GREEN=""
 CANVAS_PROMPT_RED=""
 CANVAS_PROMPT_RESET=""
+if [ -n "${ZSH_VERSION-}" ]; then
+    _canvas_np_open="%{"; _canvas_np_close="%}"
+else
+    _canvas_np_open="\["; _canvas_np_close="\]"
+fi
 if command -v tput >/dev/null 2>&1; then
     if [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]; then
-        CANVAS_PROMPT_YELLOW="$(tput setaf 3)"
-        CANVAS_PROMPT_GREEN="$(tput setaf 2)"
-        CANVAS_PROMPT_RED="$(tput setaf 1)"
-        CANVAS_PROMPT_RESET="$(tput sgr0)"
+        CANVAS_PROMPT_YELLOW="${_canvas_np_open}$(tput setaf 3)${_canvas_np_close}"
+        CANVAS_PROMPT_GREEN="${_canvas_np_open}$(tput setaf 2)${_canvas_np_close}"
+        CANVAS_PROMPT_RED="${_canvas_np_open}$(tput setaf 1)${_canvas_np_close}"
+        CANVAS_PROMPT_RESET="${_canvas_np_open}$(tput sgr0)${_canvas_np_close}"
     fi
 fi
+unset _canvas_np_open _canvas_np_close
 
 # Store the original prompt to append after our status
 ORIGINAL_PROMPT="${PS1-}"
@@ -37,41 +46,41 @@ ORIGINAL_PROMPT="${PS1-}"
 # Helpers
 #################################
 
-have() { command -v "$1" >/dev/null 2>&1; }
+_canvas_have() { command -v "$1" >/dev/null 2>&1; }
 
-get_context_id() {
+_canvas_get_context_id() {
     [ -r "$CANVAS_SESSION" ] || return 1
     jq -r '.boundContextId // empty' "$CANVAS_SESSION"
 }
 
-get_context_url() {
+_canvas_get_context_url() {
 	[ -r "$CANVAS_SESSION" ] || return 1
 	jq -r '.boundContextUrl // empty' "$CANVAS_SESSION"
 }
 
-is_connected() {
+_canvas_is_connected() {
     [ -r "$CANVAS_SESSION" ] || return 1
     local status
     status=$(jq -r '.boundRemoteStatus // empty' "$CANVAS_SESSION" 2>/dev/null)
     [ "$status" = "connected" ]
 }
 
-get_bound_remote() {
+_canvas_get_bound_remote() {
     [ -r "$CANVAS_SESSION" ] || return 1
     jq -r '.boundRemote // empty' "$CANVAS_SESSION"
 }
 
-get_remote_value() {
+_canvas_get_remote_value() {
     # $1: remote, $2: jq path under the remote
     [ -r "$CANVAS_REMOTES" ] || return 1
     local remote="$1" path="$2"
     jq -r --arg r "$remote" --arg p "$path" '.[$r] as $rm | if $rm == null then "" else ($p | split(".") as $keys | reduce $keys[] as $k ($rm; .[$k])) end // empty' "$CANVAS_REMOTES"
 }
 
-build_api_url() {
+_canvas_build_api_url() {
     local remote="$1" url base path
-    url=$(get_remote_value "$remote" url) || return 1
-    base=$(get_remote_value "$remote" apiBase) || return 1
+    url=$(_canvas_get_remote_value "$remote" url) || return 1
+    base=$(_canvas_get_remote_value "$remote" apiBase) || return 1
     [ -n "$url" ] && [ -n "$base" ] || return 1
     case "$base" in
         /*) path="$base" ;;
@@ -80,30 +89,30 @@ build_api_url() {
     printf "%s%s" "${url%/}" "$path"
 }
 
-session_mtime() {
+_canvas_session_mtime() {
     [ -r "$CANVAS_SESSION" ] || return 1
     # GNU stat then BSD stat
     stat -c %Y "$CANVAS_SESSION" 2>/dev/null || stat -f %m "$CANVAS_SESSION" 2>/dev/null
 }
 
-should_refresh_context_url() {
+_canvas_should_refresh_context_url() {
     local mtime now diff
-    mtime=$(session_mtime) || return 0
+    mtime=$(_canvas_session_mtime) || return 0
     now=$(date +%s)
     diff=$((now - mtime))
     [ "$diff" -ge "$CANVAS_CONTEXT_UPDATE_TIMEOUT" ]
 }
 
-fetch_context_url() {
-    have jq || return 1
-    have curl || return 1
+_canvas_fetch_context_url() {
+    _canvas_have jq || return 1
+    _canvas_have curl || return 1
     local remote context_id token api_url response url
-    remote=$(get_bound_remote) || return 1
-    context_id=$(get_context_id) || return 1
+    remote=$(_canvas_get_bound_remote) || return 1
+    context_id=$(_canvas_get_context_id) || return 1
     [ -n "$remote" ] && [ -n "$context_id" ] || return 1
-    token=$(get_remote_value "$remote" auth.token) || return 1
+    token=$(_canvas_get_remote_value "$remote" auth.token) || return 1
     [ -n "$token" ] || return 1
-    api_url=$(build_api_url "$remote") || return 1
+    api_url=$(_canvas_build_api_url "$remote") || return 1
 
     response=$(curl -fsS \
         --max-time 0.5 \
@@ -118,7 +127,7 @@ fetch_context_url() {
     echo "$url"
 }
 
-update_session_context_url() {
+_canvas_update_session_context_url() {
     # Atomically write boundContextUrl back into the session file
     local new_url="$1" tmp
     [ -n "$new_url" ] || return 1
@@ -140,25 +149,25 @@ update_session_context_url() {
 
 canvas_update_prompt() {
     # If jq is missing, leave prompt unchanged
-    if ! have jq; then
+    if ! _canvas_have jq; then
         return 0
     fi
 
-    if ! is_connected; then
+    if ! _canvas_is_connected; then
         PS1="[$CANVAS_PROMPT_RED●$CANVAS_PROMPT_RESET] $ORIGINAL_PROMPT"
         return 0
     fi
 
-    local url context_id
-    context_id=$(get_context_id)
-    url=$(get_context_url)
+    local url context_id new_url
+    context_id=$(_canvas_get_context_id)
+    url=$(_canvas_get_context_url)
 
     # Refresh URL from server only if session file is older than timeout or URL is empty
-    if should_refresh_context_url || [ -z "$url" ]; then
-        new_url=$(fetch_context_url 2>/dev/null)
+    if _canvas_should_refresh_context_url || [ -z "$url" ]; then
+        new_url=$(_canvas_fetch_context_url 2>/dev/null)
         if [ -n "$new_url" ]; then
             url="$new_url"
-            update_session_context_url "$new_url" 2>/dev/null || true
+            _canvas_update_session_context_url "$new_url" 2>/dev/null || true
         fi
     fi
 
@@ -182,7 +191,7 @@ canvas_update_prompt() {
 # Hook into shell prompt
 #################################
 
-if [ -n "$ZSH_VERSION" ]; then
+if [ -n "${ZSH_VERSION-}" ]; then
     # zsh: add to precmd hook if not already present
     if typeset -f precmd >/dev/null 2>&1; then :; fi
     typeset -ga precmd_functions 2>/dev/null
@@ -192,7 +201,7 @@ if [ -n "$ZSH_VERSION" ]; then
     esac
 else
     # bash: prepend to PROMPT_COMMAND once
-    case "$PROMPT_COMMAND" in
+    case "${PROMPT_COMMAND-}" in
         *canvas_update_prompt*) ;;
         "") PROMPT_COMMAND="canvas_update_prompt" ;;
         *)   PROMPT_COMMAND="canvas_update_prompt; $PROMPT_COMMAND" ;;
