@@ -3,7 +3,6 @@
 import add from './actions/add.js';
 import bind from './actions/bind.js';
 import current from './actions/current.js';
-import device from './actions/device.js';
 import list from './actions/list.js';
 import login from './actions/login.js';
 import logout from './actions/logout.js';
@@ -13,6 +12,9 @@ import rename from './actions/rename.js';
 import show from './actions/show.js';
 import sync from './actions/sync.js';
 
+import device from './device/index.js';
+import resolve from './resolve.js';
+
 export default {
     name: 'remote',
     description: 'Manage remote Canvas servers',
@@ -20,7 +22,12 @@ export default {
     pluralAlias: 'remotes',
     defaultAction: 'current',
     defaultPluralAction: 'list',
+    // `remote admin@dev` shows it, same rule as `ws <name>`.
+    defaultResourceAction: 'show',
     needsConnection: false,
-    actions: [add, bind, current, device, list, login, logout, ping, remove, rename, show, sync],
-    submodules: [],
+    // A known remote id in the resource slot: `remote admin@dev ping`,
+    // `remote admin@dev device show`. Unknown tokens stay positionals.
+    resourceArg: { name: 'remote', resolve, optional: true },
+    actions: [add, bind, current, list, login, logout, ping, remove, rename, show, sync],
+    submodules: [device],
 };

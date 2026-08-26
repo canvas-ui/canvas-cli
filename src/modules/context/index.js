@@ -6,16 +6,15 @@ import current from './actions/current.js';
 import destroy from './actions/destroy.js';
 import list from './actions/list.js';
 import path from './actions/path.js';
-import paths from './actions/paths.js';
 import set from './actions/set.js';
 import show from './actions/show.js';
-import tree from './actions/tree.js';
 import update from './actions/update.js';
 import url from './actions/url.js';
 import workspace from './actions/workspace.js';
 
 import resolve from './resolve.js';
 import { documentNouns } from '../../core/nouns.js';
+import tree from './tree/index.js';
 
 export default {
     name: 'context',
@@ -28,6 +27,6 @@ export default {
     defaultResourceAction: 'show',
     needsConnection: true,
     resourceArg: { name: 'context', resolve, optional: true },
-    actions: [bind, create, current, destroy, list, path, paths, set, show, tree, update, url, workspace],
-    submodules: documentNouns('context'),
+    actions: [bind, create, current, destroy, list, path, set, show, update, url, workspace],
+    submodules: [tree, ...documentNouns('context')],
 };

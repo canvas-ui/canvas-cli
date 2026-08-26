@@ -24,8 +24,14 @@ export function repoFilePath(handle, repoPath) {
 
 // Backend git HTTP URL for clone/push/pull:
 //   {remoteUrl}/rest/v2/workspaces/{ws}/git
+//
+// Reads baseUrl/apiBase off the client. It used to read
+// `api.http.defaults.baseURL`, an axios property that stopped existing when
+// the client moved to fetch — which silently killed every dot command that
+// touches the repo (add, clone, push, pull) with "Cannot read properties of
+// undefined (reading 'defaults')".
 export function gitUrl({ api, id }) {
-    const base = api.http.defaults.baseURL.replace(/\/$/, '');
+    const base = `${api.baseUrl}${api.apiBase}`.replace(/\/$/, '');
     return `${base}/workspaces/${id}/git`;
 }
 

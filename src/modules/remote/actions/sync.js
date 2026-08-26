@@ -4,8 +4,9 @@ export default {
     name: 'sync',
     description: 'Sync remote info (ping + cache version)',
     positional: [{ name: 'id' }],
-    async run({ args, client, io }) {
-        const ids = args.id ? [args.id] : Object.keys(client.remotes());
+    async run({ args, client, io, parent }) {
+        const named = parent?.remote?.id || args.id;
+        const ids = named ? [named] : Object.keys(client.remotes());
         if (ids.length === 0) { io.warn('No remotes configured'); return; }
         let ok = 0, fail = 0;
         for (const id of ids) {

@@ -1,9 +1,9 @@
 'use strict';
 
-import { resolveHandle } from '../lib/handle.js';
-import { findByRepoPath } from '../lib/docs.js';
-import device from '../lib/device.js';
-import { UsageError, NotFoundError } from '../../../core/errors.js';
+import { resolveHandle } from '../../lib/handle.js';
+import { findByRepoPath } from '../../lib/docs.js';
+import device from '../../lib/device.js';
+import { UsageError, NotFoundError } from '../../../../core/errors.js';
 
 export default {
     name: 'unlink',

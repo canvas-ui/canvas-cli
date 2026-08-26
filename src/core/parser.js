@@ -71,10 +71,13 @@ export function bindPositional(tokens, positional = []) {
  * @param {Object[]} positional the action's schema
  * @returns {string[]} names of missing required positionals
  */
-export function missingPositionals(args, positional = []) {
+export function missingPositionals(args, positional = [], { resourceConsumed = false } = {}) {
     const missing = [];
     for (const spec of positional) {
         if (!spec?.required) continue;
+        // `remote <id> show` puts the id in the resource slot, so the `id`
+        // positional is satisfied even though nothing followed the verb.
+        if (spec.fromResource && resourceConsumed) continue;
         const value = args[spec.name];
         const empty = spec.variadic
             ? !Array.isArray(value) || value.length === 0

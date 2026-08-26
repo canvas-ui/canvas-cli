@@ -1,7 +1,7 @@
 'use strict';
 
-import { resolveWorkspaceHandle } from '../lib/handle.js';
-import { UsageError } from '../../../core/errors.js';
+import { resolveWorkspaceHandle } from '../../lib/handle.js';
+import { UsageError } from '../../../../core/errors.js';
 
 // Remove a path from a workspace tree.
 //
@@ -15,8 +15,9 @@ import { UsageError } from '../../../core/errors.js';
 //                  the backend itself (rw backends only; read-only locations are
 //                  reference-dropped). Only effective inside the backends tree.
 export default {
-    name: 'tree-rm',
-    description: 'Remove a path from a workspace tree (--purge deletes ingested docs in the backends tree; --destroy also deletes them on the backend)',
+    name: 'rm',
+    aliases: ['remove'],
+    description: 'Remove a path (--purge drops its documents; --destroy also deletes them on the backend)',
     positional: [
         { name: 'address' },
         { name: 'path', required: true },
@@ -27,12 +28,11 @@ export default {
         const { args, flags, io } = ctx;
         const handle = resolveWorkspaceHandle(ctx);
 
-        // `canvas ws tree-rm <addr> <path>` → args.path. In the resource-first form
-        // `canvas ws <addr> tree-rm <path>` the workspace is consumed by the parent,
-        // so the lone positional lands in args.address — fall back to it when it
-        // looks like a path (addresses never start with '/').
+        // `ws <addr> tree rm <path>` consumes the workspace in the resource
+        // slot, so the lone positional lands in `address`; `ws tree rm <addr>
+        // <path>` fills both. Paths start with '/', addresses never do.
         let raw = args.path;
-        if (!raw && typeof args.address === 'string' && args.address.startsWith('/')) raw = args.address;
+        if (!raw && typeof args.address === 'string') raw = args.address;
         if (!raw) throw new UsageError('Path required');
         const path = String(raw).startsWith('/') ? raw : `/${raw}`;
         const tree = flags.tree || 'directory';

@@ -113,10 +113,10 @@ async function walk({ mod, remaining, argv, ctx, parent, isPlural, path }) {
         throw new UsageError(`Unknown action '${actionName}' for module '${mod.name}'`);
     }
 
-    return invoke({ mod, action, actionTokens, argv, ctx, parent, path: actionPath });
+    return invoke({ mod, action, actionTokens, argv, ctx, parent, path: actionPath, resourceConsumed: Boolean(resourceWasConsumed) });
 }
 
-async function invoke({ mod, action, actionTokens, argv, ctx, parent, path }) {
+async function invoke({ mod, action, actionTokens, argv, ctx, parent, path, resourceConsumed }) {
     // Re-parse the FULL argv with the action's flag schema so flags placed
     // anywhere on the line are picked up with their real types.
     const fullParsed = parseWithSchema(argv, action);
@@ -129,7 +129,7 @@ async function invoke({ mod, action, actionTokens, argv, ctx, parent, path }) {
     const flags = { ...parsed };
     delete flags._;
 
-    const missing = missingPositionals(posArgs, positional);
+    const missing = missingPositionals(posArgs, positional, { resourceConsumed });
     if (missing.length) {
         throw new UsageError(
             `Missing required argument${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}\n` +

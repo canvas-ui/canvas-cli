@@ -204,9 +204,20 @@ shortcuts for their module. `ag` and `hi` are the same thing — two spellings o
 # Workspaces and contexts
 canvas ws list                 # or: canvas workspaces
 canvas ws universe             # a named resource shows itself
+canvas ws universe trees       # the trees in it; `tree` shows one
+canvas ws universe tree rm /old/path -r --purge
 canvas ctx bind <context>
 canvas ctx                     # the bound context
+canvas ctx tree paths          # one path per line
 canvas contexts
+
+# Remotes, tokens and this device
+canvas remote admin@dev            # a known remote id is a resource too
+canvas remote admin@dev ping
+canvas remote admin@dev device     # how this machine is registered there
+canvas auth tokens                 # token list | create | rm | set
+canvas dot device                  # this machine
+canvas dot devices                 # every entry → device → local path
 
 # Config (list | show | get | set | delete | edit | validate)
 canvas config get server.url
@@ -229,6 +240,7 @@ server use. Both `ctx` and `ws` carry the full set:
 | `identity` | `identities` | `data/schema/identity` | list, get, rm, delete |
 | `dotfile` | `dotfiles` | `data/schema/dotfile` | list, get (writes belong to `canvas dot`) |
 | `doc` | `docs` | *any* | list, get, rm, delete |
+| `tree` | `trees` | — | show, paths, rm *(workspace)* |
 
 ```bash
 ctx todo add "ship the refactor" --due 2026-09-01T09:00:00Z --task-priority 2

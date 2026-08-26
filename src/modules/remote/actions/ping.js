@@ -7,8 +7,8 @@ export default {
     name: 'ping',
     description: 'Test reachability',
     positional: [{ name: 'id' }],
-    async run({ args, client, session, io }) {
-        const id = args.id || session.boundRemote();
+    async run({ args, client, session, io, parent }) {
+        const id = parent?.remote?.id || args.id || session.boundRemote();
         if (!id) throw new UsageError('Remote id required');
         if (!client.getRemote(id)) throw new NotFoundError(`Remote '${id}' not found`);
         client.clearCache(id);
@@ -23,6 +23,15 @@ export default {
         }
         if (isBoundRemote) session.update({ boundRemoteStatus: 'connected' });
         io.success(`'${id}' reachable (${Date.now() - start}ms)`);
-        if (info) io.output(info);
+        if (info) {
+            io.detail(info, {
+                columns: [
+                    { key: 'productName', label: 'server' },
+                    { key: 'version', label: 'version' },
+                    { key: 'license', label: 'license' },
+                    { key: 'status', label: 'status' },
+                ],
+            });
+        }
     },
 };

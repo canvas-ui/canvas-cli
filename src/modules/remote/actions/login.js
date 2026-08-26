@@ -9,8 +9,8 @@ export default {
     description: 'Login to a remote',
     positional: [{ name: 'id' }],
     flags: { token: 'string', email: 'string', username: 'string', password: 'string' },
-    async run({ args, flags, client, session, io }) {
-        const id = args.id || session.boundRemote();
+    async run({ args, flags, client, session, io, parent }) {
+        const id = parent?.remote?.id || args.id || session.boundRemote();
         if (!id) throw new UsageError('Remote id required');
         const r = client.getRemote(id);
         if (!r) throw new NotFoundError(`Remote '${id}' not found`);

@@ -1,10 +1,10 @@
 'use strict';
 
-import { UsageError, AuthError } from '../../../core/errors.js';
+import { UsageError, AuthError } from '../../../../core/errors.js';
 
 export default {
-    name: 'set-token',
-    aliases: ['setToken', 'token-set'],
+    name: 'set',
+    aliases: ['use'],
     description: 'Set API token on bound remote',
     positional: [{ name: 'token' }],
     flags: { token: 'string' },

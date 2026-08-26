@@ -8,13 +8,12 @@ import show from './actions/show.js';
 import start from './actions/start.js';
 import status from './actions/status.js';
 import stop from './actions/stop.js';
-import tree from './actions/tree.js';
-import treeRm from './actions/tree-rm.js';
 import update from './actions/update.js';
 
 import hooks from './hooks/index.js';
 import agent from './agent/index.js';
 import backends from './backends/index.js';
+import tree from './tree/index.js';
 import resolve from './resolve.js';
 import { documentNouns } from '../../core/nouns.js';
 
@@ -29,6 +28,6 @@ export default {
     defaultResourceAction: 'show',
     needsConnection: true,
     resourceArg: { name: 'workspace', resolve, optional: true },
-    actions: [create, current, del, list, show, start, status, stop, tree, treeRm, update],
-    submodules: [agent, hooks, backends, ...documentNouns('workspace')],
+    actions: [create, current, del, list, show, start, status, stop, update],
+    submodules: [agent, hooks, backends, tree, ...documentNouns('workspace')],
 };

@@ -6,8 +6,8 @@ export default {
     name: 'logout',
     description: 'Logout from a remote',
     positional: [{ name: 'id' }],
-    async run({ args, client, session, io }) {
-        const id = args.id || session.boundRemote();
+    async run({ args, client, session, io, parent }) {
+        const id = parent?.remote?.id || args.id || session.boundRemote();
         if (!id) throw new UsageError('Remote id required');
         if (!client.getRemote(id)) throw new NotFoundError(`Remote '${id}' not found`);
         try { await client.client(id).auth.logout(); } catch { /* best effort */ }

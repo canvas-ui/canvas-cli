@@ -1,11 +1,11 @@
 'use strict';
 
 import chalk from 'chalk';
-import { UsageError } from '../../../core/errors.js';
+import { UsageError } from '../../../../core/errors.js';
 
 export default {
-    name: 'create-token',
-    aliases: ['createToken', 'token-create'],
+    name: 'create',
+    aliases: ['new'],
     description: 'Create new API token',
     positional: [{ name: 'name' }],
     flags: { name: 'string', description: 'string', save: 'boolean' },

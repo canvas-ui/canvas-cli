@@ -1,10 +1,10 @@
 'use strict';
 
-import { UsageError } from '../../../core/errors.js';
+import { UsageError } from '../../../../core/errors.js';
 
 export default {
-    name: 'delete-token',
-    aliases: ['deleteToken', 'token-delete'],
+    name: 'rm',
+    aliases: ['remove', 'delete'],
     description: 'Delete API token',
     positional: [{ name: 'id' }],
     flags: { force: 'boolean' },
