@@ -257,6 +257,17 @@ size, type and whether the bytes are `stored` or on a `device:<id>`, a todo its
 status, due date and priority. `-f json` always carries the whole document,
 `-f csv` the same columns unclipped.
 
+A context can carry a **saved view** — the feature filters the web toolbox
+persists onto it. Listing through a context folds that view in, exactly as the
+web does, so a context filtered to notes lists no tabs even when it holds
+hundreds. `ctx show` prints it as `filter`, and `--all` lists past it:
+
+```bash
+ctx show                         # filter  any: text, text/plain, note
+ctx tabs                         # (empty) — this context filters to …
+ctx tabs --all                   # every tab in the context
+```
+
 ### AI assistance
 
 ```bash

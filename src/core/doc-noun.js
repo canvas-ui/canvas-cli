@@ -44,6 +44,7 @@ export function createDocNoun(o) {
         positional: [{ name: 'query' }],
         flags: {
             feature: 'string', filter: 'string',
+            ...(scope === 'context' ? { all: 'boolean' } : {}),
             ...(scope === 'workspace' ? { 'context-path': 'string', tree: 'string' } : {}),
         },
         async run(ctx) {
@@ -56,7 +57,21 @@ export function createDocNoun(o) {
                 filter: ctx.flags.filter,
                 context: ctx.flags['context-path'],
                 treeNameOrTreeId: ctx.flags.tree,
+                // A context lists through its saved view by default, the way
+                // the web does; --all ignores it.
+                ...(ctx.flags.all ? { applyContextSpec: false } : {}),
             });
+            if (docs.length === 0 && !ctx.flags.all && ctx.io.format === 'table') {
+                // An empty listing has two very different causes, and `(empty)`
+                // tells them apart for neither: nothing is here, or the
+                // context's saved view hides what is. Say which.
+                const view = await s.savedView().catch(() => null);
+                if (view) {
+                    ctx.io.info(`(empty) — this context filters to ${view}`);
+                    ctx.io.info(`Use \`--all\` to list past it, or clear it in the web toolbox.`);
+                    return;
+                }
+            }
             // Per-schema columns: a note lists its preview, a file its size
             // and where the bytes live. Mixed results (`doc list`) fall back
             // to the generic row.

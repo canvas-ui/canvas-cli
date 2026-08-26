@@ -1,7 +1,7 @@
 'use strict';
 
 import { routes } from '@augmentd-labs/canvas-protocol';
-import { buildListDocumentsParams, normalizeDocumentList } from './api-helpers.js';
+import { buildListDocumentsParams, normalizeDocumentList, describeContextSpec } from './api-helpers.js';
 
 /**
  * The container a document noun operates on — a context or a workspace —
@@ -30,6 +30,16 @@ export async function docScope(ctx, kind) {
                 ? await api.contexts.documents(id, params)
                 : await api.workspaces.documents(id, params);
             return normalizeDocumentList(payload);
+        },
+
+        /**
+         * The saved view folded into every list here, as a one-line summary —
+         * or null when there is none (a workspace never has one).
+         */
+        savedView: async () => {
+            if (kind !== 'context') return null;
+            const c = await api.contexts.get(id);
+            return describeContextSpec(c?.context || c?.payload || c);
         },
 
         get: async (docId) => {

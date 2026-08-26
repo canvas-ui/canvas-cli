@@ -11,6 +11,9 @@ export function buildListDocumentsParams(opts = {}) {
     if (features.length) params.allOf = features;
     const filters = opts.filter != null ? [].concat(opts.filter).filter(Boolean) : [];
     if (filters.length) params.filters = filters;
+    // Only ever sent to turn the context's saved view OFF; omitted means "fold
+    // it in", which is what a bound client wants by default.
+    if (opts.applyContextSpec === false) params.applyContextSpec = false;
     return params;
 }
 
@@ -55,4 +58,27 @@ export function unwrapResource(payload, key) {
     if (!payload) return payload;
     if (payload[key]) return payload[key];
     return payload;
+}
+
+/**
+ * A context can carry a saved view — the toolbox filters the web persists onto
+ * it (`features.anyOf`, `filters`). The server folds that into every listing
+ * unless `applyContextSpec=false`, so a context whose saved view matches
+ * nothing lists as empty while holding hundreds of documents. Rendering the
+ * spec is how the CLI explains that instead of printing a bare `(empty)`.
+ *
+ * @returns {string|null} e.g. `any: note, text` — null when nothing is saved
+ */
+export function describeContextSpec(context) {
+    if (!context) return null;
+    const f = context.features || {};
+    const short = (v) => String(v).replace(/^data\/(schema|mime)\//, '');
+    const parts = [];
+    for (const [key, label] of [['allOf', 'all'], ['anyOf', 'any'], ['noneOf', 'none']]) {
+        const list = Array.isArray(f[key]) ? f[key].filter(Boolean) : [];
+        if (list.length) parts.push(`${label}: ${list.map(short).join(', ')}`);
+    }
+    const filters = Array.isArray(context.filters) ? context.filters.filter(Boolean) : [];
+    if (filters.length) parts.push(`filters: ${filters.join(', ')}`);
+    return parts.length ? parts.join(' · ') : null;
 }
