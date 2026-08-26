@@ -2,6 +2,7 @@
 
 import { UsageError } from '../../../core/errors.js';
 import { unwrapResource } from '../../../core/api-helpers.js';
+import { WORKSPACE_COLUMNS } from '../lib/columns.js';
 import { resolveWorkspaceHandle } from '../lib/handle.js';
 
 export default {
@@ -20,6 +21,6 @@ export default {
         }
         const ws = await handle.api.patch(`/workspaces/${handle.id}`, data);
         io.success(`Workspace '${handle.full}' updated`);
-        io.output(unwrapResource(ws, 'workspace'));
+        io.detail(unwrapResource(ws, 'workspace'), { columns: WORKSPACE_COLUMNS });
     },
 };

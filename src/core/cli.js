@@ -42,7 +42,6 @@ export async function main(argv = process.argv.slice(2)) {
             return 0;
         }
 
-        const stdin = process.stdin.isTTY ? null : await readStdin();
         const client = new CanvasClient();
 
         if (parsed.help && parsed._[0]) {
@@ -53,7 +52,11 @@ export async function main(argv = process.argv.slice(2)) {
             tokens: parsed._.map(String),
             argv,
             registry,
-            ctx: { client, session, io, stdin },
+            // Reading stdin is deferred to the actions that declare they want
+            // it (`wantsStdin`). Reading it eagerly meant every command waited
+            // for EOF, so `canvas ws list` inside a script with an inherited
+            // pipe hung forever.
+            ctx: { client, session, io, readStdin },
         });
         if (result?.kind === 'help') {
             if (result.path?.length) return showHelpForPath(registry, result.path, io);

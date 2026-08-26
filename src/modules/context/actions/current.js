@@ -4,7 +4,8 @@
 // (bitmaps, ACLs, tree ids, toolbox metadata) — dumping all of them as a table
 // produced an unreadable wall of columns. `canvas context show` still prints
 // the whole document, and -f json here carries it under `document`.
-const COLUMNS = ['context', 'remote', 'url', 'workspace', 'path', 'boundAt'];
+const COLUMNS = ['context', 'remote', 'url', 'workspace', 'path',
+    { key: 'boundAt', label: 'bound', format: 'date' }];
 
 export default {
     name: 'current',

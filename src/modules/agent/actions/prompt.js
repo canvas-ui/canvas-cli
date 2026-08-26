@@ -10,6 +10,8 @@ export default {
         workspace: 'string', context: 'string',
         steer: 'boolean', 'streaming-behavior': 'string',
     },
+    // Reads piped input; the dispatcher only waits for stdin when asked.
+    wantsStdin: true,
     async run({ parent, args, flags, stdin, client, io }) {
         let agent = parent.agent;
         let messageWords = args.message || [];

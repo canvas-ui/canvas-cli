@@ -2,13 +2,10 @@
 
 import { clientAppFeature, tagsToFeatures } from '@augmentd-labs/canvas-schemas';
 import { docScope } from './doc-scope.js';
+import { listColumns, detailColumns, title as docTitle } from './doc-render.js';
 import { UsageError } from './errors.js';
 
 const CLIENT_FEATURE = clientAppFeature('canvas-cli');
-
-// What a document row shows when nobody asked for anything specific. Documents
-// carry ~20 fields; a list is for finding one, not for reading all of it.
-const LIST_COLUMNS = ['id', 'schema', 'title', 'updatedAt'];
 
 /**
  * Build a noun submodule for one document schema.
@@ -60,7 +57,10 @@ export function createDocNoun(o) {
                 context: ctx.flags['context-path'],
                 treeNameOrTreeId: ctx.flags.tree,
             });
-            ctx.io.output(docs.map(summarize), { columns: LIST_COLUMNS });
+            // Per-schema columns: a note lists its preview, a file its size
+            // and where the bytes live. Mixed results (`doc list`) fall back
+            // to the generic row.
+            ctx.io.output(docs, { columns: listColumns(schema) });
         },
     };
 
@@ -71,7 +71,8 @@ export function createDocNoun(o) {
         positional: [{ name: 'docId', required: true }],
         async run(ctx) {
             const s = await docScope(ctx, scope);
-            ctx.io.output(await s.get(ctx.args.docId));
+            const doc = await s.get(ctx.args.docId);
+            ctx.io.detail(doc, { columns: detailColumns(doc), title: docTitle(doc) || undefined });
         },
     };
 
@@ -169,16 +170,4 @@ function targetsFor(ctx, scope) {
 function idsOf(created) {
     const list = Array.isArray(created) ? created : created?.documents || created?.payload || [];
     return (Array.isArray(list) ? list : []).map((d) => d?.id ?? d).filter((v) => v != null);
-}
-
-// Documents differ in where their human-readable name lives; the list is
-// useless if half the rows say '-'.
-function summarize(doc) {
-    const d = doc?.data || {};
-    return {
-        id: doc?.id,
-        schema: (doc?.schema || '').replace(/^data\/schema\//, ''),
-        title: d.title || d.label || d.url || d.uri || d.name || doc?.metadata?.filename || null,
-        updatedAt: doc?.updatedAt,
-    };
 }

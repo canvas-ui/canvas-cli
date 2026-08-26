@@ -2,6 +2,7 @@
 
 import { UsageError } from '../../../core/errors.js';
 import { unwrapResource } from '../../../core/api-helpers.js';
+import { CONTEXT_COLUMNS } from '../lib/columns.js';
 
 export default {
     name: 'show',
@@ -10,6 +11,6 @@ export default {
         const handle = parent.context || (session.boundContext() && client.resolve(session.boundContext()));
         if (!handle) throw new UsageError('Context address required');
         const ctx = await handle.api.contexts.get(handle.id);
-        io.output(unwrapResource(ctx, 'context'));
+        io.detail(unwrapResource(ctx, 'context'), { columns: CONTEXT_COLUMNS });
     },
 };

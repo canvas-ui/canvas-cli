@@ -12,6 +12,8 @@ export default {
     description: 'Write hook source to local clone (then hook push)',
     positional: [{ name: 'hookPath', required: true }],
     flags: { workspace: 'string', file: 'string' },
+    // Reads piped input; the dispatcher only waits for stdin when asked.
+    wantsStdin: true,
     async run(ctx) {
         const { args, flags, io, stdin } = ctx;
         if (!args.hookPath) throw new UsageError('hookPath required');

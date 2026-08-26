@@ -137,6 +137,8 @@ async function invoke({ mod, action, actionTokens, argv, ctx, parent, path }) {
         );
     }
 
+    const stdin = action.wantsStdin && ctx.readStdin ? await ctx.readStdin() : null;
+
     const needsConnection = action.needsConnection ?? mod.needsConnection ?? false;
     if (needsConnection && ctx.client && typeof ctx.client.ping === 'function') {
         await ctx.client.ping();
@@ -150,7 +152,7 @@ async function invoke({ mod, action, actionTokens, argv, ctx, parent, path }) {
         rest,
         flags,
         parent,
-        stdin: ctx.stdin,
+        stdin,
         module: mod,
         path,
     });

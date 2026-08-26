@@ -7,6 +7,8 @@ export default {
     description: 'Prompt an agent with workspace context',
     positional: [{ name: 'agent', required: true }, { name: 'message', variadic: true }],
     flags: { steer: 'boolean' },
+    // Reads piped input; the dispatcher only waits for stdin when asked.
+    wantsStdin: true,
     async run({ parent, args, flags, stdin, io }) {
         if (!parent.workspace) throw new UsageError('Workspace address required');
         if (!args.agent) throw new UsageError('Agent name required');

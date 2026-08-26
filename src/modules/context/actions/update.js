@@ -2,6 +2,7 @@
 
 import { UsageError } from '../../../core/errors.js';
 import { unwrapResource } from '../../../core/api-helpers.js';
+import { CONTEXT_COLUMNS } from '../lib/columns.js';
 
 export default {
     name: 'update',
@@ -17,6 +18,6 @@ export default {
         }
         const ctx = await parent.context.api.contexts.update(parent.context.id, data);
         io.success(`Context '${parent.context.full}' updated`);
-        io.output(unwrapResource(ctx, 'context'));
+        io.detail(unwrapResource(ctx, 'context'), { columns: CONTEXT_COLUMNS });
     },
 };
