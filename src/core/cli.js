@@ -2,9 +2,9 @@
 
 import chalk from 'chalk';
 
-import { parseGlobal } from './parser.js';
+import { parseGlobal, formatUsage } from './parser.js';
 import { createIO, readStdin } from './io.js';
-import { loadRegistry } from './registry.js';
+import { loadRegistry, collectFlagVocabulary, resolvePath } from './registry.js';
 import { dispatch } from './dispatcher.js';
 import { CanvasClient } from './transport/rest.js';
 import session from './session.js';
@@ -19,7 +19,11 @@ function readVersion() {
 
 export async function main(argv = process.argv.slice(2)) {
     try {
-        const parsed = parseGlobal(argv);
+        // The registry is built BEFORE parsing: it owns the flag vocabulary,
+        // without which the first pass mistakes an unknown flag for one that
+        // takes a value and eats the positional after it.
+        const registry = await loadRegistry();
+        const parsed = parseGlobal(argv, collectFlagVocabulary(registry));
         if (parsed.debug || parsed.verbose) process.env.DEBUG = 'canvas:*';
 
         const io = createIO({
@@ -33,8 +37,6 @@ export async function main(argv = process.argv.slice(2)) {
             return 0;
         }
 
-        const registry = await loadRegistry();
-
         if (!parsed._[0] || (parsed.help && !parsed._[0])) {
             showHelp(registry, io);
             return 0;
@@ -44,7 +46,7 @@ export async function main(argv = process.argv.slice(2)) {
         const client = new CanvasClient();
 
         if (parsed.help && parsed._[0]) {
-            return showCommandHelp(registry, parsed._[0], io);
+            return showHelpForPath(registry, parsed._.map(String), io);
         }
 
         const result = await dispatch({
@@ -54,7 +56,7 @@ export async function main(argv = process.argv.slice(2)) {
             ctx: { client, session, io, stdin },
         });
         if (result?.kind === 'help') {
-            if (result.module) return showCommandHelp(registry, result.module, io);
+            if (result.path?.length) return showHelpForPath(registry, result.path, io);
             showHelp(registry, io);
         }
         return 0;
@@ -168,35 +170,71 @@ function showHelp(registry, io) {
     io.print('  -d, --debug       Enable debug output');
 }
 
-function showCommandHelp(registry, name, io) {
-    const mod = registry.byName.get(name);
+function showHelpForPath(registry, tokens, io) {
+    const { path, mod, action } = resolvePath(registry, tokens);
     if (!mod) {
-        io.error(`Unknown command: ${name}`);
+        io.error(`Unknown command: ${tokens[0]}`);
         return 2;
     }
-    io.print(chalk.bold(mod.name) + (mod.aliases?.length ? ` (${mod.aliases.join(', ')})` : ''));
+
+    // Deepest level: one verb.
+    if (action) {
+        const aliases = (action.aliases || []).filter((a) => a !== action.name);
+        io.print(chalk.bold(action.name) + (aliases.length ? ` (${aliases.join(', ')})` : ''));
+        if (action.description) io.print(action.description);
+        io.print('');
+        io.print(chalk.bold('Usage:'));
+        io.print(`  ${formatUsage(path, action)}`);
+        printFlags(action, io);
+        return 0;
+    }
+
+    const label = mod.name + (mod.aliases?.length ? ` (${mod.aliases.join(', ')})` : '');
+    io.print(chalk.bold(label));
     if (mod.description) io.print(mod.description);
     io.print('');
-    io.print(chalk.bold('Actions:'));
-    const seen = new Set();
-    for (const [name, action] of mod.actions.entries()) {
-        if (seen.has(action)) continue;
-        seen.add(action);
-        const aliases = (action.aliases || []).filter((a) => a !== name);
-        const label = aliases.length ? `${action.name} (${aliases.join(', ')})` : action.name;
-        io.print(`  ${label.padEnd(24)} ${chalk.dim(action.description || '')}`);
-    }
+    io.print(chalk.bold('Usage:'));
+    const resourceSlot = mod.resourceArg ? ` [<${mod.resourceArg.name || mod.name}>]` : '';
+    const prefix = `  canvas ${path.join(' ')}`;
+    if (mod.submodules.size > 0) io.print(`${prefix}${resourceSlot} <noun> <verb> [args] [--flags]`);
+    io.print(`${prefix}${resourceSlot} <verb> [args] [--flags]`);
+
     if (mod.submodules.size > 0) {
         io.print('');
-        io.print(chalk.bold('Submodules:'));
-        const seenSub = new Set();
+        io.print(chalk.bold('Nouns:') + chalk.dim('   (plural lists: `notes` == `note list`)'));
+        const seen = new Set();
         for (const sub of mod.submodules.values()) {
-            if (seenSub.has(sub)) continue;
-            seenSub.add(sub);
-            io.print(`  ${sub.name.padEnd(24)} ${chalk.dim(sub.description || '')}`);
+            if (seen.has(sub)) continue;
+            seen.add(sub);
+            const extra = [...(sub.aliases || []), ...(sub.pluralAlias ? [sub.pluralAlias] : [])];
+            const name = extra.length ? `${sub.name} (${extra.join(', ')})` : sub.name;
+            io.print(`  ${name.padEnd(26)} ${chalk.dim(sub.description || '')}`);
         }
     }
+
+    io.print('');
+    io.print(chalk.bold(mod.submodules.size > 0 ? 'Verbs:' : 'Actions:'));
+    const seen = new Set();
+    for (const [name, act] of mod.actions.entries()) {
+        if (seen.has(act)) continue;
+        seen.add(act);
+        const aliases = (act.aliases || []).filter((a) => a !== name);
+        const label2 = aliases.length ? `${act.name} (${aliases.join(', ')})` : act.name;
+        io.print(`  ${label2.padEnd(26)} ${chalk.dim(act.description || '')}`);
+    }
+    io.print('');
+    io.print(chalk.dim(`  canvas ${path.join(' ')} <verb> --help   for one verb's arguments`));
     return 0;
+}
+
+function printFlags(action, io) {
+    const flags = Object.entries(action.flags || {});
+    if (!flags.length) return;
+    io.print('');
+    io.print(chalk.bold('Flags:'));
+    for (const [name, type] of flags) {
+        io.print(`  --${name}${type === 'boolean' ? '' : ' <value>'}`);
+    }
 }
 
 export default main;

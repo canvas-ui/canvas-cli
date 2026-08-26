@@ -31,6 +31,8 @@ export default {
     pluralAlias: 'workspaces',
     defaultAction: 'list',
     defaultPluralAction: 'list',
+    // A named resource with no verb shows it: `ws universe` == `ws universe show`.
+    defaultResourceAction: 'show',
     needsConnection: true,
     resourceArg: { name: 'workspace', resolve, optional: true },
     actions: [add, upload, indexAction, create, current, del, documents, dotfiles, list, notes, show, start, status, stop, tabs, tree, treeRm, update],

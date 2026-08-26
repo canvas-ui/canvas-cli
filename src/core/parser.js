@@ -10,11 +10,23 @@ const GLOBAL_ALIASES = {
     f: 'format', r: 'raw', d: 'debug', q: 'quiet', t: 'tag',
 };
 
-export function parseGlobal(argv) {
+/**
+ * First pass: produces the token stream the dispatcher walks.
+ *
+ * `vocab` comes from the registry (`collectFlagVocabulary`) so every flag any
+ * action declares is known here. It matters because an unknown `--flag` is
+ * assumed by minimist to take a value, which silently removes the next real
+ * token from `_` — `ctx note add --dry-run foo` would lose `foo` and the
+ * dispatcher would never see the note body.
+ *
+ * @param {string[]} argv
+ * @param {{string?: string[], boolean?: string[], alias?: Object}} [vocab]
+ */
+export function parseGlobal(argv, vocab = {}) {
     return minimist(argv, {
-        string: GLOBAL_STRINGS,
-        boolean: GLOBAL_BOOLEANS,
-        alias: GLOBAL_ALIASES,
+        string: [...GLOBAL_STRINGS, ...(vocab.string || [])],
+        boolean: [...GLOBAL_BOOLEANS, ...(vocab.boolean || [])],
+        alias: { ...GLOBAL_ALIASES, ...(vocab.alias || {}) },
         stopEarly: false,
     });
 }
@@ -48,4 +60,48 @@ export function bindPositional(tokens, positional = []) {
     }
     rest = tokens.slice(positional.length);
     return { args, rest };
+}
+
+/**
+ * Required positionals that were not supplied. `required: true` has been
+ * declared on ~40 actions and enforced by none of them — each hand-threw its
+ * own message, or forgot to.
+ *
+ * @param {Object} args bound positionals
+ * @param {Object[]} positional the action's schema
+ * @returns {string[]} names of missing required positionals
+ */
+export function missingPositionals(args, positional = []) {
+    const missing = [];
+    for (const spec of positional) {
+        if (!spec?.required) continue;
+        const value = args[spec.name];
+        const empty = spec.variadic
+            ? !Array.isArray(value) || value.length === 0
+            : value === undefined || value === null || value === '';
+        if (empty) missing.push(spec.name);
+    }
+    return missing;
+}
+
+/**
+ * The one usage renderer, shared by `--help` and by the missing-argument
+ * error, so the two can never describe a command differently.
+ *
+ *   formatUsage(['ctx', 'note', 'add'], addAction)
+ *   → 'canvas ctx note add <body…> [--title <v>] [--tag <v>]'
+ *
+ * @param {string[]} path grammar tokens leading to the action
+ * @param {Object} action
+ */
+export function formatUsage(path = [], action = {}) {
+    const parts = ['canvas', ...path];
+    for (const spec of action.positional || []) {
+        const name = spec.variadic ? `${spec.name}…` : spec.name;
+        parts.push(spec.required ? `<${name}>` : `[${name}]`);
+    }
+    for (const [name, type] of Object.entries(action.flags || {})) {
+        parts.push(type === 'boolean' ? `[--${name}]` : `[--${name} <v>]`);
+    }
+    return parts.join(' ');
 }

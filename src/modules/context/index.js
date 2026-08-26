@@ -30,6 +30,8 @@ export default {
     pluralAlias: 'contexts',
     defaultAction: 'current',
     defaultPluralAction: 'list',
+    // A named resource with no verb shows it: `ws universe` == `ws universe show`.
+    defaultResourceAction: 'show',
     needsConnection: true,
     resourceArg: { name: 'context', resolve, optional: true },
     actions: [add, upload, indexAction, bind, create, current, destroy, documents, dotfiles, list, notes, path, paths, set, show, tabs, tree, update, url, workspace],
