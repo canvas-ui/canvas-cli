@@ -86,7 +86,7 @@ export function createIO({ format = 'table', raw = false, quiet = false } = {}) 
 function normalizeColumns(columns) {
     return columns.map((c) => {
         if (typeof c === 'string') return { key: c, label: c.includes('.') ? c.split('.').pop() : c };
-        return { ...c, label: c.label || (c.key ? c.key.split('.').pop() : '?') };
+        return { ...c, label: c.label ?? (c.key ? c.key.split('.').pop() : '') };
     });
 }
 
@@ -118,7 +118,10 @@ function getPath(row, key) {
 
 function renderCell(row, spec) {
     const value = rawValue(row, spec);
-    if (value == null || value === '') return chalk.dim('-');
+    // A dash means "this record has no such value". A marker column (current
+    // session, active flag) means the opposite — absence is the information —
+    // so it opts out with emptyText: ''.
+    if (value == null || value === '') return spec.emptyText ?? chalk.dim('-');
     let text = applyFormat(value, spec.format);
     if (spec.width && text.length > spec.width) text = `${text.slice(0, spec.width - 1)}…`;
     return spec.dim ? chalk.dim(text) : text;

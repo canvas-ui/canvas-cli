@@ -5,16 +5,16 @@ import del from './actions/delete.js';
 import list from './actions/list.js';
 import prompt from './actions/prompt.js';
 import restart from './actions/restart.js';
-import session from './actions/session.js';
-import sessions from './actions/sessions.js';
 import show from './actions/show.js';
-import skills from './actions/skills.js';
 import start from './actions/start.js';
 import status from './actions/status.js';
 import stop from './actions/stop.js';
 import update from './actions/update.js';
 
 import resolve from './resolve.js';
+import session from './session/index.js';
+import skill from './skill/index.js';
+import tool from './tool/index.js';
 
 export default {
     name: 'agent',
@@ -25,6 +25,6 @@ export default {
     defaultPluralAction: 'list',
     needsConnection: true,
     resourceArg: { name: 'agent', resolve, optional: true },
-    actions: [create, del, list, prompt, restart, session, sessions, show, skills, start, status, stop, update],
-    submodules: [],
+    actions: [create, del, list, prompt, restart, show, start, status, stop, update],
+    submodules: [session, skill, tool],
 };

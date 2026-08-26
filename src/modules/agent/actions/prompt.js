@@ -8,6 +8,7 @@ export default {
     positional: [{ name: 'agent' }, { name: 'message', variadic: true }],
     flags: {
         workspace: 'string', context: 'string',
+        session: 'string',
         steer: 'boolean', 'streaming-behavior': 'string',
     },
     // Reads piped input; the dispatcher only waits for stdin when asked.
@@ -36,7 +37,16 @@ export default {
 
         const streamingBehavior = flags.steer || flags['streaming-behavior'] === 'steer'
             ? 'steer' : 'followUp';
-        const out = await agent.api.agents.prompt(agent.name, { message, streamingBehavior });
+        // --session talks in a named thread instead of whatever the agent is
+        // currently on; `agent <a> session list` names them.
+        const body = { message, streamingBehavior };
+        const res = flags.session
+            ? await agent.api.post(
+                `/agents/${encodeURIComponent(agent.name)}/sessions/${encodeURIComponent(flags.session)}/prompt`,
+                body,
+            )
+            : await agent.api.agents.prompt(agent.name, body);
+        const out = res?.payload || res;
         if (out?.queued && (!out.messages || out.messages.length === 0)) {
             io.warn(`Agent busy; accepted as ${out.streamingBehavior === 'steer' ? 'steer' : 'follow-up'}.`);
             return;
