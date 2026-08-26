@@ -68,7 +68,7 @@ export function createDocNoun(o) {
                 const view = await s.savedView().catch(() => null);
                 if (view) {
                     ctx.io.info(`(empty) — this context filters to ${view}`);
-                    ctx.io.info(`Use \`--all\` to list past it, or clear it in the web toolbox.`);
+                    ctx.io.info(`Use \`--all\` to list past it, or \`ctx update --clear-filter\` to drop it.`);
                     return;
                 }
             }
