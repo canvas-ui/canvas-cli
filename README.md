@@ -18,7 +18,7 @@ curl -fsSL https://raw.githubusercontent.com/canvas-ui/canvas/main/apps/cli/scri
 This resolves the newest `cli-v*` GitHub Release, downloads the single-file
 binary for your platform, verifies it against the release's `SHA256SUMS`,
 installs it to `~/.local/bin/canvas` together with the shortcut wrappers
-(`ws`, `ctx`, `context`, `dot`, `agent`, `hi`) and offers to wire the shell
+(`ws`, `ctx`, `context`, `dot`, `agent`, `ag`, `hi`) and offers to wire the shell
 prompt integration into your rc file.
 
 No runtime is required — the binaries are bun-compiled and self-contained.
@@ -30,7 +30,7 @@ Flags can be passed through the pipe:
 curl -fsSL .../install.sh | bash -s -- --prompt
 
 # Pin a version, install elsewhere, skip the extras
-curl -fsSL .../install.sh | bash -s -- --version 2.1.11 --dir ~/bin --no-prompt --no-shortcuts
+curl -fsSL .../install.sh | bash -s -- --version 2.1.13 --dir ~/bin --no-prompt --no-shortcuts
 ```
 
 | Flag | Effect |
@@ -87,7 +87,7 @@ npm install -g @augmentd-labs/canvas-cli   # installs the `canvas` command
 
 The unscoped `canvas-cli` name on npmjs is an unrelated package — use the
 scoped name. The npm package installs only the `canvas` command; the shortcuts
-(`ctx`, `context`, `dot`, `ws`, `agent`, `hi`) ship with the standalone
+(`ctx`, `context`, `dot`, `ws`, `agent`, `ag`, `hi`) ship with the standalone
 binaries and the source install. Node.js v20 LTS or newer.
 
 ### From source (development)
@@ -116,10 +116,15 @@ state and the bound context URL:
 [● (work) admin@dev://universe://work/reports] user@host:~$
 ```
 
-A green dot means the bound remote is connected, red means it is not. The
-context URL is read from `~/.canvas/config/cli-session.json` and refreshed from
-the server at most every 30 seconds (`CANVAS_CONTEXT_UPDATE_TIMEOUT`), with a
-0.5s timeout so a dead remote never stalls your prompt.
+The dot is **green** when the bound remote last answered, **red** when it is
+unreachable or nothing is bound, and **yellow** when a remote is bound but
+nothing has verified it yet. That state is written by `canvas remote bind`,
+`canvas remote ping` and `canvas context bind`; a server that answers with an
+error still counts as reachable.
+
+The context URL is read from `~/.canvas/config/cli-session.json` and refreshed
+from the server at most every 30 seconds (`CANVAS_CONTEXT_UPDATE_TIMEOUT`),
+with a 0.5s timeout so a dead remote never stalls your prompt.
 
 The installer sets this up for you (`--prompt`). Manually:
 
@@ -160,8 +165,9 @@ canvas --help
 | `config` | `cfg`, `settings` | CLI configuration |
 | `server` | | Manage a local Canvas server (PM2) |
 
-The `ws`, `ctx`, `context`, `dot`, `agent` and `hi` binaries are standalone
-shortcuts for their module.
+The `ws`, `ctx`, `context`, `dot`, `agent`, `ag` and `hi` binaries are standalone
+shortcuts for their module. `ag` and `hi` are the same thing — two spellings of
+`canvas agent`, kept until usage settles on one.
 
 ```bash
 # Workspaces
@@ -171,6 +177,9 @@ ws list                        # standalone shortcut
 # Contexts
 canvas ctx list
 canvas ctx bind <context>
+canvas ctx                     # summary of the bound context
+canvas ctx show                # the full context document
+canvas ctx -f json             # summary + document as JSON
 
 # Plural shortcuts expand to "<module> list"
 canvas workspaces

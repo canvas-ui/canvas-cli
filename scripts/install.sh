@@ -18,7 +18,7 @@ BINARY_NAME="canvas"
 RAW_BASE="https://raw.githubusercontent.com/${REPO}/main/apps/cli"
 
 # Shortcut wrapper -> canvas module
-SHORTCUTS=("ws:workspace" "ctx:context" "context:context" "dot:dot" "agent:agent" "hi:agent")
+SHORTCUTS=("ws:workspace" "ctx:context" "context:context" "dot:dot" "agent:agent" "ag:agent" "hi:agent")
 
 RED=''; GREEN=''; YELLOW=''; BLUE=''; NC=''
 if [ -t 1 ]; then

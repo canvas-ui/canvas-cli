@@ -35,9 +35,11 @@ export default {
         };
 
         io.info(`Testing '${args.id}'...`);
+        let reachable = false;
         try {
             const c = client.createTransient(cfg);
             const info = await c.ping();
+            reachable = true;
             if (info?.version) {
                 cfg.version = info.version;
                 io.success(`Connected — v${info.version}`);
@@ -53,6 +55,7 @@ export default {
 
         if (isFirst) {
             session.bindRemote(args.id);
+            session.update({ boundRemoteStatus: reachable ? 'connected' : 'disconnected' });
             io.success('Set as default remote (first remote)');
         }
 

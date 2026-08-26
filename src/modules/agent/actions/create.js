@@ -23,6 +23,6 @@ export default {
         if (flags['api-key'] !== undefined) payload.apiKey = flags['api-key'];
         if (flags['base-url'] !== undefined) payload.baseUrl = flags['base-url'];
         const agent = await client.client(remoteId).post('/agents', payload);
-        io.output(agent);
+        io.output(agent, { columns: ['name', 'label', 'status', 'llmProvider', 'model'] });
     },
 };

@@ -12,6 +12,7 @@
     "dot": "bin/dot.js",
     "ws": "bin/ws.js",
     "agent": "bin/agent.js",
+    "ag": "bin/ag.js",
     "hi": "bin/hi.js"
   },
   "scripts": {

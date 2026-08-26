@@ -111,9 +111,10 @@ npm install -g @augmentd-labs/canvas-cli
 ```
 
 The npm package ships **only the `canvas` command**, via `publishConfig.bin`.
-The other six (`context`, `ctx`, `dot`, `ws`, `agent`, `hi`) are too generic to
-put on a global PATH silently; they remain available in the standalone
-binaries (as wrappers written by `install.sh`) and in local development.
+The other seven (`context`, `ctx`, `dot`, `ws`, `agent`, `ag`, `hi`) are too
+generic to put on a global PATH silently — `ag` in particular collides with
+the silver searcher — so they remain available in the standalone binaries (as
+wrappers written by `install.sh`) and in local development.
 
 The three `packages/*` dependencies are published because the CLI depends on
 them — `pnpm` rewrites `workspace:*` to real versions when it packs, so those

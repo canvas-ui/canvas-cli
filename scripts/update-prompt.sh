@@ -58,11 +58,17 @@ _canvas_get_context_url() {
 	jq -r '.boundContextUrl // empty' "$CANVAS_SESSION"
 }
 
-_canvas_is_connected() {
-    [ -r "$CANVAS_SESSION" ] || return 1
-    local status
+_canvas_remote_status() {
+    # connected | disconnected | unknown | none
+    [ -r "$CANVAS_SESSION" ] || { echo none; return; }
+    local remote status
+    remote=$(jq -r '.boundRemote // empty' "$CANVAS_SESSION" 2>/dev/null)
+    [ -n "$remote" ] || { echo none; return; }
     status=$(jq -r '.boundRemoteStatus // empty' "$CANVAS_SESSION" 2>/dev/null)
-    [ "$status" = "connected" ]
+    case "$status" in
+        connected|disconnected) echo "$status" ;;
+        *) echo unknown ;;
+    esac
 }
 
 _canvas_get_bound_remote() {
@@ -153,17 +159,29 @@ canvas_update_prompt() {
         return 0
     fi
 
-    if ! _canvas_is_connected; then
+    local state dot url context_id new_url
+    state=$(_canvas_remote_status)
+
+    # No remote bound at all (or no session yet) — nothing to report but the
+    # disconnected marker.
+    if [ "$state" = "none" ]; then
         PS1="[$CANVAS_PROMPT_RED●$CANVAS_PROMPT_RESET] $ORIGINAL_PROMPT"
         return 0
     fi
 
-    local url context_id new_url
+    case "$state" in
+        connected) dot="$CANVAS_PROMPT_GREEN●$CANVAS_PROMPT_RESET" ;;
+        disconnected) dot="$CANVAS_PROMPT_RED●$CANVAS_PROMPT_RESET" ;;
+        # A remote is bound but nothing has verified it since — show the
+        # context anyway rather than pretending there is nothing there.
+        *) dot="$CANVAS_PROMPT_YELLOW●$CANVAS_PROMPT_RESET" ;;
+    esac
+
     context_id=$(_canvas_get_context_id)
     url=$(_canvas_get_context_url)
 
     # Refresh URL from server only if session file is older than timeout or URL is empty
-    if _canvas_should_refresh_context_url || [ -z "$url" ]; then
+    if [ "$state" != "disconnected" ] && { _canvas_should_refresh_context_url || [ -z "$url" ]; }; then
         new_url=$(_canvas_fetch_context_url 2>/dev/null)
         if [ -n "$new_url" ]; then
             url="$new_url"
@@ -171,19 +189,14 @@ canvas_update_prompt() {
         fi
     fi
 
-    if [ -n "$url" ]; then
-        if [ -z "$context_id" ] || [ "$context_id" = "default" ]; then
-            PS1="[$CANVAS_PROMPT_GREEN●$CANVAS_PROMPT_RESET $url] $ORIGINAL_PROMPT"
-        else
-            PS1="[$CANVAS_PROMPT_GREEN●$CANVAS_PROMPT_RESET ($context_id) $url] $ORIGINAL_PROMPT"
-        fi
+    if [ -n "$url" ] && [ -n "$context_id" ] && [ "$context_id" != "default" ]; then
+        PS1="[$dot ($context_id) $url] $ORIGINAL_PROMPT"
+    elif [ -n "$url" ]; then
+        PS1="[$dot $url] $ORIGINAL_PROMPT"
+    elif [ -n "$context_id" ] && [ "$context_id" != "default" ]; then
+        PS1="[$dot ($context_id)] $ORIGINAL_PROMPT"
     else
-        # Connected but missing URL: show status without URL
-        if [ -z "$context_id" ] || [ "$context_id" = "default" ]; then
-            PS1="[$CANVAS_PROMPT_GREEN●$CANVAS_PROMPT_RESET] $ORIGINAL_PROMPT"
-        else
-            PS1="[$CANVAS_PROMPT_GREEN●$CANVAS_PROMPT_RESET ($context_id)] $ORIGINAL_PROMPT"
-        fi
+        PS1="[$dot] $ORIGINAL_PROMPT"
     fi
 }
 

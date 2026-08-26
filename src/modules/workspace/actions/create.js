@@ -25,6 +25,6 @@ export default {
         if (flags.metadata) payload.metadata = JSON.parse(flags.metadata);
         const ws = await client.client(remoteId).workspaces.create(payload);
         io.success(`Workspace '${args.name}' created`);
-        io.output(unwrapResource(ws, 'workspace'));
+        io.output(unwrapResource(ws, 'workspace'), { columns: ['id', 'label', 'type', 'status', 'owner'] });
     },
 };

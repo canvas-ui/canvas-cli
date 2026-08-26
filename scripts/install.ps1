@@ -85,9 +85,9 @@ $ver = & $target --version 2>&1
 if ($LASTEXITCODE -ne 0 -and "$ver" -notmatch 'canvas-cli') { Write-Fail 'Installed binary does not run' }
 Write-Ok "Installed $ver"
 
-# Shortcut shims: ws / ctx / context / dot / agent / hi
+# Shortcut shims: ws / ctx / context / dot / agent / ag / hi
 if (-not $NoShortcuts) {
-    $map = @{ ws = 'workspace'; ctx = 'context'; context = 'context'; dot = 'dot'; agent = 'agent'; hi = 'agent' }
+    $map = @{ ws = 'workspace'; ctx = 'context'; context = 'context'; dot = 'dot'; agent = 'agent'; ag = 'agent'; hi = 'agent' }
     foreach ($name in $map.Keys) {
         $shim = Join-Path $InstallDir "$name.cmd"
         "@echo off`r`n`"$target`" $($map[$name]) %*" | Set-Content -Path $shim -Encoding ASCII

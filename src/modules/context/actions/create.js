@@ -21,6 +21,6 @@ export default {
         if (flags.color) data.metadata.color = flags.color;
         const ctx = await client.client(remoteId).contexts.create(data);
         io.success(`Context '${args.id}' created`);
-        io.output(unwrapResource(ctx, 'context'));
+        io.output(unwrapResource(ctx, 'context'), { columns: ['id', 'url', 'workspaceName', 'path', 'createdAt'] });
     },
 };
