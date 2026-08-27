@@ -153,6 +153,10 @@ async function invoke({ mod, action, actionTokens, argv, ctx, parent, path, reso
         flags,
         parent,
         stdin,
+        // Lazy counterpart to `stdin`: an action that only *sometimes* reads
+        // stdin (`note add -`) must not make every other invocation wait for
+        // EOF, so it pulls the pipe itself when the argument asks for it.
+        readStdin: ctx.readStdin,
         module: mod,
         path,
     });

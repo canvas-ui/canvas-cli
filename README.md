@@ -168,7 +168,7 @@ ws universe note add ./notes.md --title X
 ag lucy sessions                             # and for agents
 ```
 
-Three rules cover the rest:
+Four rules cover the rest:
 
 - **A plural noun lists it.** `ctx notes` is `ctx note list`, at any depth.
 - **`rm` unlinks, `delete` destroys.** `ctx note rm <id>` drops the document
@@ -177,6 +177,15 @@ Three rules cover the rest:
 - **An address beats a noun, a noun beats a resource.** `ctx note list` is the
   note noun even if you own a context called `note` — address that one as
   `ctx user@remote:note`.
+- **`-` reads the argument from stdin**, for every noun the CLI can create:
+
+  ```bash
+  journalctl --user --since today | grep -i err | ctx note add - --title "errors"
+  echo https://example.com | ctx tab add -
+  ```
+
+  Only `-` pulls the pipe, so nothing hangs waiting on a stdin you never meant
+  to send. `file add` is the exception: its argument is a path on disk.
 
 `--help` works at every level and prints the usage line for what you asked
 about: `canvas ws --help`, `canvas ctx note --help`, `canvas ctx note add --help`.

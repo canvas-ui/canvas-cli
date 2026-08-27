@@ -25,6 +25,8 @@ const CLIENT_FEATURE = clientAppFeature('canvas-cli');
  * @param {(ctx: Object) => Object|Object[]} [o.build] args/flags → document(s);
  *        omitted ⇒ the noun is read-only (no `add` verb)
  * @param {Object[]} [o.addPositional] defaults to a variadic required `body`
+ * @param {string|null} [o.stdinArg] the positional `-` fills from stdin;
+ *        defaults to the first one, null opts the noun out
  * @param {Object} [o.addFlags] extra flags for `add`
  * @param {(ctx: Object) => Promise<any>} [o.addRun] replaces the whole `add`
  *        body (the file noun streams bytes instead of building a document)
@@ -36,6 +38,12 @@ export function createDocNoun(o) {
         name, plural, aliases = [], aliasPlurals = [], schema, description, scope,
         build, addPositional, addFlags = {}, addRun, extraVerbs = [],
     } = o;
+
+    const addSlots = addPositional || [{ name: 'body', variadic: true, required: true }];
+    // Which argument `-` stands in for. Nouns that stream bytes rather than
+    // build a document (`file`) opt out — their positional is a path, and a
+    // path cannot come down a pipe.
+    const stdinArg = addRun ? null : (o.stdinArg !== undefined ? o.stdinArg : addSlots[0]?.name);
 
     const listVerb = {
         name: 'list',
@@ -133,7 +141,7 @@ export function createDocNoun(o) {
             name: 'add',
             aliases: ['new'],
             description: `Add a ${name}`,
-            positional: addPositional || [{ name: 'body', variadic: true, required: true }],
+            positional: addSlots,
             flags: {
                 title: 'string', tag: 'string', comment: 'string',
                 ...(scope === 'workspace' ? { path: 'string' } : {}),
@@ -141,6 +149,7 @@ export function createDocNoun(o) {
             },
             async run(ctx) {
                 if (addRun) return addRun(ctx);
+                if (stdinArg) await fillFromStdin(ctx, stdinArg);
                 const s = await docScope(ctx, scope);
                 const docs = [build(ctx)].flat();
                 const features = [
@@ -167,6 +176,27 @@ export function createDocNoun(o) {
         actions,
         submodules: [],
     };
+}
+
+/**
+ * `-` means "the argument is on stdin", the way every other unix tool spells
+ * it, so `journalctl … | ctx note add - --title 'errors'` works for any noun
+ * the CLI can build — not just notes.
+ *
+ * Read lazily, and only when the argument actually is `-`: a command that
+ * waits on stdin unconditionally hangs inside a script that inherited a pipe.
+ */
+async function fillFromStdin(ctx, slot) {
+    const value = ctx.args[slot];
+    const isDash = Array.isArray(value) ? value.length === 1 && value[0] === '-' : value === '-';
+    if (!isDash) return;
+    const text = ctx.readStdin ? await ctx.readStdin() : null;
+    if (text == null) {
+        throw new UsageError(`'-' reads ${slot} from stdin, but nothing is piped in.`);
+    }
+    const body = text.replace(/\s+$/, '');
+    if (!body) throw new UsageError('Nothing on stdin to add.');
+    ctx.args[slot] = Array.isArray(value) ? [body] : body;
 }
 
 // Workspace inserts can name a tree path; context inserts cannot (a context is
