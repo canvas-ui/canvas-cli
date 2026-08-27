@@ -220,6 +220,11 @@ canvas ctx                     # the bound context
 canvas ctx tree paths          # one path per line
 canvas contexts
 
+# A context is a path in one tree of one workspace — `create` takes all three
+canvas ctx create MBAG universe://project-foo/tasks/baz
+canvas ctx create MBAG --workspace universe --url /project-foo/tasks/baz \
+    --tree directory --base-url /project-foo
+
 # Remotes, tokens and this device
 canvas remote admin@dev            # a known remote id is a resource too
 canvas remote admin@dev ping
