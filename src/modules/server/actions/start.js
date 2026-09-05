@@ -20,7 +20,8 @@ export default {
             io.warn('Canvas server already running');
             return;
         }
-        const script = path.join(root, 'src/Server.js');
+        // The package entry point; src/Server.js only exports the singleton.
+        const script = path.join(root, 'src/init.js');
         const cfg = {
             name: PM2_APP, script, cwd: root,
             env: { NODE_ENV: 'development', ...process.env },

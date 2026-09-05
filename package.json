@@ -1,6 +1,6 @@
 {
   "name": "@augmentd-labs/canvas-cli",
-  "version": "2.2.4",
+  "version": "2.3.0",
   "description": "Canvas CLI",
   "author": "Jozef Melich <me@idnc.sk>",
   "license": "AGPL-3.0-or-later",
@@ -17,6 +17,7 @@
   },
   "scripts": {
     "lint": "eslint \"**/*.js\"",
+    "test": "node --test \"tests/**/*.test.js\"",
     "lint:fix": "eslint \"**/*.js\" --fix",
     "format": "prettier --write \"**/*.{js,md}\"",
     "format:js": "prettier --write \"**/*.js\"",

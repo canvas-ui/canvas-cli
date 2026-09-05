@@ -15,7 +15,7 @@ function ensureDirs() {
 }
 ensureDirs();
 
-class JsonFile {
+export class JsonFile {
     constructor(path, defaults = {}) {
         this.path = path;
         this.defaults = defaults;

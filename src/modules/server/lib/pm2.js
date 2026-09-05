@@ -28,7 +28,8 @@ export function findServerRoot() {
 function isValidRoot(dir) {
     try {
         const pkg = path.join(dir, 'package.json');
-        const script = path.join(dir, 'src/Server.js');
+        // src/init.js is the package entry point (Server.js is a non-starting singleton).
+        const script = path.join(dir, 'src/init.js');
         if (!existsSync(pkg) || !existsSync(script)) return false;
         const j = JSON.parse(readFileSync(pkg, 'utf8'));
         // Historical process names stay matched — running servers registered
@@ -42,11 +43,11 @@ export async function hasPM2() {
     catch { return false; }
 }
 
-export async function getProcessInfo() {
+export async function getProcessInfo(name = PM2_APP) {
     try {
         const { stdout } = await execAsync('pm2 jlist');
         const procs = JSON.parse(stdout);
-        return procs.find((p) => p.name === PM2_APP) || null;
+        return procs.find((p) => p.name === name) || null;
     } catch { return null; }
 }
 

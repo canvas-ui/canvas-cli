@@ -325,6 +325,35 @@ canvas remotes                                              # list remotes
 canvas remote bind admin@dev
 ```
 
+### Mirrors (roaming profile)
+
+`canvas mirror` keeps workspaces from a hub in sync as real folders on this
+machine (`~/Workspaces/<workspace>` by default) through `canvas-fuse --mirror`:
+pinned folders stay available offline, everything else is fetched on demand,
+edits made offline are pushed when the hub is reachable, and a file that
+changed on both sides is never overwritten — the hub's version keeps the name
+and yours lands in the hub's conflict inbox (or, with `--conflicts rename`,
+next to it as `name (conflict from <device> <date>).ext`).
+
+```bash
+canvas mirror init                                  # pick hub, root, workspaces, pinned folders; start mounts
+canvas mirror init --hub admin@dev --root ~/Workspaces --workspace devel:UI/,Docs/ --conflicts prompt --service --yes
+canvas mirror add work --pin Contracts/ --conflicts rename
+canvas mirror status                                # daemon state, cursor/head, pending, conflicts, lag
+canvas mirror sync                                  # reconcile now
+canvas mirror pin add devel Photos/2026/
+canvas mirror conflicts                             # what waits in the hub inbox
+canvas mirror conflicts devel --resolve 100042 --keep both
+canvas mirror service install                       # pm2 processes, restart on crash, start at login
+canvas mirror stop all
+```
+
+State: `config/mirrors.json` (this device's mirror list), the mount's own
+cache/ledger under `~/.canvas/<remote>/fuse/workspaces/<workspace>/`, and the
+device's status report on the hub (Workspace › Settings › Sync). Requires the
+`canvas-fuse` binary (`CANVAS_FUSE_BIN` overrides the lookup) and, for
+`service`, pm2.
+
 ### Output formats
 
 Lists accept `-f, --format` with `table` (default), `json` or `csv`; `-r, --raw`
@@ -349,6 +378,7 @@ overridable with `CANVAS_USER_HOME`):
 | `config/remotes.json` | Registered remotes with their URLs and auth tokens — managed via `canvas remote add \| bind \| rename`, not by hand |
 | `config/cli-session.json` | The current session: bound remote and its status, bound context and URL |
 | `config/cli-aliases.json` | User-defined command aliases (`canvas alias`) |
+| `config/mirrors.json` | Workspaces mirrored on this device (`canvas mirror init \| add \| remove`) |
 | `scripts/update-prompt.sh` | Prompt integration, if installed |
 
 AI prompts (`hi`, `canvas agent`) run against agents hosted on the bound Canvas

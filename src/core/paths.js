@@ -4,8 +4,10 @@ import os from 'node:os';
 import path from 'node:path';
 
 function userHome() {
-    const mode = process.env.SERVER_MODE || 'user';
-    const home = process.env.SERVER_HOME || process.cwd();
+    // canvas-server spells these CANVAS_SERVER_MODE / CANVAS_SERVER_HOME; the
+    // unprefixed forms are kept for existing setups.
+    const mode = process.env.CANVAS_SERVER_MODE || process.env.SERVER_MODE || 'user';
+    const home = process.env.CANVAS_SERVER_HOME || process.env.SERVER_HOME || process.cwd();
     if (mode !== 'user') return path.join(home, 'users');
     return process.platform === 'win32'
         ? path.join(os.homedir(), 'Canvas')

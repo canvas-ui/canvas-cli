@@ -10,3 +10,4 @@ export { default as config } from './config/index.js';
 export { default as alias } from './alias/index.js';
 export { default as server } from './server/index.js';
 export { default as role } from './role/index.js';
+export { default as mirror } from './mirror/index.js';
