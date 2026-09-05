@@ -18,6 +18,7 @@ export default {
                 id: m.id,
                 workspace: m.workspaceName,
                 hub: m.remote,
+                client: m.client || 'fuse',
                 mountpoint: m.mountpoint,
                 pins: (m.pins || []).join(', ') || '(on demand)',
                 conflicts: m.conflicts,
@@ -25,6 +26,6 @@ export default {
                 mount: st ? (st.status || 'ok') : 'not running',
                 state: st?.mirror?.state || '-',
             };
-        }), { columns: ['id', 'workspace', 'hub', 'mountpoint', 'pins', 'conflicts', 'managed', 'mount', 'state'] });
+        }), { columns: ['id', 'workspace', 'hub', 'client', 'mountpoint', 'pins', 'conflicts', 'managed', 'mount', 'state'] });
     },
 };

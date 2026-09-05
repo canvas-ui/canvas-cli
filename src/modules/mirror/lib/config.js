@@ -17,6 +17,8 @@ export const FILE_MIRRORS = path.join(DIR_CONFIG, 'mirrors.json');
 export const DEFAULTS = Object.freeze({ version: 1, root: null, mirrors: [] });
 export const CONFLICT_MODES = ['prompt', 'rename'];
 export const DELETE_MODES = ['propagate', 'keep'];
+// fuse = canvas-fuse --mirror (Linux, on-demand + pins); daemon = canvas-edge real folder.
+export const CLIENTS = ['fuse', 'daemon'];
 
 const store = new JsonFile(FILE_MIRRORS, { ...DEFAULTS, mirrors: [] });
 
@@ -58,10 +60,11 @@ export function parseWorkspaceSpec(spec) {
     return { name: name.trim(), pins };
 }
 
-export function buildMirror({ remoteId, workspaceId, workspaceName, root, pins = [], ignore = [], conflicts = 'prompt', deletes = 'propagate', managed = 'manual' }) {
+export function buildMirror({ remoteId, workspaceId, workspaceName, root, pins = [], ignore = [], conflicts = 'prompt', deletes = 'propagate', managed = 'manual', client = 'fuse' }) {
     if (!remoteId || !workspaceName) throw new Error('remoteId and workspaceName are required');
     if (!CONFLICT_MODES.includes(conflicts)) throw new Error(`conflicts must be one of ${CONFLICT_MODES.join('|')}`);
     if (!DELETE_MODES.includes(deletes)) throw new Error(`deletes must be one of ${DELETE_MODES.join('|')}`);
+    if (!CLIENTS.includes(client)) throw new Error(`client must be one of ${CLIENTS.join('|')}`);
     const mirrorRoot = root || defaultRoot();
     return {
         id: mirrorId(remoteId, workspaceName),
@@ -74,6 +77,7 @@ export function buildMirror({ remoteId, workspaceId, workspaceName, root, pins =
         ignore: [...new Set(ignore)],
         conflicts,
         deletes,
+        client,
         // 'pm2' when `mirror service install` runs it, 'manual' when started detached.
         managed,
         paused: false,

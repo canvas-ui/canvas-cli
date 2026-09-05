@@ -4,6 +4,7 @@ import { UsageError } from '../../../core/errors.js';
 import { findMirror, listMirrors } from '../lib/config.js';
 import { mount, mountForeground } from '../lib/fuse.js';
 import { startProcess } from '../lib/pm2.js';
+import { ensureEdgeService } from '../lib/edge.js';
 
 export default {
     name: 'start',
@@ -19,7 +20,11 @@ export default {
             process.exitCode = code;
             return;
         }
-        for (const mirror of targets) {
+        if (targets.some((m) => m.client === 'daemon')) {
+            const { started } = await ensureEdgeService(io);
+            io.success(`${started ? 'Started' : 'Reloaded'} canvas-edge`);
+        }
+        for (const mirror of targets.filter((m) => m.client !== 'daemon')) {
             if (mirror.managed === 'pm2') {
                 const { name, started } = await startProcess(mirror);
                 io.success(`${started ? 'Started' : 'Already running'}: ${name}`);

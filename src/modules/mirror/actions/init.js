@@ -5,10 +5,11 @@ import path from 'node:path';
 import { input, select, yesNo } from '../../../core/prompt.js';
 import { UsageError } from '../../../core/errors.js';
 import { ensureDeviceRegistered } from '../../../core/device-registration.js';
-import { CONFLICT_MODES, DELETE_MODES, buildMirror, defaultRoot, parseWorkspaceSpec, readConfig, setRoot, splitList, upsertMirror } from '../lib/config.js';
+import { CLIENTS, CONFLICT_MODES, DELETE_MODES, buildMirror, defaultRoot, parseWorkspaceSpec, readConfig, setRoot, splitList, upsertMirror } from '../lib/config.js';
 import { fuseAvailable, mount } from '../lib/fuse.js';
 import { STARTUP_HINT, save, startProcess } from '../lib/pm2.js';
 import { listHubWorkspaces, resolveHub } from '../lib/hub.js';
+import { ensureEdgeService } from '../lib/edge.js';
 
 /*
  * First run on a device: log in to a hub, pick where mirrored workspaces live
@@ -26,6 +27,7 @@ export default {
         workspace: 'string',   // name[:sub/,sub2/], comma-separated for several
         conflicts: 'string',   // prompt | rename
         deletes: 'string',     // propagate | keep
+        client: 'string',      // fuse (default on Linux) | daemon (real folder via canvas-edge)
         service: 'boolean',    // install pm2 processes instead of detached mounts
         'no-start': 'boolean',
         yes: 'boolean',
@@ -85,18 +87,34 @@ export default {
         if (!CONFLICT_MODES.includes(conflicts)) throw new UsageError(`--conflicts must be ${CONFLICT_MODES.join('|')}`);
         const deletes = flags.deletes || 'propagate';
         if (!DELETE_MODES.includes(deletes)) throw new UsageError(`--deletes must be ${DELETE_MODES.join('|')}`);
+        let mirrorClient = flags.client;
+        if (!mirrorClient && interactive) {
+            mirrorClient = await select('How should the folders be provided?', [
+                { label: 'fuse — canvas-fuse mount: everything visible, pinned folders offline, the rest on demand (Linux)', value: 'fuse' },
+                { label: 'daemon — canvas-edge keeps a real folder fully synced (any OS, no FUSE)', value: 'daemon' },
+            ]);
+        }
+        mirrorClient = mirrorClient || (process.platform === 'linux' ? 'fuse' : 'daemon');
+        if (!CLIENTS.includes(mirrorClient)) throw new UsageError(`--client must be ${CLIENTS.join('|')}`);
 
         const useService = flags.service || (interactive && !flags['no-start']
             ? await yesNo('Run the mirrors as pm2 services (start at login, restart on crash)?', true)
             : false);
 
         const mirrors = chosen.map(({ ws, pins }) => upsertMirror(buildMirror({
-            remoteId, workspaceId: ws.id, workspaceName: ws.name, root, pins, conflicts, deletes,
+            remoteId, workspaceId: ws.id, workspaceName: ws.name, root, pins, conflicts, deletes, client: mirrorClient,
             managed: useService ? 'pm2' : 'manual',
         })));
         io.success(`${mirrors.length} mirror(s) configured in mirrors.json`);
 
         if (flags['no-start']) return;
+        if (mirrorClient === 'daemon') {
+            // One canvas-edge process serves every daemon mirror; it reads mirrors.json.
+            const { started } = await ensureEdgeService(io);
+            io.success(`${started ? 'Started' : 'Reloaded'} canvas-edge for ${mirrors.length} folder(s) under ${root}`);
+            io.print('\nCheck progress with `canvas mirror status`; conflicts show up in Workspace › Settings › Sync.');
+            return;
+        }
         if (!(await fuseAvailable())) {
             io.warn('canvas-fuse binary not found — mirrors are configured but not started. Install canvas-fuse (or set CANVAS_FUSE_BIN) and run `canvas mirror start all`.');
             return;

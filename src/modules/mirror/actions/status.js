@@ -3,6 +3,7 @@
 import { findMirror, listMirrors } from '../lib/config.js';
 import { statusAll } from '../lib/fuse.js';
 import { unwrap } from '../lib/hub.js';
+import { edgeStatus } from '../lib/edge.js';
 
 export default {
     name: 'status',
@@ -13,10 +14,13 @@ export default {
         if (mirrors.length === 0) { io.info('No mirrors. Run `canvas mirror init`.'); return; }
         const running = await statusAll().catch(() => []);
         const byMount = new Map(running.map((m) => [m.mountpoint, m]));
+        const edge = mirrors.some((m) => m.client === 'daemon') ? await edgeStatus().catch(() => null) : null;
+        const edgeById = new Map((edge?.mirrors || []).map((m) => [m.id, m]));
         const rows = [];
         for (const m of mirrors) {
-            const st = byMount.get(m.mountpoint);
-            const mi = st?.mirror || {};
+            const isDaemon = m.client === 'daemon';
+            const st = isDaemon ? (edgeById.get(m.id) ? { status: 'ok' } : null) : byMount.get(m.mountpoint);
+            const mi = isDaemon ? (edgeById.get(m.id) || {}) : (st?.mirror || {});
             let hubLag = '-';
             try {
                 const rc = client.client(m.remote);
@@ -26,6 +30,7 @@ export default {
             } catch { /* offline or old hub */ }
             rows.push({
                 workspace: m.workspaceName,
+                client: m.client || 'fuse',
                 mount: st ? (st.status || 'ok') : 'down',
                 state: mi.state || '-',
                 cursor: mi.cursor != null ? `${mi.cursor}/${mi.head ?? '?'}` : '-',
@@ -38,6 +43,6 @@ export default {
                 error: mi.lastError || '',
             });
         }
-        io.output(rows, { columns: ['workspace', 'mount', 'state', 'cursor', 'pending', 'failed', 'conflicts', 'lag', 'cache', 'lastSync', 'error'] });
+        io.output(rows, { columns: ['workspace', 'client', 'mount', 'state', 'cursor', 'pending', 'failed', 'conflicts', 'lag', 'cache', 'lastSync', 'error'] });
     },
 };
