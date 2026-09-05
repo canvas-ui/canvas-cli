@@ -2,6 +2,7 @@
 
 import init from './actions/init.js';
 import add from './actions/add.js';
+import publish from './actions/publish.js';
 import remove from './actions/remove.js';
 import list from './actions/list.js';
 import status from './actions/status.js';
@@ -23,6 +24,6 @@ export default {
     defaultAction: 'status',
     defaultPluralAction: 'list',
     needsConnection: false,
-    actions: [init, add, remove, list, status, start, stop, sync, pin, conflicts, service, logs],
+    actions: [init, add, publish, remove, list, status, start, stop, sync, pin, conflicts, service, logs],
     submodules: [],
 };

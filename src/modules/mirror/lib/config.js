@@ -40,9 +40,9 @@ export function mirrorId(remoteId, workspaceName) {
     return `${remoteId}/${workspaceName}`;
 }
 
-/** canvas-fuse mounts a `-w` workspace at `<root>/<workspace>/`. */
-export function mountpointFor(root, workspaceName) {
-    return path.join(root, workspaceName);
+/** canvas-fuse mounts a `-w` workspace at `<root>/<folder>/` (the hub's folder name). */
+export function mountpointFor(root, folderName) {
+    return path.join(root, folderName);
 }
 
 export function splitList(value) {
@@ -60,19 +60,29 @@ export function parseWorkspaceSpec(spec) {
     return { name: name.trim(), pins };
 }
 
-export function buildMirror({ remoteId, workspaceId, workspaceName, root, pins = [], ignore = [], conflicts = 'prompt', deletes = 'propagate', managed = 'manual', client = 'fuse' }) {
+/**
+ * `folder` overrides the derived `<root>/<workspace>` location — that is how a
+ * pre-existing folder (say ~/Code/UI) is published as a workspace and kept in
+ * sync in place. Only the daemon client can do that: a FUSE mount needs an
+ * empty mountpoint and would hide whatever the folder holds.
+ */
+export function buildMirror({ remoteId, workspaceId, workspaceName, folderName = null, root, folder = null, pins = [], ignore = [], conflicts = 'prompt', deletes = 'propagate', managed = 'manual', client = 'fuse' }) {
     if (!remoteId || !workspaceName) throw new Error('remoteId and workspaceName are required');
     if (!CONFLICT_MODES.includes(conflicts)) throw new Error(`conflicts must be one of ${CONFLICT_MODES.join('|')}`);
     if (!DELETE_MODES.includes(deletes)) throw new Error(`deletes must be one of ${DELETE_MODES.join('|')}`);
     if (!CLIENTS.includes(client)) throw new Error(`client must be one of ${CLIENTS.join('|')}`);
+    if (folder && client !== 'daemon') throw new Error('a custom folder needs the daemon client (a FUSE mount must be an empty mountpoint)');
     const mirrorRoot = root || defaultRoot();
     return {
         id: mirrorId(remoteId, workspaceName),
         remote: remoteId,
         workspaceId: workspaceId || null,
         workspaceName,
+        // The hub's case-preserving folder name ("Universe"); `workspaceName`
+        // is the lowercase identity used in URLs and ids.
+        folderName: folderName || workspaceName,
         root: mirrorRoot,
-        mountpoint: mountpointFor(mirrorRoot, workspaceName),
+        mountpoint: folder ? path.resolve(folder) : mountpointFor(mirrorRoot, folderName || workspaceName),
         pins: [...new Set(pins)],
         ignore: [...new Set(ignore)],
         conflicts,
@@ -93,8 +103,10 @@ export function findMirror(ref) {
     if (!ref) return null;
     const needle = String(ref).trim();
     const mirrors = listMirrors();
+    const lower = needle.toLowerCase();
     return mirrors.find((m) => m.id === needle)
-        || mirrors.find((m) => m.workspaceName === needle)
+        || mirrors.find((m) => m.id.toLowerCase() === lower)
+        || mirrors.find((m) => m.workspaceName === lower || (m.folderName || '').toLowerCase() === lower)
         || mirrors.find((m) => m.workspaceId === needle)
         || mirrors.find((m) => m.mountpoint === path.resolve(needle))
         || null;
@@ -122,4 +134,9 @@ export function setRoot(root) {
     const cfg = readConfig();
     cfg.root = root;
     writeConfig(cfg);
+}
+
+/** minimist turns `--no-start` into `start: false`; accept both spellings. */
+export function noStart(flags) {
+    return !!(flags?.['no-start'] || flags?.start === false);
 }

@@ -3,10 +3,10 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { UsageError } from '../../../core/errors.js';
-import { buildMirror, findMirror, parseWorkspaceSpec, readConfig, setRoot, splitList, upsertMirror } from '../lib/config.js';
+import { buildMirror, findMirror, parseWorkspaceSpec, readConfig, setRoot, splitList, upsertMirror, noStart } from '../lib/config.js';
 import { fuseAvailable, mount } from '../lib/fuse.js';
 import { startProcess } from '../lib/pm2.js';
-import { listHubWorkspaces, resolveHub } from '../lib/hub.js';
+import { findHubWorkspace, listHubWorkspaces, resolveHub } from '../lib/hub.js';
 import { ensureEdgeService } from '../lib/edge.js';
 
 export default {
@@ -17,15 +17,15 @@ export default {
     async run({ args, flags, client, session, io }) {
         const { name, pins: specPins } = parseWorkspaceSpec(args.workspace);
         const remoteId = await resolveHub(flags, client, session, { interactive: !flags.yes });
-        if (findMirror(`${remoteId}/${name}`)) throw new UsageError(`'${name}' is already mirrored from ${remoteId}`);
-        const ws = (await listHubWorkspaces(client, remoteId)).find((w) => w.name === name || w.id === name);
+        const ws = findHubWorkspace(await listHubWorkspaces(client, remoteId), name);
         if (!ws) throw new UsageError(`Workspace '${name}' not found on ${remoteId}`);
+        if (findMirror(`${remoteId}/${ws.name}`)) throw new UsageError(`'${ws.name}' is already mirrored from ${remoteId}`);
         const root = path.resolve(flags.root || readConfig().root || '');
         if (!root || root === path.resolve('')) throw new UsageError('No mirror root yet — run `canvas mirror init` or pass --root');
         if (!existsSync(root)) mkdirSync(root, { recursive: true });
         if (!readConfig().root) setRoot(root);
         const mirror = upsertMirror(buildMirror({
-            remoteId, workspaceId: ws.id, workspaceName: ws.name, root,
+            remoteId, workspaceId: ws.id, workspaceName: ws.name, folderName: ws.folderName, root,
             pins: [...specPins, ...splitList(flags.pin).map((p) => parseWorkspaceSpec(`x:${p}`).pins[0])],
             ignore: splitList(flags.ignore),
             conflicts: flags.conflicts || 'prompt',
@@ -35,7 +35,7 @@ export default {
             ...(flags['cache-budget-mb'] ? { cacheBudgetMb: Number(flags['cache-budget-mb']) } : {}),
         }));
         io.success(`Configured ${mirror.id} → ${mirror.mountpoint}`);
-        if (flags['no-start']) return;
+        if (noStart(flags)) return;
         if (mirror.client === 'daemon') {
             const { started } = await ensureEdgeService(io);
             io.success(`${started ? 'Started' : 'Reloaded'} canvas-edge → ${mirror.mountpoint}`);

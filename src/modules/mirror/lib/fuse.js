@@ -42,7 +42,8 @@ export async function fuseAvailable() {
  * process attached so it can supervise it.
  */
 export function mountArgs(mirror, { detach = false } = {}) {
-    const args = ['mount', '-w', mirror.workspaceName, mirror.root, '--remote', mirror.remote, '--mirror'];
+    // -w names the mount dir (<root>/<folderName>); the hub resolves it case-insensitively.
+    const args = ['mount', '-w', mirror.folderName || mirror.workspaceName, mirror.root, '--remote', mirror.remote, '--mirror'];
     for (const pin of mirror.pins || []) args.push('--pin', pin);
     for (const glob of mirror.ignore || []) args.push('--ignore', glob);
     if (mirror.conflicts) args.push('--conflicts', mirror.conflicts);

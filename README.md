@@ -335,10 +335,20 @@ changed on both sides is never overwritten — the hub's version keeps the name
 and yours lands in the hub's conflict inbox (or, with `--conflicts rename`,
 next to it as `name (conflict from <device> <date>).ext`).
 
+`canvas mirror init` is the first-run wizard: log in to a server (or pick a
+configured remote), choose the mirror root, then either **mirror** workspaces
+from the hub as local folders (multi-select, pinned folders, fuse or daemon)
+or **publish** local folders as new hub workspaces that stay in sync in
+place — or both. Folder names keep the case of the workspace
+(`~/Workspaces/Universe`); the lowercase `name` is the hub's identity.
+
 ```bash
-canvas mirror init                                  # pick hub, root, workspaces, pinned folders; start mounts
-canvas mirror init --hub admin@dev --root ~/Workspaces --workspace devel:UI/,Docs/ --conflicts prompt --service --yes
+canvas mirror init                                  # wizard: hub login, root, mirror and/or publish, start
+canvas mirror init --hub-url https://canvas.example.org --email me@x.org --password … \
+    --root ~/Workspaces --workspace Universe,devel:UI/,Docs/ --publish ~/Code/UI:ui --conflicts prompt --service --yes
 canvas mirror add work --pin Contracts/ --conflicts rename
+canvas mirror publish ~/Code/UI --name ui           # this folder becomes workspace 'ui' on the hub, synced in place (daemon)
+canvas mirror publish ~/Notes --attach              # sync into an existing hub workspace of the same name
 canvas mirror status                                # daemon state, cursor/head, pending, conflicts, lag
 canvas mirror sync                                  # reconcile now
 canvas mirror pin add devel Photos/2026/
