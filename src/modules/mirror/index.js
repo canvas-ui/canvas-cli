@@ -14,6 +14,7 @@ import pin from './actions/pin.js';
 import conflicts from './actions/conflicts.js';
 import service from './actions/service.js';
 import logs from './actions/logs.js';
+import edge from './actions/edge.js';
 
 // Device mirrors: workspaces kept in sync as real folders on this machine
 // (canvas-fuse --mirror). `canvas mirror init` is the roaming-profile setup.
@@ -25,6 +26,6 @@ export default {
     defaultAction: 'status',
     defaultPluralAction: 'list',
     needsConnection: false,
-    actions: [init, add, publish, remove, list, status, start, stop, restart, sync, pin, conflicts, service, logs],
+    actions: [init, add, publish, remove, list, status, start, stop, restart, sync, pin, conflicts, service, logs, edge],
     submodules: [],
 };

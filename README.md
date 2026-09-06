@@ -345,9 +345,9 @@ sync in place — or both. pm2 is checked before anything is written: when it
 is missing the wizard offers to install it, or continues unsupervised
 (`--no-service` skips the question). The same goes for `canvas-edge`, the
 folder-sync daemon (`runtimes/edge` in the monorepo): when it cannot be found
-the wizard offers `npm install -g --ignore-scripts github:canvas-ui/canvas#edge-dist` — the
-self-contained artifact branch the pipeline publishes (`CANVAS_EDGE_PACKAGE`
-overrides the spec) — or a local checkout, whose path is remembered in
+the wizard offers to fetch it (`canvas mirror edge install`: the `edge-dist` artifact branch
+into `~/.canvas/edge`, no global npm, no sudo; `CANVAS_EDGE_PACKAGE` overrides
+the spec; `canvas mirror edge update` pulls the latest and restarts) — or a local checkout, whose path is remembered in
 `mirrors.json` (`edgeBin`; `CANVAS_EDGE_BIN` overrides it). Run the wizard
 again later to add more or to restart what is configured. Folder names keep the case of the workspace
 (`~/Workspaces/Universe`); the lowercase `name` is the hub's identity.
