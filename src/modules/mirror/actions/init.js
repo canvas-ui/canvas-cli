@@ -11,6 +11,7 @@ import { ensurePM2 } from '../lib/pm2.js';
 import { findHubWorkspace, listHubWorkspaces, resolveHub } from '../lib/hub.js';
 import { configurePublishedMirror, ensureHubWorkspace, inspectFolder, parsePublishSpec } from '../lib/publish.js';
 import { startMirrors } from '../lib/lifecycle.js';
+import { ensureEdge } from '../lib/edge.js';
 
 /*
  * First run on a device (and re-runnable later):
@@ -113,13 +114,17 @@ export default {
 
         // 5. Start (messages go through the wizard's gutter, not the table io)
         const wio = { success: log.success, error: log.error, warn: log.warn, info: log.info };
-        if (configured.length) await startMirrors(configured, wio);
+        const results = [];
+        if (configured.length) results.push(...await startMirrors(configured, wio));
         if (action !== 'add') {
             const ids = new Set(configured.map((m) => m.id));
             const older = listMirrors().filter((m) => !ids.has(m.id));
-            if (older.length) await startMirrors(older, wio, { restart: true });
+            if (older.some((m) => m.client === 'daemon')) await ensureEdge({ interactive, io: wio });
+            if (older.length) results.push(...await startMirrors(older, wio, { restart: true }));
         }
-        outro('Check progress with `canvas mirror status`; conflicts show up in Workspace › Settings › Sync.');
+        const failed = results.filter((r) => !r.ok);
+        if (failed.length) outro(`${failed.length} of ${results.length} mirror(s) did not start — fix the cause above, then \`canvas mirror start all\`.`);
+        else outro('Check progress with `canvas mirror status`; conflicts show up in Workspace › Settings › Sync.');
     },
 };
 
@@ -175,6 +180,9 @@ async function setupMirrors({ flags, interactive, client, remoteId, root, confli
     }
     mirrorClient = mirrorClient || (process.platform === 'linux' ? 'fuse' : 'daemon');
     if (!CLIENTS.includes(mirrorClient)) throw new UsageError(`--client must be ${CLIENTS.join('|')}`);
+    if (mirrorClient === 'daemon' && !(await ensureEdge({ interactive, io: log }))) {
+        log.warn('canvas-edge is missing — folders are configured but will only sync once it is installed.');
+    }
 
     let chosen = [];
     if (flags.workspace) {
@@ -250,6 +258,9 @@ async function setupPublishes({ flags, interactive, client, remoteId, root, conf
             if (!raw) break;
             try { specs.push(parsePublishSpec(raw)); } catch (e) { log.warn(e.message); }
         }
+    }
+    if (specs.length && !(await ensureEdge({ interactive, io: log }))) {
+        log.warn('canvas-edge is missing — published folders will only sync once it is installed.');
     }
     const out = [];
     for (const spec of specs) {

@@ -14,7 +14,8 @@ import { JsonFile } from '../../../core/storage.js';
  */
 
 export const FILE_MIRRORS = path.join(DIR_CONFIG, 'mirrors.json');
-export const DEFAULTS = Object.freeze({ version: 1, root: null, mirrors: [] });
+// `edgeBin`: explicit path to canvas-edge for this device (wizard: "use a local checkout").
+export const DEFAULTS = Object.freeze({ version: 1, root: null, edgeBin: null, mirrors: [] });
 export const CONFLICT_MODES = ['prompt', 'rename'];
 export const DELETE_MODES = ['propagate', 'keep'];
 // fuse = canvas-fuse --mirror (Linux, on-demand + pins); daemon = canvas-edge real folder.
@@ -128,6 +129,12 @@ export function removeMirror(id) {
     cfg.mirrors = cfg.mirrors.filter((m) => m.id !== id);
     writeConfig(cfg);
     return cfg.mirrors.length < before;
+}
+
+export function setEdgeBin(edgeBin) {
+    const cfg = readConfig();
+    cfg.edgeBin = edgeBin || null;
+    writeConfig(cfg);
 }
 
 export function setRoot(root) {

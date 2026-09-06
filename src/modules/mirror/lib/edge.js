@@ -3,16 +3,19 @@
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { exec, spawn } from 'node:child_process';
+import { exec, execFile, execSync, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { CANVAS_HOME } from '../../../core/paths.js';
 import { hasPM2, getProcessInfo, pm2Env, pm2Start } from '../../server/lib/pm2.js';
 import { CanvasError } from '../../../core/errors.js';
 import { PM2_INSTALL } from './pm2.js';
+import { input, select, spinner } from '../../../core/prompt.js';
+import { readConfig, setEdgeBin } from './config.js';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 /*
@@ -26,14 +29,36 @@ export const EDGE_PM2_NAME = 'canvas-edge';
 export const EDGE_SOCKET = process.platform === 'win32' ? null : path.join(CANVAS_HOME, 'run', 'edge.sock');
 export const EDGE_PORT = Number(process.env.CANVAS_EDGE_PORT) || 8802;
 
+// canvas-server is not on npm yet; a global install straight from GitHub
+// puts `canvas-edge` on npm's global bin path.
+export const EDGE_PACKAGE = 'github:canvas-ui/canvas-server';
+export const EDGE_INSTALL = `npm install -g ${EDGE_PACKAGE}`;
+
+let npmGlobalRoot;
+function npmRootGlobal() {
+    if (npmGlobalRoot !== undefined) return npmGlobalRoot;
+    try { npmGlobalRoot = String(execSync('npm root -g', { stdio: ['ignore', 'pipe', 'ignore'], timeout: 10000 })).trim() || null; }
+    catch { npmGlobalRoot = null; }
+    return npmGlobalRoot;
+}
+
 export function edgeBinary() {
+    const globalRoot = npmRootGlobal();
+    const configured = readConfig().edgeBin;
     const candidates = [
         process.env.CANVAS_EDGE_BIN,
+        configured ? path.join(configured, 'bin', 'canvas-edge') : null,
+        configured,
         process.env.CANVAS_SERVER_ROOT ? path.join(process.env.CANVAS_SERVER_ROOT, 'bin', 'canvas-edge') : null,
+        globalRoot ? path.join(globalRoot, 'canvas-server', 'bin', 'canvas-edge') : null,
+        globalRoot ? path.join(globalRoot, '@augmentd-labs', 'canvas-server', 'bin', 'canvas-edge') : null,
+        // Dev checkout: <container>/canvas-server next to the monorepo (a compiled CLI has no such path).
         path.resolve(HERE, '../../../../../../../canvas-server/bin/canvas-edge'),
         path.join(os.homedir(), '.canvas', 'server', 'bin', 'canvas-edge'),
     ].filter(Boolean);
-    for (const c of candidates) if (existsSync(c)) return c;
+    for (const c of candidates) {
+        try { if (statSync(c).isFile()) return c; } catch { /* next */ }
+    }
     return 'canvas-edge';
 }
 
@@ -77,7 +102,47 @@ async function waitFor(pred, { timeout = 8000, step = 250 } = {}) {
     return pred();
 }
 
-export const EDGE_INSTALL_HINT = 'canvas-edge not found. Install canvas-server (`npm install -g @augmentd-labs/canvas-server`) or point CANVAS_EDGE_BIN / CANVAS_SERVER_ROOT at a checkout.';
+export const EDGE_INSTALL_HINT = `canvas-edge not found. Install it with \`${EDGE_INSTALL}\` or point CANVAS_EDGE_BIN / CANVAS_SERVER_ROOT at a checkout.`;
+
+/**
+ * Preflight for daemon mirrors: true when canvas-edge can be started.
+ * Interactively offers the GitHub install (npm -g) — the same shape as the
+ * pm2 preflight, so a fresh device is fixed inside the wizard.
+ */
+export async function ensureEdge({ interactive = false, io } = {}) {
+    if (await edgeAvailable()) return true;
+    if (!interactive) return false;
+    const choice = await select('canvas-edge (the folder sync daemon) is not installed on this device.', [
+        { label: 'Install it now from GitHub', value: 'install', hint: EDGE_INSTALL },
+        { label: 'Use a local canvas-server checkout', value: 'local', hint: 'path is remembered in mirrors.json' },
+        { label: 'Skip', value: 'skip', hint: 'set CANVAS_EDGE_BIN or CANVAS_SERVER_ROOT and run `canvas mirror start all` later' },
+    ]);
+    if (choice === 'local') {
+        const raw = (await input({ message: 'Path to the canvas-server checkout (or the canvas-edge script)', placeholder: '~/Code/canvas-server' })).trim();
+        const p = path.resolve(raw.replace(/^~(?=$|[\\/])/, os.homedir()));
+        const bin = existsSync(path.join(p, 'bin', 'canvas-edge')) ? path.join(p, 'bin', 'canvas-edge') : existsSync(p) && !statSync(p).isDirectory() ? p : null;
+        if (!bin) { io?.warn?.(`${p}: no bin/canvas-edge there`); return false; }
+        setEdgeBin(bin);
+        io?.success?.(`canvas-edge: ${bin}`);
+        return true;
+    }
+    if (choice !== 'install') return false;
+    const s = spinner();
+    s.start('Installing canvas-server from GitHub (a few minutes, it pulls its git dependencies)…');
+    try {
+        await execFileAsync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['install', '-g', EDGE_PACKAGE], { timeout: 900000, maxBuffer: 32 * 1024 * 1024, shell: process.platform === 'win32' });
+    } catch (err) {
+        const tail = String(err.stderr || err.message || '').trim().split('\n').slice(-4).join('\n');
+        s.stop('canvas-server install failed');
+        io?.warn?.(`${tail}\nInstall it by hand (\`${EDGE_INSTALL}\`, git + a recent Node required) and run \`canvas mirror start all\`.`);
+        return false;
+    }
+    npmGlobalRoot = undefined;
+    if (await edgeAvailable()) { s.stop('canvas-edge installed'); return true; }
+    s.stop('canvas-server installed, but canvas-edge is still not resolvable');
+    io?.warn?.('Check `npm root -g` / your PATH, or set CANVAS_EDGE_BIN.');
+    return false;
+}
 
 /** Is there a canvas-edge we can start? (absolute candidate found, or resolvable on PATH) */
 export async function edgeAvailable() {
@@ -87,20 +152,26 @@ export async function edgeAvailable() {
     catch { return false; }
 }
 
+function spawnError(err, bin) {
+    if (err.code !== 'ENOENT') return `canvas-edge failed to start: ${err.message}`;
+    return path.isAbsolute(bin) ? 'canvas-edge needs Node.js on PATH (`node` was not found).' : EDGE_INSTALL_HINT;
+}
+
 /** Detached, unsupervised daemon (logs to ~/.canvas/var/log/canvas-edge.log). */
 function spawnDetached() {
     const bin = edgeBinary();
     return new Promise((resolve, reject) => {
         let child;
         try {
-            // A compiled CLI runs under bun; a script file still needs a JS runtime, so hand it to whatever runs us.
+            // canvas-edge is a Node script. A compiled CLI's execPath is the CLI itself, so use `node` from PATH there.
+            const runtime = process.versions?.bun ? 'node' : process.execPath;
             child = path.isAbsolute(bin)
-                ? spawn(process.execPath, [bin], { detached: true, stdio: 'ignore', env: { ...process.env } })
+                ? spawn(runtime, [bin], { detached: true, stdio: 'ignore', env: { ...process.env } })
                 : spawn(bin, [], { detached: true, stdio: 'ignore', env: { ...process.env }, shell: process.platform === 'win32' });
         } catch (err) {
-            return reject(new CanvasError(err.code === 'ENOENT' ? EDGE_INSTALL_HINT : `canvas-edge failed to start: ${err.message}`));
+            return reject(new CanvasError(spawnError(err, bin)));
         }
-        child.once('error', (err) => reject(new CanvasError(err.code === 'ENOENT' ? EDGE_INSTALL_HINT : `canvas-edge failed to start: ${err.message}`)));
+        child.once('error', (err) => reject(new CanvasError(spawnError(err, bin))));
         child.once('spawn', () => { child.unref(); resolve(); });
     });
 }
