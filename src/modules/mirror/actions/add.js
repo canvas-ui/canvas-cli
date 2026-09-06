@@ -4,10 +4,8 @@ import { existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { UsageError } from '../../../core/errors.js';
 import { buildMirror, findMirror, parseWorkspaceSpec, readConfig, setRoot, splitList, upsertMirror, noStart } from '../lib/config.js';
-import { fuseAvailable, mount } from '../lib/fuse.js';
-import { startProcess } from '../lib/pm2.js';
+import { startMirrors } from '../lib/lifecycle.js';
 import { findHubWorkspace, listHubWorkspaces, resolveHub } from '../lib/hub.js';
-import { ensureEdgeService } from '../lib/edge.js';
 
 export default {
     name: 'add',
@@ -36,19 +34,6 @@ export default {
         }));
         io.success(`Configured ${mirror.id} → ${mirror.mountpoint}`);
         if (noStart(flags)) return;
-        if (mirror.client === 'daemon') {
-            const { started } = await ensureEdgeService(io);
-            io.success(`${started ? 'Started' : 'Reloaded'} canvas-edge → ${mirror.mountpoint}`);
-            return;
-        }
-        if (!(await fuseAvailable())) { io.warn('canvas-fuse not found; start later with `canvas mirror start`.'); return; }
-        if (mirror.managed === 'pm2') {
-            const { name: proc } = await startProcess(mirror);
-            io.success(`Started ${proc}`);
-        } else {
-            const res = await mount(mirror);
-            if (res.ok) io.success(`Mounted ${mirror.mountpoint}`);
-            else io.error(`Mount failed: ${res.stderr.trim() || res.stdout.trim()}`);
-        }
+        await startMirrors([mirror], io);
     },
 };

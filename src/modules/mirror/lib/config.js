@@ -140,3 +140,11 @@ export function setRoot(root) {
 export function noStart(flags) {
     return !!(flags?.['no-start'] || flags?.start === false);
 }
+
+/**
+ * Declared booleans default to false, so `flags.service === false` cannot tell
+ * `--no-service` from "not mentioned"; only the raw argv can.
+ */
+export function flagOff(name, argv = process.argv) {
+    return argv.includes(`--no-${name}`);
+}

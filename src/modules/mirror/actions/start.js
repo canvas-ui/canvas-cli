@@ -2,9 +2,8 @@
 
 import { UsageError } from '../../../core/errors.js';
 import { findMirror, listMirrors } from '../lib/config.js';
-import { mount, mountForeground } from '../lib/fuse.js';
-import { startProcess } from '../lib/pm2.js';
-import { ensureEdgeService } from '../lib/edge.js';
+import { mountForeground } from '../lib/fuse.js';
+import { startMirrors } from '../lib/lifecycle.js';
 
 export default {
     name: 'start',
@@ -20,19 +19,6 @@ export default {
             process.exitCode = code;
             return;
         }
-        if (targets.some((m) => m.client === 'daemon')) {
-            const { started } = await ensureEdgeService(io);
-            io.success(`${started ? 'Started' : 'Reloaded'} canvas-edge`);
-        }
-        for (const mirror of targets.filter((m) => m.client !== 'daemon')) {
-            if (mirror.managed === 'pm2') {
-                const { name, started } = await startProcess(mirror);
-                io.success(`${started ? 'Started' : 'Already running'}: ${name}`);
-            } else {
-                const res = await mount(mirror);
-                if (res.ok) io.success(`Mounted ${mirror.mountpoint}`);
-                else io.error(`Mount failed for ${mirror.workspaceName}: ${res.stderr.trim() || res.stdout.trim()}`);
-            }
-        }
+        await startMirrors(targets, io);
     },
 };

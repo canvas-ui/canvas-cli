@@ -1,12 +1,9 @@
 'use strict';
 
-import { exec } from 'node:child_process';
-import { promisify } from 'node:util';
 import path from 'node:path';
-import { findServerRoot, getProcessInfo, hasPM2, PM2_APP } from '../lib/pm2.js';
+import { findServerRoot, getProcessInfo, hasPM2, PM2_APP, pm2Env, pm2Start } from '../lib/pm2.js';
 import { CanvasError } from '../../../core/errors.js';
 
-const execAsync = promisify(exec);
 
 export default {
     name: 'start',
@@ -24,10 +21,10 @@ export default {
         const script = path.join(root, 'src/init.js');
         const cfg = {
             name: PM2_APP, script, cwd: root,
-            env: { NODE_ENV: 'development', ...process.env },
+            env: pm2Env({ NODE_ENV: 'development' }),
             time: true, autorestart: true, max_restarts: 5, min_uptime: '10s',
         };
-        await execAsync(`pm2 start '${JSON.stringify(cfg).replace(/'/g, '\\\'')}'`);
+        await pm2Start(cfg);
         io.success('Canvas server started');
     },
 };

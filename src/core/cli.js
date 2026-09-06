@@ -10,6 +10,7 @@ import { CanvasClient } from './transport/rest.js';
 import session from './session.js';
 import { remotes as remotesStore } from './storage.js';
 import { CanvasError, UsageError, AuthError } from './errors.js';
+import { PromptCancelled } from './prompt.js';
 import { isNetworkError } from '@augmentd-labs/canvas-api-client';
 import pkg from '../../package.json' with { type: 'json' };
 
@@ -64,6 +65,7 @@ export async function main(argv = process.argv.slice(2)) {
         }
         return 0;
     } catch (err) {
+        if (err instanceof PromptCancelled) return 130;
         if (err instanceof UsageError) {
             console.error(chalk.red(err.message));
             console.error(chalk.dim('Run `canvas --help` for available commands.'));

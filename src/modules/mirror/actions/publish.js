@@ -6,6 +6,7 @@ import { CONFLICT_MODES, DELETE_MODES, readConfig, splitList, noStart } from '..
 import { resolveHub } from '../lib/hub.js';
 import { configurePublishedMirror, ensureHubWorkspace, inspectFolder, parsePublishSpec } from '../lib/publish.js';
 import { ensureEdgeService } from '../lib/edge.js';
+import { ensurePM2 } from '../lib/pm2.js';
 
 /*
  * `canvas mirror publish ~/Code/UI [--name ui]` — the folder becomes a hub
@@ -31,15 +32,21 @@ export default {
         const deletes = flags.deletes || 'propagate';
         if (!DELETE_MODES.includes(deletes)) throw new UsageError(`--deletes must be ${DELETE_MODES.join('|')}`);
 
+        let managed = 'manual';
+        if (flags.service) {
+            if (await ensurePM2({ interactive, io })) managed = 'pm2';
+            else if (!interactive) throw new UsageError('--service needs pm2 (`npm install -g pm2`)');
+            else io.warn('Continuing without pm2 — canvas-edge starts detached.');
+        }
         if (interactive && !(await yesNo(`Publish ${spec.folder} (${info.entries} entries) as workspace '${spec.name}' on ${remoteId}?`, true))) return;
         const { ws, created } = await ensureHubWorkspace(client, remoteId, { name: spec.name, label: flags.label || spec.name }, { onExisting: flags.attach ? 'attach' : 'fail', io });
         const mirror = configurePublishedMirror({
             remoteId, ws, folder: spec.folder, root: readConfig().root || undefined,
-            conflicts, deletes, ignore: splitList(flags.ignore), managed: flags.service ? 'pm2' : 'manual',
+            conflicts, deletes, ignore: splitList(flags.ignore), managed,
         });
         io.success(`${created ? 'Publishing' : 'Syncing'} ${mirror.mountpoint} ↔ ${remoteId}/${ws.name}`);
         if (noStart(flags)) return;
-        const { started } = await ensureEdgeService(io);
+        const { started } = await ensureEdgeService(io, { managed });
         io.success(`${started ? 'Started' : 'Reloaded'} canvas-edge — first upload runs in the background (\`canvas mirror status\`)`);
     },
 };

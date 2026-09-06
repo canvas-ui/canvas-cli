@@ -335,11 +335,16 @@ changed on both sides is never overwritten — the hub's version keeps the name
 and yours lands in the hub's conflict inbox (or, with `--conflicts rename`,
 next to it as `name (conflict from <device> <date>).ext`).
 
-`canvas mirror init` is the first-run wizard: log in to a server (or pick a
+`canvas mirror init` is the first-run wizard (arrow-key prompts on a
+terminal, plain readline when piped): log in to a server (or pick a
 configured remote), choose the mirror root, then either **mirror** workspaces
-from the hub as local folders (multi-select, pinned folders, fuse or daemon)
-or **publish** local folders as new hub workspaces that stay in sync in
-place — or both. Folder names keep the case of the workspace
+from the hub as local folders (fuse or daemon first, then a multi-select of
+workspaces, then — only if you want it — the folders to keep offline / limit
+the sync to) or **publish** local folders as new hub workspaces that stay in
+sync in place — or both. pm2 is checked before anything is written: when it
+is missing the wizard offers to install it, or continues unsupervised
+(`--no-service` skips the question). Run it again later to add more or to
+restart what is configured. Folder names keep the case of the workspace
 (`~/Workspaces/Universe`); the lowercase `name` is the hub's identity.
 
 ```bash
@@ -354,6 +359,7 @@ canvas mirror sync                                  # reconcile now
 canvas mirror pin add devel Photos/2026/
 canvas mirror conflicts                             # what waits in the hub inbox
 canvas mirror conflicts devel --resolve 100042 --keep both
+canvas mirror restart all                           # stop + start (after editing mirrors.json, or a dead mount)
 canvas mirror service install                       # pm2 processes, restart on crash, start at login
 canvas mirror stop all
 ```

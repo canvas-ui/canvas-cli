@@ -2,9 +2,10 @@
 
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DIR_VAR } from '../../../core/paths.js';
 
 const execAsync = promisify(exec);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -36,6 +37,29 @@ function isValidRoot(dir) {
         // under the old names must remain recognizable.
         return j.name === 'canvas-server' || j.name === '@canvas/server' || j.name === '@augmentd-labs/canvas-server';
     } catch { return false; }
+}
+
+/**
+ * Environment worth handing to a pm2-managed process: our own settings, the
+ * PATH/HOME family, nothing else. Dumping the whole environment into the
+ * process file leaks secrets and (with quotes in values) used to break the
+ * `pm2 start '<json>'` shell line into mangled process names.
+ */
+export function pm2Env(extra = {}) {
+    const keep = /^(CANVAS_|PATH$|HOME$|USER$|LANG$|LC_|XDG_|TMPDIR$|NODE_|LOG_LEVEL$|DEBUG$)/;
+    const env = {};
+    for (const [k, v] of Object.entries(process.env)) if (keep.test(k) && v != null) env[k] = v;
+    return { ...env, ...extra };
+}
+
+/** `pm2 start` from a process file under ~/.canvas/var/pm2 — no shell quoting of JSON. */
+export async function pm2Start(cfg) {
+    const dir = path.join(DIR_VAR, 'pm2');
+    mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `${cfg.name}.config.json`);
+    writeFileSync(file, JSON.stringify({ apps: [cfg] }, null, 2));
+    await execAsync(`pm2 start "${file}"`);
+    return file;
 }
 
 export async function hasPM2() {

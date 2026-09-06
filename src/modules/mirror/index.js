@@ -8,6 +8,7 @@ import list from './actions/list.js';
 import status from './actions/status.js';
 import start from './actions/start.js';
 import stop from './actions/stop.js';
+import restart from './actions/restart.js';
 import sync from './actions/sync.js';
 import pin from './actions/pin.js';
 import conflicts from './actions/conflicts.js';
@@ -24,6 +25,6 @@ export default {
     defaultAction: 'status',
     defaultPluralAction: 'list',
     needsConnection: false,
-    actions: [init, add, publish, remove, list, status, start, stop, sync, pin, conflicts, service, logs],
+    actions: [init, add, publish, remove, list, status, start, stop, restart, sync, pin, conflicts, service, logs],
     submodules: [],
 };
