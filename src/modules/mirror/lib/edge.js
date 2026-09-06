@@ -35,7 +35,10 @@ export const EDGE_PORT = Number(process.env.CANVAS_EDGE_PORT) || 8802;
 // (a fork, a tag, or the npm name once it is published).
 export const EDGE_PACKAGE = process.env.CANVAS_EDGE_PACKAGE || 'github:canvas-ui/canvas#edge-dist';
 export const EDGE_PKG_NAME = '@augmentd-labs/canvas-edge';
-export const EDGE_INSTALL = `npm install -g ${EDGE_PACKAGE}`;
+// --ignore-scripts: lmdb / msgpackr-extract ship prebuilt platform binaries as
+// optional deps; their install script only tries node-gyp-build-optional-packages,
+// whose bin a global npm install does not link in time ("not found").
+export const EDGE_INSTALL = `npm install -g --ignore-scripts ${EDGE_PACKAGE}`;
 
 let npmGlobalRoot;
 function npmRootGlobal() {
@@ -131,7 +134,7 @@ export async function ensureEdge({ interactive = false, io } = {}) {
     const s = spinner();
     s.start(`Installing canvas-edge (${EDGE_INSTALL})…`);
     try {
-        await execFileAsync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['install', '-g', '--no-audit', '--no-fund', EDGE_PACKAGE], { timeout: 900000, maxBuffer: 32 * 1024 * 1024, shell: process.platform === 'win32' });
+        await execFileAsync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['install', '-g', '--ignore-scripts', '--no-audit', '--no-fund', EDGE_PACKAGE], { timeout: 900000, maxBuffer: 32 * 1024 * 1024, shell: process.platform === 'win32' });
     } catch (err) {
         const tail = String(err.stderr || err.message || '').trim().split('\n').filter((l) => !/TAR_ENTRY_ERROR|deprecated|EBADENGINE|allow-scripts/.test(l)).slice(-4).join('\n');
         s.stop('canvas-edge install failed');
