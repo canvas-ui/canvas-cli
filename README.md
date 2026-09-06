@@ -344,10 +344,12 @@ the sync to) or **publish** local folders as new hub workspaces that stay in
 sync in place — or both. pm2 is checked before anything is written: when it
 is missing the wizard offers to install it, or continues unsupervised
 (`--no-service` skips the question). The same goes for `canvas-edge`, the
-folder-sync daemon that ships with canvas-server: when it cannot be found the
-wizard offers to install canvas-server from GitHub
-(`npm install -g github:canvas-ui/canvas-server`, it is not on npm yet) or to
-use a local checkout, whose path is remembered in `mirrors.json` (`edgeBin`;
+folder-sync daemon that ships with canvas-server (≥ 2.8): when it cannot be
+found the wizard offers to install canvas-server from GitHub — a shallow
+clone plus `npm install` into `~/.canvas/server` (it is not on npm yet, and a
+global `npm install -g github:…` trips over a dependency's pnpm-only
+preinstall hook; `CANVAS_SERVER_GIT` points the clone at a fork) — or to use a
+local checkout, whose path is remembered in `mirrors.json` (`edgeBin`;
 `CANVAS_EDGE_BIN` / `CANVAS_SERVER_ROOT` override it). Run the wizard again
 later to add more or to restart what is configured. Folder names keep the case of the workspace
 (`~/Workspaces/Universe`); the lowercase `name` is the hub's identity.
