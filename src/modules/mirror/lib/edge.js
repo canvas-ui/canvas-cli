@@ -213,9 +213,15 @@ export async function ensureEdgeService(io, { managed = 'pm2' } = {}) {
 /** Full restart: pm2 restart when supervised, else graceful shutdown + detached respawn. */
 export async function restartEdgeService(io, { managed = 'pm2' } = {}) {
     if (managed === 'pm2' && (await hasPM2())) {
+        // Not `pm2 restart`: that reuses the script path and env the process
+        // was created with, so a moved canvas-edge (the server checkout → the
+        // edge-dist install) would stay broken. Re-create from the current lookup.
         const existing = await getProcessInfo(EDGE_PM2_NAME);
-        if (existing) { await execAsync(`pm2 restart ${EDGE_PM2_NAME}`); return { restarted: true }; }
-        return ensureEdgeService(io, { managed });
+        if (existing) {
+            await execAsync(`pm2 stop ${EDGE_PM2_NAME}`).catch(() => {});
+            await execAsync(`pm2 delete ${EDGE_PM2_NAME}`).catch(() => {});
+        }
+        return { ...(await ensureEdgeService(io, { managed })), restarted: Boolean(existing) };
     }
     if (await edgeRunning()) {
         await request('POST', '/shutdown').catch(() => null);
