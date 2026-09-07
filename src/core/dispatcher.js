@@ -39,6 +39,12 @@ function looksLikeAddress(token) {
 }
 
 async function walk({ mod, remaining, argv, ctx, parent, isPlural, path }) {
+    // A package that is not installed yet: hand over to the CLI, which offers
+    // the install and re-dispatches the same command line afterwards.
+    if (mod.placeholder) {
+        if (!ctx.onPlaceholder) throw new UsageError(`'${path.join(' ')}' needs the '${mod.placeholder}' package — run \`canvas package install ${mod.placeholder}\``);
+        return ctx.onPlaceholder(mod.placeholder, path);
+    }
     let tokens = remaining;
 
     if (mod.resourceArg && tokens.length > 0) {

@@ -8,6 +8,5 @@ export { default as dot } from './dot/index.js';
 export { default as auth } from './auth/index.js';
 export { default as config } from './config/index.js';
 export { default as alias } from './alias/index.js';
-export { default as server } from './server/index.js';
 export { default as role } from './role/index.js';
-export { default as mirror } from './mirror/index.js';
+export { default as pkg } from './package/index.js';

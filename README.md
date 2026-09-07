@@ -325,9 +325,30 @@ canvas remotes                                              # list remotes
 canvas remote bind admin@dev
 ```
 
+### Packages (lazy modules)
+
+The core CLI is auth, remotes, workspaces, contexts, agents and config.
+Anything that drags a runtime along lives in a separate package that is
+fetched on first use into `~/.canvas/packages/<name>` (no global npm, no sudo)
+and loaded from there:
+
+| package | commands | brings |
+|---|---|---|
+| `mirror` | `canvas remote mirror …` (`canvas mirror …` alias) | workspace mirrors, the first-run wizard, the canvas-edge runtime, pm2 supervision |
+| `server` | `canvas server …` | a local canvas-server checkout under pm2 |
+| `desktop` | `canvas desktop …` | the desktop app release for this platform |
+
+Using one of those commands before its package exists shows what it is and
+offers the download; `--yes` / non-interactive runs get the install command
+instead. `canvas package list | install <name> | update | remove` manages
+them. Each package is one self-contained file published as the
+`cli-<name>-dist` branch of the monorepo (`CANVAS_PACKAGE_SPEC_<NAME>`
+overrides the source); from a source checkout the workspace copies in
+`packages/cli-*` are used directly.
+
 ### Mirrors (roaming profile)
 
-`canvas mirror` keeps workspaces from a hub in sync as real folders on this
+`canvas remote mirror` (package `mirror`) keeps workspaces from a hub in sync as real folders on this
 machine (`~/Workspaces/<workspace>` by default) through `canvas-fuse --mirror`:
 pinned folders stay available offline, everything else is fetched on demand,
 edits made offline are pushed when the hub is reachable, and a file that
@@ -335,7 +356,7 @@ changed on both sides is never overwritten — the hub's version keeps the name
 and yours lands in the hub's conflict inbox (or, with `--conflicts rename`,
 next to it as `name (conflict from <device> <date>).ext`).
 
-`canvas mirror init` is the first-run wizard (arrow-key prompts on a
+`canvas remote mirror init` is the first-run wizard (arrow-key prompts on a
 terminal, plain readline when piped): log in to a server (or pick a
 configured remote), choose the mirror root, then either **mirror** workspaces
 from the hub as local folders (fuse or daemon first, then a multi-select of
@@ -345,28 +366,28 @@ sync in place — or both. pm2 is checked before anything is written: when it
 is missing the wizard offers to install it, or continues unsupervised
 (`--no-service` skips the question). The same goes for `canvas-edge`, the
 folder-sync daemon (`runtimes/edge` in the monorepo): when it cannot be found
-the wizard offers to fetch it (`canvas mirror edge install`: the `edge-dist` artifact branch
+the wizard offers to fetch it (`canvas remote mirror edge install`: the `edge-dist` artifact branch
 into `~/.canvas/edge`, no global npm, no sudo; `CANVAS_EDGE_PACKAGE` overrides
-the spec; `canvas mirror edge update` pulls the latest and restarts) — or a local checkout, whose path is remembered in
+the spec; `canvas remote mirror edge update` pulls the latest and restarts) — or a local checkout, whose path is remembered in
 `mirrors.json` (`edgeBin`; `CANVAS_EDGE_BIN` overrides it). Run the wizard
 again later to add more or to restart what is configured. Folder names keep the case of the workspace
 (`~/Workspaces/Universe`); the lowercase `name` is the hub's identity.
 
 ```bash
-canvas mirror init                                  # wizard: hub login, root, mirror and/or publish, start
-canvas mirror init --hub-url https://canvas.example.org --email me@x.org --password … \
+canvas remote mirror init                                  # wizard: hub login, root, mirror and/or publish, start
+canvas remote mirror init --hub-url https://canvas.example.org --email me@x.org --password … \
     --root ~/Workspaces --workspace Universe,devel:UI/,Docs/ --publish ~/Code/UI:ui --conflicts prompt --service --yes
-canvas mirror add work --pin Contracts/ --conflicts rename
-canvas mirror publish ~/Code/UI --name ui           # this folder becomes workspace 'ui' on the hub, synced in place (daemon)
-canvas mirror publish ~/Notes --attach              # sync into an existing hub workspace of the same name
-canvas mirror status                                # daemon state, cursor/head, pending, conflicts, lag
-canvas mirror sync                                  # reconcile now
-canvas mirror pin add devel Photos/2026/
-canvas mirror conflicts                             # what waits in the hub inbox
-canvas mirror conflicts devel --resolve 100042 --keep both
-canvas mirror restart all                           # stop + start (after editing mirrors.json, or a dead mount)
-canvas mirror service install                       # pm2 processes, restart on crash, start at login
-canvas mirror stop all
+canvas remote mirror add work --pin Contracts/ --conflicts rename
+canvas remote mirror publish ~/Code/UI --name ui           # this folder becomes workspace 'ui' on the hub, synced in place (daemon)
+canvas remote mirror publish ~/Notes --attach              # sync into an existing hub workspace of the same name
+canvas remote mirror status                                # daemon state, cursor/head, pending, conflicts, lag
+canvas remote mirror sync                                  # reconcile now
+canvas remote mirror pin add devel Photos/2026/
+canvas remote mirror conflicts                             # what waits in the hub inbox
+canvas remote mirror conflicts devel --resolve 100042 --keep both
+canvas remote mirror restart all                           # stop + start (after editing mirrors.json, or a dead mount)
+canvas remote mirror service install                       # pm2 processes, restart on crash, start at login
+canvas remote mirror stop all
 ```
 
 State: `config/mirrors.json` (this device's mirror list), the mount's own
@@ -399,7 +420,7 @@ overridable with `CANVAS_USER_HOME`):
 | `config/remotes.json` | Registered remotes with their URLs and auth tokens — managed via `canvas remote add \| bind \| rename`, not by hand |
 | `config/cli-session.json` | The current session: bound remote and its status, bound context and URL |
 | `config/cli-aliases.json` | User-defined command aliases (`canvas alias`) |
-| `config/mirrors.json` | Workspaces mirrored on this device (`canvas mirror init \| add \| remove`) |
+| `config/mirrors.json` | Workspaces mirrored on this device (`canvas remote mirror init \| add \| remove`) |
 | `scripts/update-prompt.sh` | Prompt integration, if installed |
 
 AI prompts (`hi`, `canvas agent`) run against agents hosted on the bound Canvas

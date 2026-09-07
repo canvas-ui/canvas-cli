@@ -1,12 +1,42 @@
 'use strict';
 
 import * as moduleExports from '../modules/index.js';
+import * as packages from './packages.js';
 
-export function loadRegistry() {
-    const modules = Object.values(moduleExports)
-        .filter((m) => m && m.name)
-        .map(processModule);
+/**
+ * Static modules plus the lazily installed packages (core/packages.js): an
+ * installed package mounts its real module, a missing one mounts a
+ * placeholder that offers the install. `mount: 'remote'` hangs the module
+ * under `remote` (`canvas remote mirror …`); the bare `canvas mirror …`
+ * stays reachable as an alias of the same module.
+ */
+export async function loadRegistry() {
+    const raw = Object.values(moduleExports).filter((m) => m && m.name).map((m) => ({ ...m, submodules: [...(m.submodules || [])] }));
+    const byRawName = new Map(raw.map((m) => [m.name, m]));
+    const aliasTop = [];
+    for (const key of packages.keys()) {
+        let loaded = null;
+        try { loaded = await packages.load(key); } catch (err) {
+            if (process.env.DEBUG) console.error(`[packages] ${key}: ${err.message}`);
+            process.stderr.write(`warning: package '${key}' failed to load (${err.message.split('\n')[0]}) — \`canvas package update ${key}\` or \`canvas package remove ${key}\`\n`);
+        }
+        const mod = loaded ? loaded.mod : packages.placeholderModule(key);
+        const mount = packages.CATALOG[key].mount;
+        if (mount && byRawName.has(mount)) {
+            byRawName.get(mount).submodules.push(mod);
+            aliasTop.push([mod.name, mod]);
+        } else {
+            raw.push(mod);
+        }
+    }
+    const modules = raw.map(processModule);
     const byName = indexModules(modules);
+    for (const [name] of aliasTop) {
+        if (byName.has(name)) continue;
+        // Same processed object the parent holds, so `canvas mirror x` === `canvas remote mirror x`.
+        const parent = modules.find((m) => (m.submodules.get(name)?.name === name));
+        if (parent) byName.set(name, parent.submodules.get(name));
+    }
     return { byName, modules };
 }
 

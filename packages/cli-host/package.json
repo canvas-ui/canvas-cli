@@ -1,0 +1,31 @@
+{
+    "name": "@augmentd-labs/canvas-cli-host",
+    "version": "0.1.0",
+    "description": "Canvas CLI extension SDK: prompts, errors, paths, storage, device identity, pm2 and prefix-install helpers shared by the core CLI and its lazily installed packages",
+    "license": "AGPL-3.0-or-later",
+    "type": "module",
+    "exports": {
+        ".": "./src/index.js",
+        "./errors": "./src/errors.js",
+        "./prompt": "./src/prompt.js",
+        "./paths": "./src/paths.js",
+        "./storage": "./src/storage.js",
+        "./device": "./src/device.js",
+        "./device-registration": "./src/device-registration.js",
+        "./address": "./src/address.js",
+        "./pm2": "./src/pm2.js",
+        "./prefix-install": "./src/prefix-install.js"
+    },
+    "files": ["src", "NOTICE"],
+    "scripts": {
+        "test": "node --test \"tests/**/*.test.js\"",
+        "lint": "eslint src tests --no-error-on-unmatched-pattern"
+    },
+    "engines": { "node": ">=20" },
+    "dependencies": {
+        "@augmentd-labs/canvas-api-client": "workspace:*",
+        "@clack/prompts": "^1.7.0",
+        "debug": "^4.4.3"
+    },
+    "repository": { "type": "git", "url": "git+https://github.com/canvas-ui/canvas.git", "directory": "packages/cli-host" }
+}

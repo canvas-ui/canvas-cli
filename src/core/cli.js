@@ -10,7 +10,8 @@ import { CanvasClient } from './transport/rest.js';
 import session from './session.js';
 import { remotes as remotesStore } from './storage.js';
 import { CanvasError, UsageError, AuthError } from './errors.js';
-import { PromptCancelled } from './prompt.js';
+import { PromptCancelled, isTTY, yesNo } from './prompt.js';
+import * as packages from './packages.js';
 import { isNetworkError } from '@augmentd-labs/canvas-api-client';
 import pkg from '../../package.json' with { type: 'json' };
 
@@ -49,6 +50,17 @@ export async function main(argv = process.argv.slice(2)) {
             return showHelpForPath(registry, parsed._.map(String), io);
         }
 
+        // Placeholder → offer the package, install it, re-dispatch the same argv.
+        const onPlaceholder = async (key, path) => {
+            const c = packages.CATALOG[key];
+            const cmd = `canvas package install ${key}`;
+            if (parsed.yes || !isTTY()) throw new UsageError(`'${path.join(' ')}' needs the '${key}' package (${c.description}; ${c.size}) — run \`${cmd}\``);
+            io.print(`'${path.join(' ')}' is provided by the '${key}' package: ${c.description} (${c.size}).`);
+            if (!(await yesNo(`Download it now from ${packages.spec(key)}?`, true))) throw new UsageError(`Not installed. Run \`${cmd}\` when ready.`);
+            await packages.install(key);
+            io.success(`Package '${key}' installed into ${packages.prefix(key)}`);
+            return dispatch({ tokens: parsed._.map(String), argv, registry: await loadRegistry(), ctx: { client, session, io, readStdin } });
+        };
         const result = await dispatch({
             tokens: parsed._.map(String),
             argv,
@@ -57,7 +69,7 @@ export async function main(argv = process.argv.slice(2)) {
             // it (`wantsStdin`). Reading it eagerly meant every command waited
             // for EOF, so `canvas ws list` inside a script with an inherited
             // pipe hung forever.
-            ctx: { client, session, io, readStdin },
+            ctx: { client, session, io, readStdin, onPlaceholder },
         });
         if (result?.kind === 'help') {
             if (result.path?.length) return showHelpForPath(registry, result.path, io);
@@ -65,18 +77,20 @@ export async function main(argv = process.argv.slice(2)) {
         }
         return 0;
     } catch (err) {
-        if (err instanceof PromptCancelled) return 130;
-        if (err instanceof UsageError) {
+        // Extension packages bundle their own copy of the SDK, so error
+        // classes do not match across that boundary — go by code/name.
+        if (err instanceof PromptCancelled || err?.code === 'CANCELLED') return 130;
+        if (err instanceof UsageError || err?.code === 'USAGE') {
             console.error(chalk.red(err.message));
             console.error(chalk.dim('Run `canvas --help` for available commands.'));
             return 2;
         }
-        if (err instanceof AuthError) {
+        if (err instanceof AuthError || err?.code === 'AUTH') {
             printNotConnected();
             if (process.env.DEBUG) console.error(err.stack);
             return 1;
         }
-        if (err instanceof CanvasError) {
+        if (err instanceof CanvasError || (err?.code && err?.name?.endsWith('Error'))) {
             // isNetworkError covers node/undici codes AND Bun's fetch codes —
             // the compiled binary runs under Bun, where ECONNREFUSED-style
             // codes never appear.
