@@ -6,6 +6,7 @@ import restart from './actions/restart.js';
 import start from './actions/start.js';
 import status from './actions/status.js';
 import stop from './actions/stop.js';
+import { serverService } from './lib/service.js';
 
 /*
  * @augmentd-labs/canvas-cli-server — the `canvas server` module: a local
@@ -19,4 +20,6 @@ export default {
     needsConnection: false,
     actions: [install, logs, restart, start, status, stop],
     submodules: [],
+    // Local services `canvas update` checks and refreshes (see apps/cli/src/modules/update/lib.js).
+    services: [serverService],
 };

@@ -346,6 +346,32 @@ them. Each package is one self-contained file published as the
 overrides the source); from a source checkout the workspace copies in
 `packages/cli-*` are used directly.
 
+### Updating (`canvas update`)
+
+One command keeps everything Canvas put on this device current:
+
+```bash
+canvas update                 # check, show the plan, apply (asks first on a terminal)
+canvas update check           # report only; `canvas update --check` does the same
+canvas update cli --to 2.7.1  # pin the CLI to one release
+canvas update edge            # just the canvas-edge daemon (or: packages | services | server)
+canvas update --yes --skip-restart
+```
+
+| component | how it is checked | how it is updated |
+|---|---|---|
+| `cli` | newest `cli-v*` GitHub Release (binary) or the npm registry | a release binary downloads the asset for this platform next to itself, verifies `SHA256SUMS`, runs it once and swaps it in (the same steps as `install.sh`); an npm install runs `npm install -g`; a source checkout is left to `git pull` |
+| `package:<name>` | the `canvasRev` on the `cli-<name>-dist` branch vs the installed one | `npm update` in `~/.canvas/packages/<name>` |
+| `service:edge` | `edge-dist` branch vs `~/.canvas/edge` (mirror package) | `npm update` there, then the daemon is re-created under pm2 (or respawned) when daemon mirrors exist |
+| `service:server` | remote branch HEAD vs `~/.canvas/server` (server package) | `git pull --ff-only` + `npm install`, then `pm2 restart` when it runs |
+
+Packages go first (they carry the service updaters), then services, the CLI
+last — the new `canvas` is used by your next command. Without a terminal
+nothing is applied unless `--yes` is given. Set `GITHUB_TOKEN` if the
+unauthenticated GitHub API rate limit gets in the way. A package can expose
+what it runs to `canvas update` by exporting `services` from its module
+(`{ id, label, installed(), latest(), update({ io, onStep }), restart?({ io }) }`).
+
 ### Mirrors (roaming profile)
 
 `canvas remote mirror` (package `mirror`) keeps workspaces from a hub in sync as real folders on this

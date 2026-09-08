@@ -15,6 +15,7 @@ import conflicts from './actions/conflicts.js';
 import service from './actions/service.js';
 import logs from './actions/logs.js';
 import edge from './actions/edge.js';
+import { edgeService } from './lib/service.js';
 
 /*
  * @augmentd-labs/canvas-cli-mirror — the `canvas remote mirror` module:
@@ -33,4 +34,6 @@ export default {
     needsConnection: false,
     actions: [init, add, publish, remove, list, status, start, stop, restart, sync, pin, conflicts, service, logs, edge],
     submodules: [],
+    // Local services `canvas update` checks and refreshes (see apps/cli/src/modules/update/lib.js).
+    services: [edgeService],
 };

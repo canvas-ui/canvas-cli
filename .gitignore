@@ -14,9 +14,7 @@
 /users/**
 /multiverse/**
 
-# Test files and directories(well, non-production files)
-tests/**
-tests/**/*
+# Scratch files (tests/ is tracked: `npm test` runs tests/**/*.test.js)
 _test*
 
 # Dev
