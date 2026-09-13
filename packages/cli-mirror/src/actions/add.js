@@ -11,7 +11,7 @@ export default {
     name: 'add',
     description: 'Mirror one more workspace on this device',
     positional: [{ name: 'workspace', required: true }],
-    flags: { hub: 'string', root: 'string', pin: 'string', ignore: 'string', conflicts: 'string', deletes: 'string', direction: 'string', client: 'string', 'cache-budget-mb': 'string', service: 'boolean', 'no-start': 'boolean' },
+    flags: { hub: 'string', root: 'string', pin: 'string', ignore: 'string', conflicts: 'string', deletes: 'string', direction: 'string', 'state-dir': 'string', client: 'string', 'cache-budget-mb': 'string', service: 'boolean', 'no-start': 'boolean' },
     async run({ args, flags, client, session, io }) {
         const { name, pins: specPins } = parseWorkspaceSpec(args.workspace);
         const remoteId = await resolveHub(flags, client, session, { interactive: !flags.yes });
@@ -29,6 +29,7 @@ export default {
             conflicts: flags.conflicts || 'prompt',
             deletes: flags.deletes || 'propagate',
             direction: flags.direction || 'bi',
+            stateDir: flags['state-dir'] || null,
             managed: flags.service ? 'pm2' : 'manual',
             client: flags.client || (process.platform === 'linux' ? 'fuse' : 'daemon'),
             ...(flags['cache-budget-mb'] ? { cacheBudgetMb: Number(flags['cache-budget-mb']) } : {}),

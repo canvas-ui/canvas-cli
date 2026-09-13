@@ -17,7 +17,7 @@ export default {
     name: 'publish',
     description: 'Publish a local folder as a new workspace on the hub and keep it in sync',
     positional: [{ name: 'folder', required: true }],
-    flags: { hub: 'string', name: 'string', label: 'string', attach: 'boolean', conflicts: 'string', deletes: 'string', direction: 'string', ignore: 'string', service: 'boolean', 'no-start': 'boolean', yes: 'boolean' },
+    flags: { hub: 'string', name: 'string', label: 'string', attach: 'boolean', conflicts: 'string', deletes: 'string', direction: 'string', 'state-dir': 'string', ignore: 'string', service: 'boolean', 'no-start': 'boolean', yes: 'boolean' },
     async run({ args, flags, client, session, io }) {
         const interactive = !flags.yes;
         const spec = parsePublishSpec(flags.name ? `${args.folder}:${flags.name}` : args.folder);
@@ -44,7 +44,7 @@ export default {
         const { ws, created } = await ensureHubWorkspace(client, remoteId, { name: spec.name, label: flags.label || spec.name }, { onExisting: flags.attach ? 'attach' : 'fail', io });
         const mirror = configurePublishedMirror({
             remoteId, ws, folder: spec.folder, root: readConfig().root || undefined,
-            conflicts, deletes, direction, ignore: splitList(flags.ignore), managed,
+            conflicts, deletes, direction, stateDir: flags['state-dir'] || null, ignore: splitList(flags.ignore), managed,
         });
         io.success(`${created ? 'Publishing' : 'Syncing'} ${mirror.mountpoint} ↔ ${remoteId}/${ws.name}`);
         if (noStart(flags)) return;

@@ -70,12 +70,13 @@ export function parseWorkspaceSpec(spec) {
  * sync in place. Only the daemon client can do that: a FUSE mount needs an
  * empty mountpoint and would hide whatever the folder holds.
  */
-export function buildMirror({ remoteId, workspaceId, workspaceName, folderName = null, root, folder = null, pins = [], ignore = [], conflicts = 'prompt', deletes = 'propagate', direction = 'bi', managed = 'manual', client = 'fuse' }) {
+export function buildMirror({ remoteId, workspaceId, workspaceName, folderName = null, root, folder = null, pins = [], ignore = [], conflicts = 'prompt', deletes = 'propagate', direction = 'bi', stateDir = null, managed = 'manual', client = 'fuse' }) {
     if (!remoteId || !workspaceName) throw new Error('remoteId and workspaceName are required');
     if (!CONFLICT_MODES.includes(conflicts)) throw new Error(`conflicts must be one of ${CONFLICT_MODES.join('|')}`);
     if (!DELETE_MODES.includes(deletes)) throw new Error(`deletes must be one of ${DELETE_MODES.join('|')}`);
     if (!DIRECTIONS.includes(direction)) throw new Error(`direction must be one of ${DIRECTIONS.join('|')}`);
     if (direction !== 'bi' && client !== 'daemon') throw new Error('a one-way direction needs the daemon client (a FUSE mount is always bi-directional)');
+    if (stateDir && client !== 'daemon') throw new Error('an external state dir applies to the daemon client only (a FUSE mount keeps its own data dir)');
     if (!CLIENTS.includes(client)) throw new Error(`client must be one of ${CLIENTS.join('|')}`);
     if (folder && client !== 'daemon') throw new Error('a custom folder needs the daemon client (a FUSE mount must be an empty mountpoint)');
     const mirrorRoot = root || defaultRoot();
@@ -94,6 +95,9 @@ export function buildMirror({ remoteId, workspaceId, workspaceName, folderName =
         conflicts,
         deletes,
         direction,
+        // Daemon client: where ledger/queue/cache/trash/conflicts live. null =
+        // `<folder>/.workspace`; set it to keep a mirrored share user-files-only.
+        stateDir: stateDir ? path.resolve(String(stateDir)) : null,
         client,
         // 'pm2' when `mirror service install` runs it, 'manual' when started detached.
         managed,
