@@ -6,7 +6,7 @@ import path from 'node:path';
 import { input, intro, log, multiSelect, note, outro, select, spinner, yesNo } from '@augmentd-labs/canvas-cli-host/prompt';
 import { UsageError } from '@augmentd-labs/canvas-cli-host/errors';
 import { ensureDeviceRegistered } from '@augmentd-labs/canvas-cli-host/device-registration';
-import { CLIENTS, CONFLICT_MODES, DELETE_MODES, buildMirror, defaultRoot, findMirror, flagOff, listMirrors, parseWorkspaceSpec, readConfig, setRoot, splitList, upsertMirror, noStart } from '../lib/config.js';
+import { CLIENTS, CONFLICT_MODES, DELETE_MODES, DIRECTIONS, buildMirror, defaultRoot, findMirror, flagOff, listMirrors, parseWorkspaceSpec, readConfig, setRoot, splitList, upsertMirror, noStart } from '../lib/config.js';
 import { ensurePM2 } from '../lib/pm2.js';
 import { findHubWorkspace, listHubWorkspaces, resolveHub } from '../lib/hub.js';
 import { configurePublishedMirror, ensureHubWorkspace, inspectFolder, parsePublishSpec } from '../lib/publish.js';
@@ -41,6 +41,7 @@ export default {
         attach: 'boolean',     // publish into a same-named hub workspace if it already exists
         conflicts: 'string',   // prompt | rename
         deletes: 'string',     // propagate | keep
+        direction: 'string',   // bi | pull (backup target) | push (one-shot import) — daemon client only
         client: 'string',      // fuse (default on Linux) | daemon (real folder via canvas-edge)
         service: 'boolean',    // --service: pm2 processes; --no-service: detached starts
         restart: 'boolean',    // also restart mirrors that were configured earlier
@@ -98,11 +99,11 @@ export default {
             } else mode = 'mirror';
 
             // 4. Behaviour (asked once, applies to everything configured in this run)
-            const { conflicts, deletes } = await pickModes(flags, interactive);
+            const { conflicts, deletes, direction } = await pickModes(flags, interactive);
             const managed = (await pickSupervision(flags, interactive, io)) ? 'pm2' : 'manual';
 
             if (mode === 'mirror' || mode === 'both') {
-                configured.push(...await setupMirrors({ flags, interactive, client, remoteId, root, conflicts, deletes, managed }));
+                configured.push(...await setupMirrors({ flags, interactive, client, remoteId, root, conflicts, deletes, direction, managed }));
             }
             if (mode === 'publish' || mode === 'both') {
                 configured.push(...await setupPublishes({ flags, interactive, client, remoteId, root, conflicts, deletes, managed, io }));
@@ -140,7 +141,9 @@ async function pickModes(flags, interactive) {
     if (!CONFLICT_MODES.includes(conflicts)) throw new UsageError(`--conflicts must be ${CONFLICT_MODES.join('|')}`);
     const deletes = flags.deletes || 'propagate';
     if (!DELETE_MODES.includes(deletes)) throw new UsageError(`--deletes must be ${DELETE_MODES.join('|')}`);
-    return { conflicts, deletes };
+    const direction = flags.direction || 'bi';
+    if (!DIRECTIONS.includes(direction)) throw new UsageError(`--direction must be ${DIRECTIONS.join('|')}`);
+    return { conflicts, deletes, direction };
 }
 
 /**
@@ -163,7 +166,7 @@ async function pickSupervision(flags, interactive, io) {
 }
 
 /** Remote workspaces → local folders under the root. */
-async function setupMirrors({ flags, interactive, client, remoteId, root, conflicts, deletes, managed }) {
+async function setupMirrors({ flags, interactive, client, remoteId, root, conflicts, deletes, direction = 'bi', managed }) {
     const s = spinner();
     s.start(`Listing workspaces on ${remoteId}…`);
     let available;
@@ -221,7 +224,7 @@ async function setupMirrors({ flags, interactive, client, remoteId, root, confli
             if (interactive && !(await yesNo(`${target} already has files — merge them into '${ws.name}' (they are uploaded, nothing is deleted)?`, true))) continue;
         }
         out.push(upsertMirror(buildMirror({
-            remoteId, workspaceId: ws.id, workspaceName: ws.name, folderName: ws.folderName, root, pins, conflicts, deletes, client: mirrorClient, managed,
+            remoteId, workspaceId: ws.id, workspaceName: ws.name, folderName: ws.folderName, root, pins, conflicts, deletes, direction, client: mirrorClient, managed,
         })));
         log.success(`${ws.folderName} → ${target}`);
     }

@@ -56,10 +56,10 @@ export async function ensureHubWorkspace(client, remoteId, { name, label, descri
 }
 
 /** Config entry for a published folder (daemon client, in place). */
-export function configurePublishedMirror({ remoteId, ws, folder, root, conflicts, deletes, managed, ignore = [] }) {
+export function configurePublishedMirror({ remoteId, ws, folder, root, conflicts, deletes, direction = 'bi', managed, ignore = [] }) {
     if (findMirror(`${remoteId}/${ws.name}`)) throw new UsageError(`'${ws.name}' is already mirrored from ${remoteId}`);
     return upsertMirror(buildMirror({
         remoteId, workspaceId: ws.id, workspaceName: ws.name, folderName: ws.folderName || path.basename(folder), root, folder,
-        client: 'daemon', conflicts, deletes, managed, ignore,
+        client: 'daemon', conflicts, deletes, direction, managed, ignore,
     }));
 }

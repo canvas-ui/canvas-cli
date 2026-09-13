@@ -18,6 +18,9 @@ export const FILE_MIRRORS = path.join(DIR_CONFIG, 'mirrors.json');
 export const DEFAULTS = Object.freeze({ version: 1, root: null, edgeBin: null, mirrors: [] });
 export const CONFLICT_MODES = ['prompt', 'rename'];
 export const DELETE_MODES = ['propagate', 'keep'];
+// bi = both ways; pull = the hub is the only writer (a backup target: local edits are
+// preserved in .workspace/conflicts and reverted, local-only files reported); push = one-shot import.
+export const DIRECTIONS = ['bi', 'pull', 'push'];
 // fuse = canvas-fuse --mirror (Linux, on-demand + pins); daemon = canvas-edge real folder.
 export const CLIENTS = ['fuse', 'daemon'];
 
@@ -67,10 +70,12 @@ export function parseWorkspaceSpec(spec) {
  * sync in place. Only the daemon client can do that: a FUSE mount needs an
  * empty mountpoint and would hide whatever the folder holds.
  */
-export function buildMirror({ remoteId, workspaceId, workspaceName, folderName = null, root, folder = null, pins = [], ignore = [], conflicts = 'prompt', deletes = 'propagate', managed = 'manual', client = 'fuse' }) {
+export function buildMirror({ remoteId, workspaceId, workspaceName, folderName = null, root, folder = null, pins = [], ignore = [], conflicts = 'prompt', deletes = 'propagate', direction = 'bi', managed = 'manual', client = 'fuse' }) {
     if (!remoteId || !workspaceName) throw new Error('remoteId and workspaceName are required');
     if (!CONFLICT_MODES.includes(conflicts)) throw new Error(`conflicts must be one of ${CONFLICT_MODES.join('|')}`);
     if (!DELETE_MODES.includes(deletes)) throw new Error(`deletes must be one of ${DELETE_MODES.join('|')}`);
+    if (!DIRECTIONS.includes(direction)) throw new Error(`direction must be one of ${DIRECTIONS.join('|')}`);
+    if (direction !== 'bi' && client !== 'daemon') throw new Error('a one-way direction needs the daemon client (a FUSE mount is always bi-directional)');
     if (!CLIENTS.includes(client)) throw new Error(`client must be one of ${CLIENTS.join('|')}`);
     if (folder && client !== 'daemon') throw new Error('a custom folder needs the daemon client (a FUSE mount must be an empty mountpoint)');
     const mirrorRoot = root || defaultRoot();
@@ -88,6 +93,7 @@ export function buildMirror({ remoteId, workspaceId, workspaceName, folderName =
         ignore: [...new Set(ignore)],
         conflicts,
         deletes,
+        direction,
         client,
         // 'pm2' when `mirror service install` runs it, 'manual' when started detached.
         managed,

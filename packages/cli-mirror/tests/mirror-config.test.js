@@ -38,6 +38,14 @@ describe('mirror config', () => {
         assert.throws(() => config.buildMirror({ remoteId: 'a', workspaceName: 'b', conflicts: 'maybe' }));
     });
 
+    test('direction: bi by default, one-way only for the daemon client', () => {
+        const root = path.join(home, 'Workspaces');
+        assert.equal(config.buildMirror({ remoteId: 'a', workspaceName: 'b', root }).direction, 'bi');
+        assert.equal(config.buildMirror({ remoteId: 'a', workspaceName: 'nas', root, client: 'daemon', direction: 'pull' }).direction, 'pull');
+        assert.throws(() => config.buildMirror({ remoteId: 'a', workspaceName: 'b', root, direction: 'sideways' }));
+        assert.throws(() => config.buildMirror({ remoteId: 'a', workspaceName: 'b', root, client: 'fuse', direction: 'pull' }), /daemon client/);
+    });
+
     test('mountArgs never puts credentials on the command line', () => {
         const m = config.buildMirror({ remoteId: 'admin@dev', workspaceName: 'devel', root: '/tmp/ws', pins: ['UI/**'], ignore: ['*.tmp'], conflicts: 'prompt', deletes: 'keep' });
         assert.deepEqual(fuse.mountArgs(m), ['mount', '-w', 'devel', '/tmp/ws', '--remote', 'admin@dev', '--mirror', '--pin', 'UI/**', '--ignore', '*.tmp', '--conflicts', 'prompt', '--deletes', 'keep']);

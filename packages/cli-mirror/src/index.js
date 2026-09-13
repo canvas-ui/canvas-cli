@@ -12,6 +12,7 @@ import restart from './actions/restart.js';
 import sync from './actions/sync.js';
 import pin from './actions/pin.js';
 import conflicts from './actions/conflicts.js';
+import direction from './actions/direction.js';
 import service from './actions/service.js';
 import logs from './actions/logs.js';
 import edge from './actions/edge.js';
@@ -32,7 +33,7 @@ export default {
     defaultAction: 'status',
     defaultPluralAction: 'list',
     needsConnection: false,
-    actions: [init, add, publish, remove, list, status, start, stop, restart, sync, pin, conflicts, service, logs, edge],
+    actions: [init, add, publish, remove, list, status, start, stop, restart, sync, pin, conflicts, direction, service, logs, edge],
     submodules: [],
     // Local services `canvas update` checks and refreshes (see apps/cli/src/modules/update/lib.js).
     services: [edgeService],
