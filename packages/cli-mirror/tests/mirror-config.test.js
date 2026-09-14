@@ -46,6 +46,13 @@ describe('mirror config', () => {
         assert.throws(() => config.buildMirror({ remoteId: 'a', workspaceName: 'b', root, client: 'fuse', direction: 'pull' }), /daemon client/);
     });
 
+    test("managed: manual | pm2 | edge; 'edge' is for FUSE mounts only", () => {
+        const root = path.join(home, 'Workspaces');
+        assert.equal(config.buildMirror({ remoteId: 'a', workspaceName: 'b', root, client: 'fuse', managed: 'edge' }).managed, 'edge');
+        assert.throws(() => config.buildMirror({ remoteId: 'a', workspaceName: 'b', root, client: 'daemon', managed: 'edge' }), /FUSE/);
+        assert.throws(() => config.buildMirror({ remoteId: 'a', workspaceName: 'b', root, managed: 'systemd' }), /managed must be/);
+    });
+
     test('stateDir: absolute, daemon client only, null by default', () => {
         const root = path.join(home, 'Workspaces');
         assert.equal(config.buildMirror({ remoteId: 'a', workspaceName: 'b', root }).stateDir, null);

@@ -14,13 +14,15 @@ export default {
         if (mirrors.length === 0) { io.info('No mirrors. Run `canvas remote mirror init`.'); return; }
         const running = await statusAll().catch(() => []);
         const byMount = new Map(running.map((m) => [m.mountpoint, m]));
-        const edge = mirrors.some((m) => m.client === 'daemon') ? await edgeStatus().catch(() => null) : null;
+        const edge = mirrors.some((m) => m.client === 'daemon' || m.managed === 'edge') ? await edgeStatus().catch(() => null) : null;
         const edgeById = new Map((edge?.mirrors || []).map((m) => [m.id, m]));
         const rows = [];
         for (const m of mirrors) {
-            const isDaemon = m.client === 'daemon';
-            const st = isDaemon ? (edgeById.get(m.id) ? { status: 'ok' } : null) : byMount.get(m.mountpoint);
-            const mi = isDaemon ? (edgeById.get(m.id) || {}) : (st?.mirror || {});
+            const viaEdge = m.client === 'daemon' || m.managed === 'edge';
+            const unit = viaEdge ? edgeById.get(m.id) : null;
+            // fuse units: the daemon merges `canvas-fuse status --json` into its row (`mount`).
+            const st = viaEdge ? (unit ? { status: unit.unit === 'fuse' ? unit.mount : 'ok' } : null) : byMount.get(m.mountpoint);
+            const mi = viaEdge ? (unit || {}) : (st?.mirror || {});
             let hubLag = '-';
             try {
                 const rc = client.client(m.remote);
@@ -30,7 +32,7 @@ export default {
             } catch { /* offline or old hub */ }
             rows.push({
                 workspace: m.workspaceName,
-                client: m.client || 'fuse',
+                client: `${m.client || 'fuse'}${m.managed === 'edge' ? '/edge' : ''}`,
                 mount: st ? (st.status || 'ok') : 'down',
                 state: mi.state || '-',
                 cursor: mi.cursor != null ? `${mi.cursor}/${mi.head ?? '?'}` : '-',

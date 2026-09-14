@@ -12,22 +12,25 @@ import { upsertMirror } from './config.js';
  * `mirror init`, `mirror start` and `mirror restart` so they cannot drift.
  */
 export async function startMirrors(mirrors, io, { restart = false } = {}) {
-    const daemon = mirrors.filter((m) => m.client === 'daemon');
-    const fuse = mirrors.filter((m) => m.client !== 'daemon');
+    // Everything canvas-edge runs: daemon folders and edge-supervised FUSE mounts (fuse units).
+    const viaEdge = mirrors.filter((m) => m.client === 'daemon' || m.managed === 'edge');
+    const fuse = mirrors.filter((m) => m.client !== 'daemon' && m.managed !== 'edge');
     const results = [];
 
-    if (daemon.length) {
-        // `mirror stop` pauses daemon entries; starting them again lifts that before the daemon reloads.
-        for (const m of daemon) if (m.paused) upsertMirror({ ...m, paused: false });
-        const managed = daemon.some((m) => m.managed === 'pm2') ? 'pm2' : 'manual';
+    if (viaEdge.length) {
+        // `mirror stop` pauses edge entries; starting them again lifts that before the daemon reloads.
+        for (const m of viaEdge) if (m.paused) upsertMirror({ ...m, paused: false });
+        // The daemon itself runs under pm2 when any daemon folder asked for it (`service install`).
+        const managed = viaEdge.some((m) => m.client === 'daemon' && m.managed === 'pm2') ? 'pm2' : 'manual';
+        const fuseUnits = viaEdge.filter((m) => m.client !== 'daemon').length;
         try {
             const res = restart ? await restartEdgeService(io, { managed }) : await ensureEdgeService(io, { managed });
             const verb = res.restarted ? 'Restarted' : res.started ? 'Started' : 'Reloaded';
-            io.success(`${verb} canvas-edge for ${daemon.length} folder(s)${managed === 'manual' ? ' (unsupervised)' : ''}`);
-            results.push(...daemon.map((m) => ({ mirror: m, ok: true })));
+            io.success(`${verb} canvas-edge for ${viaEdge.length - fuseUnits} folder(s)${fuseUnits ? ` + ${fuseUnits} fuse unit(s)` : ''}${managed === 'manual' ? ' (unsupervised)' : ''}`);
+            results.push(...viaEdge.map((m) => ({ mirror: m, ok: true })));
         } catch (e) {
             io.error(`canvas-edge: ${e.message}`);
-            results.push(...daemon.map((m) => ({ mirror: m, ok: false, error: e.message })));
+            results.push(...viaEdge.map((m) => ({ mirror: m, ok: false, error: e.message })));
         }
     }
 

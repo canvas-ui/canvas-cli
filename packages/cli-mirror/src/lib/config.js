@@ -21,6 +21,10 @@ export const DELETE_MODES = ['propagate', 'keep'];
 // bi = both ways; pull = the hub is the only writer (a backup target: local edits are
 // preserved in .workspace/conflicts and reverted, local-only files reported); push = one-shot import.
 export const DIRECTIONS = ['bi', 'pull', 'push'];
+// Who keeps a mirror running: 'manual' (detached start), 'pm2' (a pm2 process
+// per FUSE mount / for the edge daemon), 'edge' (a FUSE mount supervised by the
+// canvas-edge daemon as a `fuse` unit — daemon entries are always edge-run).
+export const SUPERVISORS = ['manual', 'pm2', 'edge'];
 // fuse = canvas-fuse --mirror (Linux, on-demand + pins); daemon = canvas-edge real folder.
 export const CLIENTS = ['fuse', 'daemon'];
 
@@ -77,6 +81,8 @@ export function buildMirror({ remoteId, workspaceId, workspaceName, folderName =
     if (!DIRECTIONS.includes(direction)) throw new Error(`direction must be one of ${DIRECTIONS.join('|')}`);
     if (direction !== 'bi' && client !== 'daemon') throw new Error('a one-way direction needs the daemon client (a FUSE mount is always bi-directional)');
     if (stateDir && client !== 'daemon') throw new Error('an external state dir applies to the daemon client only (a FUSE mount keeps its own data dir)');
+    if (!SUPERVISORS.includes(managed)) throw new Error(`managed must be one of ${SUPERVISORS.join('|')}`);
+    if (managed === 'edge' && client !== 'fuse') throw new Error('managed:\'edge\' is for FUSE mounts (daemon folders are always run by canvas-edge)');
     if (!CLIENTS.includes(client)) throw new Error(`client must be one of ${CLIENTS.join('|')}`);
     if (folder && client !== 'daemon') throw new Error('a custom folder needs the daemon client (a FUSE mount must be an empty mountpoint)');
     const mirrorRoot = root || defaultRoot();

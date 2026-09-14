@@ -27,7 +27,8 @@ export default {
             for (const mirror of daemon) upsertMirror({ ...mirror, managed: op === 'install' ? 'pm2' : 'manual' });
             io.success(`canvas-edge ${op === 'install' ? 'now runs under pm2' : 'runs detached'} (${daemon.length} folder(s))`);
         }
-        for (const mirror of mirrors.filter((m) => m.client !== 'daemon')) {
+        // Edge-supervised FUSE mounts follow the daemon; pm2 never takes them over.
+        for (const mirror of mirrors.filter((m) => m.client !== 'daemon' && m.managed !== 'edge')) {
             if (op === 'install') {
                 const { name, started } = await startProcess(mirror);
                 upsertMirror({ ...mirror, managed: 'pm2' });
