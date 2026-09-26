@@ -80,7 +80,7 @@ export async function ingestPath(ctx, { mode, adapter, useTargets = true }) {
         return;
     }
 
-    if (mode === 'upload') { try { await adapter.start(); } catch { /* already started */ } }
+
 
     const flush = async (docs) => {
         // Context: insert at the context's own focused path — no path targeting.
