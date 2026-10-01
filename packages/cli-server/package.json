@@ -27,7 +27,7 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/canvas-ui/canvas-common.git",
+        "url": "git+https://github.com/canvas-ui/canvas-cli.git",
         "directory": "packages/cli-server"
     }
 }

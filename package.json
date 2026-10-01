@@ -1,6 +1,6 @@
 {
   "name": "@augmentd-labs/canvas-cli",
-  "version": "2.9.0",
+  "version": "2.10.0",
   "description": "Canvas CLI",
   "author": "Jozef Melich <me@idnc.sk>",
   "license": "AGPL-3.0-or-later",
@@ -17,7 +17,7 @@
   },
   "scripts": {
     "lint": "eslint \"**/*.js\"",
-    "test": "node --test \"tests/**/*.test.js\"",
+    "test": "node --test \"tests/**/*.test.js\" && pnpm -r --if-present run test",
     "lint:fix": "eslint \"**/*.js\" --fix",
     "format": "prettier --write \"**/*.{js,md}\"",
     "format:js": "prettier --write \"**/*.js\"",
@@ -32,7 +32,9 @@
     "build:windows": "bun build --compile --target=bun-windows-x64 --minify --icon=assets/icons/canvas.ico --outfile=dist/canvas-windows.exe ./bin/canvas.js",
     "build:dev": "bun build --compile --outfile=dist/canvas-dev ./bin/canvas.js",
     "generate:icons": "scripts/generate-icons.sh",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "publish:npm": "node scripts/publish-npm.mjs",
+    "release": "bash scripts/release.sh"
   },
   "files": [
     "bin",
@@ -48,8 +50,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/canvas-ui/canvas-common.git",
-    "directory": "apps/cli"
+    "url": "git+https://github.com/canvas-ui/canvas-cli.git"
   },
   "keywords": [
     "cli",
@@ -60,10 +61,10 @@
     "shell"
   ],
   "dependencies": {
-    "@augmentd-labs/canvas-api-client": "workspace:*",
+    "@augmentd-labs/canvas-api-client": "^0.3.0",
     "@augmentd-labs/canvas-cli-host": "workspace:*",
-    "@augmentd-labs/canvas-protocol": "workspace:*",
-    "@augmentd-labs/canvas-schemas": "workspace:*",
+    "@augmentd-labs/canvas-protocol": "^0.4.0",
+    "@augmentd-labs/canvas-schemas": "^0.2.0",
     "chalk": "^5.6.2",
     "cli-table3": "^0.6.5",
     "date-fns": "^4.1.0",
@@ -79,6 +80,8 @@
     "globals": "^16.5.0",
     "prettier": "^3.8.1",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.57.1"
-  }
+    "typescript-eslint": "^8.57.1",
+    "esbuild": "^0.28.2"
+  },
+  "packageManager": "pnpm@10.32.1"
 }

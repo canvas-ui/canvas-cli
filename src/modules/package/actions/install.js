@@ -14,7 +14,7 @@ export default {
         for (const key of names) {
             if (!packages.CATALOG[key]) throw new UsageError(`Unknown package '${key}' — one of: ${packages.keys().join(', ')}, all`);
             const s = spinner();
-            s.start(`Installing ${key} (${packages.spec(key)})…`);
+            s.start(`Installing ${key} (${packages.source(key)})…`);
             try {
                 const dir = await packages.install(key);
                 const where = packages.locate(key);

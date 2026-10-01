@@ -12,10 +12,10 @@ documents with integrated AI assistance.
 ### One-liner (Linux / macOS)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/canvas-ui/canvas/main/apps/cli/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/canvas-ui/canvas-cli/main/scripts/install.sh | bash
 ```
 
-This resolves the newest `cli-v*` GitHub Release, downloads the single-file
+This resolves the newest GitHub Release, downloads the single-file
 binary for your platform, verifies it against the release's `SHA256SUMS`,
 installs it to `~/.local/bin/canvas` together with the shortcut wrappers
 (`ws`, `ctx`, `context`, `dot`, `agent`, `ag`, `hi`) and offers to wire the shell
@@ -35,7 +35,7 @@ curl -fsSL .../install.sh | bash -s -- --version 2.1.13 --dir ~/bin --no-prompt 
 
 | Flag | Effect |
 | --- | --- |
-| `--version <ver>` | Install a specific release (`2.1.11` or `cli-v2.1.11`) |
+| `--version <ver>` | Install a specific release (`2.1.11` or `v2.1.11`) |
 | `--dir <path>` | Install directory (default `~/.local/bin`, or `$CANVAS_INSTALL_DIR`) |
 | `--prompt` / `--no-prompt` | Wire / skip the prompt integration without being asked |
 | `--no-shortcuts` | Install only `canvas` |
@@ -46,7 +46,7 @@ Run `scripts/install.sh` again at any time to upgrade in place.
 ### One-liner (Windows)
 
 ```powershell
-irm https://raw.githubusercontent.com/canvas-ui/canvas/main/apps/cli/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/canvas-ui/canvas-cli/main/scripts/install.ps1 | iex
 ```
 
 Installs `canvas.exe` into `%LOCALAPPDATA%\Programs\canvas`, writes `.cmd`
@@ -54,7 +54,7 @@ shims for the shortcuts and adds the directory to your user PATH.
 
 ### Manual binary download
 
-Every `cli-v*` release attaches single-file binaries, downloaded as-is, not
+Every release attaches single-file binaries, downloaded as-is, not
 archived:
 
 | Platform | Architecture | Asset |
@@ -65,9 +65,7 @@ archived:
 | **macOS** | ARM64 (Apple Silicon) | `canvas-macos-arm` |
 | **Windows** | x64 | `canvas-windows.exe` |
 
-Grab them from the [releases page](https://github.com/canvas-ui/canvas/releases?q=cli-v)
-— the repository is a monorepo, so look for a tag starting with `cli-v`, not
-just "latest".
+Grab them from the [releases page](https://github.com/canvas-ui/canvas-cli/releases/latest).
 
 ```bash
 sha256sum -c SHA256SUMS --ignore-missing   # every release ships SHA256SUMS
@@ -93,9 +91,9 @@ binaries and the source install. Node.js v20 LTS or newer.
 ### From source (development)
 
 ```bash
-git clone https://github.com/canvas-ui/canvas ~/Code/canvas
-cd ~/Code/canvas/apps/cli
-pnpm install                 # from the monorepo root
+git clone https://github.com/canvas-ui/canvas-cli ~/Code/canvas/canvas-cli
+cd ~/Code/canvas/canvas-cli
+pnpm install                 # corepack enable, if pnpm is missing
 
 # Wrappers in ~/.local/bin pointing at this checkout (bun if present, else node)
 scripts/install.sh --local
@@ -130,7 +128,7 @@ The installer sets this up for you (`--prompt`). Manually:
 
 ```bash
 mkdir -p ~/.canvas/scripts
-curl -fsSL https://raw.githubusercontent.com/canvas-ui/canvas/main/apps/cli/scripts/update-prompt.sh \
+curl -fsSL https://raw.githubusercontent.com/canvas-ui/canvas-cli/main/scripts/update-prompt.sh \
   -o ~/.canvas/scripts/update-prompt.sh
 
 # ~/.bashrc or ~/.zshrc
@@ -259,7 +257,7 @@ server use. Both `ctx` and `ws` carry the full set:
 ```bash
 ctx todo add "ship the refactor" --due 2026-09-01T09:00:00Z --task-priority 2
 ctx tab add https://example.com --title "Example"
-ctx link add git+ssh://git@github.com/canvas-ui/canvas --title monorepo
+ctx link add git+ssh://git@github.com/canvas-ui/canvas-cli --title canvas-cli
 ctx file add ./report.pdf        # uploads the bytes (embeddable)
 ctx file index ~/Photos          # records a device pointer, bytes stay put
 ws work note add "meeting recap" --path notes:/standup
@@ -341,10 +339,10 @@ and loaded from there:
 Using one of those commands before its package exists shows what it is and
 offers the download; `--yes` / non-interactive runs get the install command
 instead. `canvas package list | install <name> | update | remove` manages
-them. Each package is one self-contained file published as the
-`cli-<name>-dist` branch of the monorepo (`CANVAS_PACKAGE_SPEC_<NAME>`
-overrides the source); from a source checkout the workspace copies in
-`packages/cli-*` are used directly.
+them. Each package is one self-contained file published to npm as
+`@augmentd-labs/canvas-cli-<name>` (`CANVAS_PACKAGE_SPEC_<NAME>` overrides the
+`latest` dist-tag with a version, tarball or git spec); from a source checkout
+the workspace copies in `packages/cli-*` are used directly.
 
 ### Updating (`canvas update`)
 
@@ -360,9 +358,9 @@ canvas update --yes --skip-restart
 
 | component | how it is checked | how it is updated |
 |---|---|---|
-| `cli` | newest `cli-v*` GitHub Release (binary) or the npm registry | a release binary downloads the asset for this platform next to itself, verifies `SHA256SUMS`, runs it once and swaps it in (the same steps as `install.sh`); an npm install runs `npm install -g`; a source checkout is left to `git pull` |
-| `package:<name>` | the `canvasRev` on the `cli-<name>-dist` branch vs the installed one | `npm update` in `~/.canvas/packages/<name>` |
-| `service:edge` | `edge-dist` branch vs `~/.canvas/edge` (mirror package) | `npm update` there, then the daemon is re-created under pm2 (or respawned) when daemon mirrors exist |
+| `cli` | newest GitHub Release (binary) or the npm registry | a release binary downloads the asset for this platform next to itself, verifies `SHA256SUMS`, runs it once and swaps it in (the same steps as `install.sh`); an npm install runs `npm install -g`; a source checkout is left to `git pull` |
+| `package:<name>` | `latest` on npm vs the installed version | `npm update` in `~/.canvas/packages/<name>` |
+| `service:edge` | `latest` of `@augmentd-labs/canvas-edge` on npm vs `~/.canvas/edge` (mirror package) | `npm update` there, then the daemon is re-created under pm2 (or respawned) when daemon mirrors exist |
 | `service:server` | remote branch HEAD vs `~/.canvas/server` (server package) | `git pull --ff-only` + `npm install`, then `pm2 restart` when it runs |
 
 Packages go first (they carry the service updaters), then services, the CLI
@@ -391,8 +389,8 @@ the sync to) or **publish** local folders as new hub workspaces that stay in
 sync in place — or both. pm2 is checked before anything is written: when it
 is missing the wizard offers to install it, or continues unsupervised
 (`--no-service` skips the question). The same goes for `canvas-edge`, the
-folder-sync daemon (`runtimes/edge` in the monorepo): when it cannot be found
-the wizard offers to fetch it (`canvas remote mirror edge install`: the `edge-dist` artifact branch
+folder-sync daemon (`@augmentd-labs/canvas-edge`, from canvas-common): when it cannot be found
+the wizard offers to fetch it (`canvas remote mirror edge install`: the npm package
 into `~/.canvas/edge`, no global npm, no sudo; `CANVAS_EDGE_PACKAGE` overrides
 the spec; `canvas remote mirror edge update` pulls the latest and restarts) — or a local checkout, whose path is remembered in
 `mirrors.json` (`edgeBin`; `CANVAS_EDGE_BIN` overrides it). Run the wizard

@@ -20,13 +20,13 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
  * CLI itself, the lazily installed CLI packages (~/.canvas/packages/<key>) and
  * the local services those packages run (canvas-edge, a local canvas-server).
  * The CLI is updated the way it was installed — a compiled binary swaps
- * itself for the matching asset of the newest `cli-v*` GitHub Release
+ * itself for the matching asset of the newest canvas-cli GitHub Release
  * (same download + SHA256SUMS check as scripts/install.sh), an npm install
- * asks npm, a source checkout is left to git. Packages and dist-branch
- * artifacts are compared by the `canvasRev` pack-dist stamps into them.
+ * asks npm, a source checkout is left to git. Packages are compared against
+ * their `latest` version on npm.
  */
 
-export const REPO = 'canvas-ui/canvas';
+export const REPO = 'canvas-ui/canvas-cli';
 export const NPM_PACKAGE = pkg.name;
 export const CLI_VERSION = pkg.version || '0.0.0';
 
@@ -74,14 +74,14 @@ export const isNewer = (candidate, current) => compareVersions(candidate, curren
  * How this CLI got here — decides how it updates itself.
  *   binary: bun-compiled release binary (scripts/install.sh, install.ps1)
  *   npm:    `npm install -g @augmentd-labs/canvas-cli` (bin/canvas.js under node)
- *   source: a monorepo checkout (apps/cli/src next to packages/cli-host)
+ *   source: a canvas-cli checkout (src/ next to packages/cli-host)
  */
 export function installMode({ execPath = process.execPath, versions = process.versions, here = HERE } = {}) {
     // path.basename on POSIX does not split backslashes; a Windows execPath must still resolve.
     const base = path.basename(execPath).split('\\').pop().toLowerCase();
     if (versions?.bun && /^canvas(-[a-z0-9-]+)?(\.exe)?$/.test(base)) return { mode: 'binary', path: execPath };
-    const sourceMarker = path.resolve(here, '../../../../packages/cli-host/package.json');
-    const inGit = path.resolve(here, '../../../../.git');
+    const sourceMarker = path.resolve(here, '../../packages/cli-host/package.json');
+    const inGit = path.resolve(here, '../../.git');
     if (existsSync(sourceMarker) && existsSync(inGit)) return { mode: 'source', path: path.resolve(here, '../..') };
     return { mode: 'npm', path: path.resolve(here, '../..') };
 }
@@ -111,38 +111,31 @@ async function fetchJson(url, init = {}) {
     return res.json();
 }
 
-/** Newest `cli-v*` GitHub Release: { version, tag, assets: { name → url } }. */
+/** Newest release (`v*`; `cli-v*` from the monorepo era also parses): { version, tag, assets: { name → url } }. */
 export async function latestCliRelease() {
     const releases = await fetchJson(`${GITHUB_API}/repos/${REPO}/releases?per_page=50`, { headers: githubHeaders() });
     const cli = (Array.isArray(releases) ? releases : [])
-        .filter((r) => !r.draft && !r.prerelease && /^cli-v\d/.test(r.tag_name || ''))
+        .filter((r) => !r.draft && !r.prerelease && /^(cli-)?v\d/.test(r.tag_name || ''))
         .map((r) => ({ tag: r.tag_name, version: parseVersion(r.tag_name)?.text, assets: Object.fromEntries((r.assets || []).map((a) => [a.name, a.browser_download_url])) }))
         .filter((r) => r.version)
         .sort((a, b) => compareVersions(b.version, a.version));
     return cli[0] || null;
 }
 
-/** A specific `cli-v<version>` release, for `--to`. */
+/** A specific `v<version>` release, for `--to`. */
 export async function cliRelease(version) {
     const v = parseVersion(version)?.text;
-    if (!v) throw new CanvasError(`'${version}' is not a version (2.7.1 or cli-v2.7.1)`);
-    const r = await fetchJson(`${GITHUB_API}/repos/${REPO}/releases/tags/cli-v${v}`, { headers: githubHeaders() });
+    if (!v) throw new CanvasError(`'${version}' is not a version (2.7.1 or v2.7.1)`);
+    const r = await fetchJson(`${GITHUB_API}/repos/${REPO}/releases/tags/v${v}`, { headers: githubHeaders() });
     return { tag: r.tag_name, version: v, assets: Object.fromEntries((r.assets || []).map((a) => [a.name, a.browser_download_url])) };
 }
 
-/** Newest published version on npm, or null when the registry is unreachable. */
+/** Newest published version on npm; null when the package is not published. */
 export async function latestNpmVersion(name = NPM_PACKAGE) {
-    const json = await fetchJson(`https://registry.npmjs.org/${name}/latest`);
-    return json?.version || null;
-}
-
-/** `canvasRev` + version of the package.json on a dist branch (what pack-dist published). */
-export async function distBranchManifest(branch) {
-    const res = await fetchWithTimeout(`https://raw.githubusercontent.com/${REPO}/${branch}/package.json`, { headers: { 'user-agent': `canvas-cli/${CLI_VERSION}` } });
+    const res = await fetchWithTimeout(`https://registry.npmjs.org/${name}/latest`);
     if (res.status === 404) return null;
-    if (!res.ok) throw new CanvasError(`${branch}: HTTP ${res.status}`);
-    const json = await res.json();
-    return { version: json.version || null, rev: json.canvasRev || null };
+    if (!res.ok) throw new CanvasError(`${name}: npm registry HTTP ${res.status}`);
+    return (await res.json())?.version || null;
 }
 
 /** HEAD commit (short) of a branch in a GitHub repo. */

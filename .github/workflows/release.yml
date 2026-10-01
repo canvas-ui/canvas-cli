@@ -1,0 +1,69 @@
+name: release
+
+# On every push to main:
+#   1. the CLI version has no v<version> Release yet → build the five
+#      bun-compiled binaries, verify them, create the v<version> tag + Release
+#      (binaries + SHA256SUMS — what scripts/install.sh and `canvas update`
+#      download);
+#   2. publish every npm package whose version npm does not have yet
+#      (scripts/publish-npm.mjs: canvas-cli, cli-host, cli-mirror, cli-server,
+#      cli-desktop).
+# An unbumped push does neither. Release = bump + push (`pnpm run release patch`
+# for the CLI; edit packages/*/package.json for a package).
+#
+# npm auth is trusted publishing: every package on npmjs.com names this repo
+# and THIS workflow file; GitHub OIDC replaces any token, provenance attached.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # tag + GitHub Release
+  id-token: write   # npm trusted publishing
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - uses: oven-sh/setup-bun@v2
+      # Trusted publishing needs npm >= 11.5.1; node 22 ships npm 10.
+      - run: npm install -g npm@latest
+      - run: pnpm install --frozen-lockfile
+      - id: cli
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=$(node -p "require('./package.json').version")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if gh release view "v$v" >/dev/null 2>&1; then echo "new=false" >> "$GITHUB_OUTPUT"; else echo "new=true" >> "$GITHUB_OUTPUT"; fi
+      - name: Build + verify binaries
+        if: steps.cli.outputs.new == 'true'
+        run: |
+          pnpm run build:all
+          bash scripts/verify-binaries.sh "${{ steps.cli.outputs.version }}"
+          cd dist && sha256sum canvas-* > SHA256SUMS
+      - name: GitHub Release
+        if: steps.cli.outputs.new == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VER: ${{ steps.cli.outputs.version }}
+        run: |
+          gh release create "v$VER" --target "$GITHUB_SHA" --title "canvas-cli v$VER" \
+            --notes "Single-file canvas CLI binaries (bun-compiled) for Linux x64/arm64, macOS x64/arm64 and Windows x64. npm: \`@augmentd-labs/canvas-cli@$VER\`." \
+            dist/canvas-linux dist/canvas-linux-arm dist/canvas-macos dist/canvas-macos-arm dist/canvas-windows.exe dist/SHA256SUMS
+      # After the Release, so a registry hiccup never costs the binaries.
+      - name: Publish to npm
+        run: node scripts/publish-npm.mjs

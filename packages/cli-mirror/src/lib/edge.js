@@ -29,15 +29,17 @@ export const EDGE_PM2_NAME = 'canvas-edge';
 export const EDGE_SOCKET = process.platform === 'win32' ? null : path.join(CANVAS_HOME, 'run', 'edge.sock');
 export const EDGE_PORT = Number(process.env.CANVAS_EDGE_PORT) || 8802;
 
-// canvas-edge ships as a self-contained artifact branch of the monorepo
-// (scripts/pack-dist.mjs → `edge-dist`). The CLI installs it into its OWN
-// prefix, ~/.canvas/edge, as an ordinary project dependency — not `npm -g`:
-// global installs of a git package with bundled deps came out with half the
-// package dirs empty (npm 11, silently), a plain install never did. No sudo,
-// no PATH games, and `canvas remote mirror edge update` is just `npm update` there.
-// CANVAS_EDGE_PACKAGE overrides the spec (a fork, a tag, the npm name later).
-export const EDGE_PACKAGE = process.env.CANVAS_EDGE_PACKAGE || 'github:canvas-ui/canvas#edge-dist';
+// canvas-edge is the npm package @augmentd-labs/canvas-edge (published from
+// canvas-ui/canvas-common). The CLI installs it into its OWN prefix,
+// ~/.canvas/edge, as an ordinary project dependency — not `npm -g`: global
+// installs of packages with bundled deps came out with half the package dirs
+// empty (npm 11, silently), a plain install never did. No sudo, no PATH games,
+// and `canvas remote mirror edge update` is just `npm update` there.
+// CANVAS_EDGE_PACKAGE overrides the dependency spec (a version, a tarball, a fork).
 export const EDGE_PKG_NAME = '@augmentd-labs/canvas-edge';
+export const EDGE_SPEC = process.env.CANVAS_EDGE_PACKAGE || 'latest';
+/** What gets fetched, for humans. */
+export const EDGE_PACKAGE = `${EDGE_PKG_NAME}@${EDGE_SPEC}`;
 export const EDGE_PREFIX = path.join(CANVAS_HOME, 'edge');
 export const EDGE_INSTALL = 'canvas remote mirror edge install';
 
@@ -113,7 +115,7 @@ export const EDGE_INSTALL_HINT = `canvas-edge not found. Run \`${EDGE_INSTALL}\`
 
 /** Install or update canvas-edge in ~/.canvas/edge (see cli-host/prefix-install). Returns the binary path. */
 export async function installEdge({ update = false } = {}) {
-    const dir = await installIntoPrefix({ prefix: EDGE_PREFIX, name: EDGE_PKG_NAME, spec: EDGE_PACKAGE, update, label: 'canvas-edge runtime managed by `canvas remote mirror edge`' });
+    const dir = await installIntoPrefix({ prefix: EDGE_PREFIX, name: EDGE_PKG_NAME, spec: EDGE_SPEC, update, label: 'canvas-edge runtime managed by `canvas remote mirror edge`' });
     const bin = path.join(dir, 'bin', 'canvas-edge');
     if (!existsSync(bin)) throw new CanvasError(`${EDGE_PREFIX} installed, but ${bin} is missing`);
     return bin;

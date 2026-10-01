@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Canvas CLI installer (Linux / macOS)
 #
-#   curl -fsSL https://raw.githubusercontent.com/canvas-ui/canvas/main/apps/cli/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/canvas-ui/canvas-cli/main/scripts/install.sh | bash
 #
-# Downloads the single-file binary from the latest `cli-v*` GitHub Release,
+# Downloads the single-file binary from the latest GitHub Release,
 # verifies it against SHA256SUMS, installs it as `canvas` plus the shortcut
 # wrappers, and (optionally) wires the prompt integration into your shell rc.
 #
@@ -11,11 +11,11 @@
 
 set -euo pipefail
 
-REPO="canvas-ui/canvas"
+REPO="canvas-ui/canvas-cli"
 INSTALL_DIR="${CANVAS_INSTALL_DIR:-$HOME/.local/bin}"
 CANVAS_HOME="${CANVAS_USER_HOME:-$HOME/.canvas}"
 BINARY_NAME="canvas"
-RAW_BASE="https://raw.githubusercontent.com/${REPO}/main/apps/cli"
+RAW_BASE="https://raw.githubusercontent.com/${REPO}/main"
 
 # Shortcut wrapper -> canvas module
 SHORTCUTS=("ws:workspace" "ctx:context" "context:context" "dot:dot" "agent:agent" "ag:agent" "hi:agent")
@@ -29,7 +29,7 @@ success() { echo "${GREEN}[ ok ]${NC} $1"; }
 warning() { echo "${YELLOW}[warn]${NC} $1" >&2; }
 error()   { echo "${RED}[fail]${NC} $1" >&2; exit 1; }
 
-VERSION=""           # cli-v<x.y.z>, resolved from the API when empty
+VERSION=""           # v<x.y.z>, resolved from the API when empty
 PROMPT_MODE="ask"    # ask | yes | no
 WITH_SHORTCUTS=true
 LOCAL_INSTALL=false
@@ -50,7 +50,7 @@ USAGE
 
 OPTIONS
     -h, --help          Show this help
-    --version <ver>     Install a specific release (2.1.11 or cli-v2.1.11)
+    --version <ver>     Install a specific release (2.1.11 or v2.1.11)
     --dir <path>        Install directory (default: \$HOME/.local/bin)
     --prompt            Install the prompt integration and wire it into ~/.bashrc / ~/.zshrc
     --no-prompt         Skip the prompt integration entirely
@@ -111,16 +111,12 @@ detect_asset() {
 }
 
 resolve_version() {
-    # The repository is a monorepo: one release feed carries cli-v*, web-v*,
-    # extension-v* and desktop-v* tags, so /releases/latest is NOT necessarily
-    # a CLI release. Take the newest cli-v* tag instead.
     local tag
-    tag=$(fetch "https://api.github.com/repos/${REPO}/releases?per_page=50" \
+    tag=$(fetch "https://api.github.com/repos/${REPO}/releases/latest" \
         | grep '"tag_name":' \
         | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/' \
-        | grep '^cli-v' \
         | head -n1) || true
-    [ -n "$tag" ] || error "Could not resolve the latest cli-v* release from GitHub"
+    [ -n "$tag" ] || error "Could not resolve the latest release from GitHub"
     echo "$tag"
 }
 
@@ -135,7 +131,7 @@ install_binary() {
     asset=$(detect_asset)
 
     if [ -n "$VERSION" ]; then
-        case "$VERSION" in cli-v*) tag="$VERSION" ;; v*) tag="cli-${VERSION}" ;; *) tag="cli-v${VERSION}" ;; esac
+        case "$VERSION" in cli-v*) tag="${VERSION#cli-}" ;; v*) tag="$VERSION" ;; *) tag="v${VERSION}" ;; esac
     else
         log "Resolving latest release..."
         tag=$(resolve_version)

@@ -56,7 +56,7 @@ export async function main(argv = process.argv.slice(2)) {
             const cmd = `canvas package install ${key}`;
             if (parsed.yes || !isTTY()) throw new UsageError(`'${path.join(' ')}' needs the '${key}' package (${c.description}; ${c.size}) — run \`${cmd}\``);
             io.print(`'${path.join(' ')}' is provided by the '${key}' package: ${c.description} (${c.size}).`);
-            if (!(await yesNo(`Download it now from ${packages.spec(key)}?`, true))) throw new UsageError(`Not installed. Run \`${cmd}\` when ready.`);
+            if (!(await yesNo(`Download it now from ${packages.source(key)}?`, true))) throw new UsageError(`Not installed. Run \`${cmd}\` when ready.`);
             await packages.install(key);
             io.success(`Package '${key}' installed into ${packages.prefix(key)}`);
             return dispatch({ tokens: parsed._.map(String), argv, registry: await loadRegistry(), ctx: { client, session, io, readStdin } });

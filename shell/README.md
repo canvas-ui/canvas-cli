@@ -18,8 +18,8 @@ For a more streamlined experience, use [canvas-cli](https://github.com/canvas-ui
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/yourusername/canvas-shell.git
-cd canvas-shell
+git clone https://github.com/canvas-ui/canvas-cli.git
+cd canvas-cli/shell
 ```
 
 2. Run the installation script:

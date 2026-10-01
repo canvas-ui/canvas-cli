@@ -15,15 +15,15 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
  * separate package fetched on first use into ~/.canvas/packages/<key> and
  * loaded from there. Until then a placeholder module answers with the offer.
  *
- * Each package is a monorepo workspace (packages/cli-<key>) published as the
- * self-contained `cli-<key>-dist` branch (scripts/pack-dist.mjs). From a
+ * Each package is a workspace in this repo (packages/cli-<key>) published to
+ * npm as one self-contained file (scripts/publish-npm.mjs bundles it: a
+ * compiled binary cannot resolve bare imports from an external file). From a
  * source checkout the workspace copy is used directly, so development needs
- * no install step. CANVAS_PACKAGE_SPEC_<KEY> overrides the fetch spec.
+ * no install step. CANVAS_PACKAGE_SPEC_<KEY> overrides the npm spec.
  */
 export const CATALOG = Object.freeze({
     mirror: {
         name: '@augmentd-labs/canvas-cli-mirror',
-        dist: 'cli-mirror-dist',
         mount: 'remote',
         description: 'Workspace mirrors on this device (canvas-edge / canvas-fuse), first-run wizard, pm2 supervision',
         size: '~1 MB, plus the canvas-edge runtime on the first daemon mirror',
@@ -31,7 +31,6 @@ export const CATALOG = Object.freeze({
     },
     server: {
         name: '@augmentd-labs/canvas-cli-server',
-        dist: 'cli-server-dist',
         mount: null,
         description: 'Run a local canvas-server under pm2 (install, start, stop, logs)',
         size: '<1 MB, plus a canvas-server checkout on `server install`',
@@ -39,7 +38,6 @@ export const CATALOG = Object.freeze({
     },
     desktop: {
         name: '@augmentd-labs/canvas-cli-desktop',
-        dist: 'cli-desktop-dist',
         mount: null,
         description: 'Fetch and launch the Canvas desktop app release for this platform',
         size: '<1 MB, plus the app download (~100 MB)',
@@ -50,17 +48,20 @@ export const CATALOG = Object.freeze({
 export const PACKAGES_DIR = path.join(CANVAS_HOME, 'packages');
 export const keys = () => Object.keys(CATALOG);
 
+/** The dependency spec written into the prefix (a dist-tag, range, tarball or git URL). */
 export function spec(key) {
-    const env = process.env[`CANVAS_PACKAGE_SPEC_${key.toUpperCase()}`];
-    return env || `github:canvas-ui/canvas#${CATALOG[key].dist}`;
+    return process.env[`CANVAS_PACKAGE_SPEC_${key.toUpperCase()}`] || 'latest';
 }
+
+/** What gets fetched, for humans: `@augmentd-labs/canvas-cli-mirror@latest`. */
+export const source = (key) => `${CATALOG[key].name}@${spec(key)}`;
 
 export const prefix = (key) => path.join(PACKAGES_DIR, key);
 
 /** The workspace copy when running from a source checkout (never inside a compiled binary). */
 export function devDir(key) {
     if (process.env.CANVAS_PACKAGES_NO_DEV) return null;
-    const dir = path.resolve(HERE, '../../../../packages', `cli-${key}`);
+    const dir = path.resolve(HERE, '../../packages', `cli-${key}`);
     return existsSync(path.join(dir, 'package.json')) ? dir : null;
 }
 
@@ -75,7 +76,7 @@ export function locate(key) {
 export async function load(key) {
     const where = locate(key);
     if (!where) return null;
-    // Installed artifacts are one self-contained file (pack-dist); the workspace copy runs from src.
+    // Installed artifacts are one self-contained file (dist/index.js); the workspace copy runs from src.
     const file = ['dist/index.js', 'src/index.js'].map((f) => path.join(where.dir, f)).find((f) => existsSync(f));
     if (!file) throw new Error(`${CATALOG[key].name}: no dist/index.js or src/index.js in ${where.dir}`);
     const mod = (await import(pathToFileURL(file).href)).default;

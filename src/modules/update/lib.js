@@ -3,14 +3,14 @@
 import path from 'node:path';
 import { CanvasError } from '../../core/errors.js';
 import * as packages from '../../core/packages.js';
-import { CLI_VERSION, cliRelease, cleanupOldBinary, distBranchManifest, installMode, latestCliRelease, latestNpmVersion, updateBinary, updateNpm } from '../../core/update.js';
+import { CLI_VERSION, cliRelease, cleanupOldBinary, installMode, latestCliRelease, latestNpmVersion, updateBinary, updateNpm } from '../../core/update.js';
 
 /*
  * The update plan: one row per component with what is installed, what is
  * available and the action that brings them together. Components:
  *
  *   cli            this executable (binary | npm | source)
- *   package:<key>  ~/.canvas/packages/<key>, compared by pack-dist's canvasRev
+ *   package:<key>  ~/.canvas/packages/<key>, compared with its latest version on npm
  *   service:<id>   whatever an installed package declares under `services`
  *                  ({ id, label, installed(), latest(), update({io}), restart?({io}) })
  *                  — canvas-edge from the mirror package, canvas-server from
@@ -59,12 +59,11 @@ async function packageRows() {
     for (const key of packages.keys()) {
         const where = packages.locate(key);
         if (!where || where.source === 'dev') continue;
-        const row = { component: `package:${key}`, kind: 'package', key, installed: where.rev ? `${where.version} (${short(where.rev)})` : where.version, latest: null, status: 'unknown', where: where.dir };
+        const row = { component: `package:${key}`, kind: 'package', key, installed: where.version, latest: null, status: 'unknown', where: where.dir };
         try {
-            const manifest = await distBranchManifest(packages.CATALOG[key].dist);
-            if (!manifest) { row.status = 'no published dist'; rows.push(row); continue; }
-            row.latest = manifest.rev ? `${manifest.version} (${short(manifest.rev)})` : manifest.version;
-            row.pending = manifest.rev && where.rev ? short(manifest.rev) !== short(where.rev) : manifest.version !== where.version;
+            row.latest = await latestNpmVersion(packages.CATALOG[key].name);
+            if (!row.latest) { row.status = 'not published'; rows.push(row); continue; }
+            row.pending = compare(row.latest, where.version) > 0;
             row.status = row.pending ? `→ ${row.latest}` : 'up to date';
         } catch (err) {
             row.status = `check failed: ${err.message}`;

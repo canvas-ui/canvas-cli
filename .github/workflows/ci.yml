@@ -1,0 +1,30 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No version input: pnpm/action-setup reads the packageManager field.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm -r --if-present run lint
+      - run: pnpm run test
+      # Build every shipped target on every PR, not just the dev binary: bun
+      # cross-compiles all five from this one Linux runner in well under a
+      # minute, and a broken target belongs in review, not in a release.
+      - run: pnpm run build:all
+      - run: bash scripts/verify-binaries.sh "$(node -p "require('./package.json').version")"
+      # Stage every npm package (bundles included) — a broken bundle fails here.
+      - run: node scripts/publish-npm.mjs --dry-run

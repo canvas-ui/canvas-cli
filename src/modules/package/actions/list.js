@@ -15,7 +15,7 @@ export default {
                 status: where ? (where.source === 'dev' ? 'workspace' : `installed ${where.version || ''}${where.rev ? ` (main@${where.rev})` : ''}`) : 'not installed',
                 commands: c.commands.join(', '),
                 size: c.size,
-                source: where?.source === 'dev' ? where.dir : packages.spec(key),
+                source: where?.source === 'dev' ? where.dir : packages.source(key),
             };
         });
         io.output(rows, { columns: ['package', 'status', 'commands', 'size', 'source'] });

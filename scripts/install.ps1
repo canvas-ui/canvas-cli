@@ -3,12 +3,12 @@
     Canvas CLI installer (Windows).
 
 .DESCRIPTION
-    Downloads canvas-windows.exe from the latest cli-v* GitHub Release,
+    Downloads canvas-windows.exe from the latest GitHub Release,
     verifies it against SHA256SUMS, installs it as canvas.exe and adds the
     install directory to the user PATH.
 
 .EXAMPLE
-    irm https://raw.githubusercontent.com/canvas-ui/canvas/main/apps/cli/scripts/install.ps1 | iex
+    irm https://raw.githubusercontent.com/canvas-ui/canvas-cli/main/scripts/install.ps1 | iex
 
 .EXAMPLE
     .\install.ps1 -Version 2.1.11 -InstallDir "$env:LOCALAPPDATA\Programs\canvas"
@@ -22,7 +22,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Repo = 'canvas-ui/canvas'
+$Repo = 'canvas-ui/canvas-cli'
 $Asset = 'canvas-windows.exe'
 
 function Write-Log     { param($m) Write-Host "[info] $m" -ForegroundColor Cyan }
@@ -31,16 +31,13 @@ function Write-Warn    { param($m) Write-Host "[warn] $m" -ForegroundColor Yello
 function Write-Fail    { param($m) Write-Host "[fail] $m" -ForegroundColor Red; exit 1 }
 
 function Resolve-CliTag {
-    # The monorepo publishes cli-v*, web-v*, extension-v* and desktop-v* into
-    # one release feed, so /releases/latest is not necessarily a CLI release.
-    $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases?per_page=50" -UseBasicParsing
-    $tag = ($releases | Where-Object { $_.tag_name -like 'cli-v*' } | Select-Object -First 1).tag_name
-    if (-not $tag) { Write-Fail 'Could not resolve the latest cli-v* release from GitHub' }
+    $tag = (Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -UseBasicParsing).tag_name
+    if (-not $tag) { Write-Fail 'Could not resolve the latest release from GitHub' }
     return $tag
 }
 
 if ($Version) {
-    $tag = if ($Version -like 'cli-v*') { $Version } elseif ($Version -like 'v*') { "cli-$Version" } else { "cli-v$Version" }
+    $tag = if ($Version -like 'cli-v*') { $Version.Substring(4) } elseif ($Version -like 'v*') { $Version } else { "v$Version" }
 } else {
     Write-Log 'Resolving latest release...'
     $tag = Resolve-CliTag
