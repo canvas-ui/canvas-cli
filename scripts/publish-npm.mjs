@@ -117,9 +117,17 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
             try {
                 // A tarball publishes from anywhere; a staged dir from inside it (npm
                 // resolves package files against the cwd).
-                execFileSync('npm', t.bundle ? cmd.filter((a) => a !== target) : cmd, { cwd: t.bundle ? target : root, stdio: 'inherit' });
+                execFileSync('npm', t.bundle ? cmd.filter((a) => a !== target) : cmd, { cwd: t.bundle ? target : root, stdio: ['ignore', 'inherit', 'pipe'] });
                 if (!dryRun) done.push(k);
-            } catch {
+            } catch (err) {
+                const stderr = String(err.stderr || '');
+                process.stderr.write(stderr);
+                // npm view lags a fresh publish (staged publishing): a version it
+                // did not show yet may already be there. That is not a failure.
+                if (/cannot publish over the previously published versions/i.test(stderr)) {
+                    console.log(`${name}@${version}: already on npm (registry view lagged) — skipping`);
+                    continue;
+                }
                 console.error(`${name}@${version}: publish FAILED`);
                 failed++;
             }
