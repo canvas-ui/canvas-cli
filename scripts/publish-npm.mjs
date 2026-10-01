@@ -109,7 +109,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
                 continue;
             }
             const cmd = ['publish', target, '--access', 'public'];
-            if (process.env.GITHUB_ACTIONS === 'true') cmd.push('--provenance');
+            // Provenance needs CI's OIDC identity; the CLI's publishConfig asks for it,
+            // so a local (first) publish must switch it off explicitly.
+            cmd.push(process.env.GITHUB_ACTIONS === 'true' ? '--provenance' : '--provenance=false');
             if (dryRun) cmd.push('--dry-run');
             console.log(`${name}@${version}: npm ${cmd.join(' ')}`);
             try {
