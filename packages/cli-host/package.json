@@ -27,5 +27,5 @@
         "@clack/prompts": "^1.7.0",
         "debug": "^4.4.3"
     },
-    "repository": { "type": "git", "url": "git+https://github.com/canvas-ui/canvas.git", "directory": "packages/cli-host" }
+    "repository": { "type": "git", "url": "git+https://github.com/canvas-ui/canvas-common.git", "directory": "packages/cli-host" }
 }

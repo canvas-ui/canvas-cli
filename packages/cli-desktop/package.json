@@ -10,5 +10,5 @@
     "scripts": { "lint": "eslint src --no-error-on-unmatched-pattern" },
     "engines": { "node": ">=20" },
     "dependencies": { "@augmentd-labs/canvas-cli-host": "workspace:*" },
-    "repository": { "type": "git", "url": "git+https://github.com/canvas-ui/canvas.git", "directory": "packages/cli-desktop" }
+    "repository": { "type": "git", "url": "git+https://github.com/canvas-ui/canvas-common.git", "directory": "packages/cli-desktop" }
 }
