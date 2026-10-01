@@ -8,11 +8,12 @@ import { CANVAS_HOME } from '@augmentd-labs/canvas-cli-host/paths';
 import { CanvasError } from '@augmentd-labs/canvas-cli-host/errors';
 
 /*
- * Desktop releases are `desktop-v*` tags on the monorepo (tauri-action
- * attaches one installer per OS). We pick the newest, choose the asset for
- * this platform, download it into ~/.canvas/apps/desktop and remember which.
+ * Desktop releases are `v*` tags on canvas-ui/canvas-desktop (tauri-action
+ * attaches one installer per OS; `desktop-v*` from the monorepo era still
+ * matches). We pick the newest, choose the asset for this platform, download
+ * it into ~/.canvas/apps/desktop and remember which.
  */
-export const REPO = process.env.CANVAS_DESKTOP_REPO || 'canvas-ui/canvas';
+export const REPO = process.env.CANVAS_DESKTOP_REPO || 'canvas-ui/canvas-desktop';
 export const APP_DIR = path.join(CANVAS_HOME, 'apps', 'desktop');
 const STATE = path.join(APP_DIR, 'installed.json');
 
@@ -25,7 +26,7 @@ const PATTERNS = {
 export async function latestRelease() {
     const res = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=30`, { headers: { accept: 'application/vnd.github+json', 'user-agent': 'canvas-cli' } });
     if (!res.ok) throw new CanvasError(`GitHub API ${res.status} listing releases of ${REPO}`);
-    const releases = (await res.json()).filter((r) => /^desktop-v/.test(r.tag_name) && !r.draft && !r.prerelease);
+    const releases = (await res.json()).filter((r) => /^(desktop-)?v\d/.test(r.tag_name) && !r.draft && !r.prerelease);
     if (releases.length === 0) throw new CanvasError(`No desktop release found on ${REPO}`);
     return releases.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
 }

@@ -1,6 +1,6 @@
 {
     "name": "@augmentd-labs/canvas-cli-desktop",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Canvas CLI package: `canvas desktop` — fetch and launch the Canvas desktop app release for this platform",
     "license": "AGPL-3.0-or-later",
     "type": "module",
