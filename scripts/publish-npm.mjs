@@ -4,9 +4,11 @@
 //
 //   @augmentd-labs/canvas-cli          the CLI (root)          pnpm pack
 //   @augmentd-labs/canvas-cli-host     extension SDK           pnpm pack
-//   @augmentd-labs/canvas-cli-mirror   lazily installed        single-file bundle
-//   @augmentd-labs/canvas-cli-server     packages (`canvas       single-file bundle
-//   @augmentd-labs/canvas-cli-desktop    package install …`)   single-file bundle
+//   @augmentd-labs/canvas-cli-server   lazily installed        single-file bundle
+//   @augmentd-labs/canvas-cli-desktop  (`canvas package …`)    single-file bundle
+//
+// (@augmentd-labs/canvas-cli-mirror is built into the CLI since 2.11.0 and
+// deprecated on npm; it is no longer published.)
 //
 // `pnpm pack` rewrites workspace:* to the real versions. The lazy packages are
 // esbuild-bundled into dist/index.js with every dependency inlined: the
@@ -29,7 +31,6 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const PACKAGES = {
     cli: { dir: '.' },
     'cli-host': { dir: 'packages/cli-host' },
-    'cli-mirror': { dir: 'packages/cli-mirror', bundle: 'src/index.js' },
     'cli-server': { dir: 'packages/cli-server', bundle: 'src/index.js' },
     'cli-desktop': { dir: 'packages/cli-desktop', bundle: 'src/index.js' },
 };

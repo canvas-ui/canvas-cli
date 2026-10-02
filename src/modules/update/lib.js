@@ -2,7 +2,9 @@
 
 import path from 'node:path';
 import { CanvasError } from '../../core/errors.js';
+import { existsSync, rmSync } from 'node:fs';
 import * as packages from '../../core/packages.js';
+import mirror from '../mirror/index.js';
 import { CLI_VERSION, cliRelease, cleanupOldBinary, installMode, latestCliRelease, latestNpmVersion, updateBinary, updateNpm } from '../../core/update.js';
 
 /*
@@ -11,10 +13,13 @@ import { CLI_VERSION, cliRelease, cleanupOldBinary, installMode, latestCliReleas
  *
  *   cli            this executable (binary | npm | source)
  *   package:<key>  ~/.canvas/packages/<key>, compared with its latest version on npm
- *   service:<id>   whatever an installed package declares under `services`
- *                  ({ id, label, installed(), latest(), update({io}), restart?({io}) })
- *                  — canvas-edge from the mirror package, canvas-server from
- *                  the server package.
+ *   service:<id>   what a built-in module or an installed package declares under
+ *                  `services` ({ id, label, installed(), latest(), update({io}),
+ *                  restart?({io}) }) — canvas-edge from the built-in mirror
+ *                  module, canvas-server from the server package.
+ *
+ * Retired packages (built into the CLI now) get a row that removes their
+ * leftover ~/.canvas/packages/<key>.
  */
 
 export const TARGETS = ['all', 'cli', 'packages', 'services'];
@@ -56,6 +61,10 @@ function compare(a, b) {
 
 async function packageRows() {
     const rows = [];
+    for (const key of packages.RETIRED) {
+        const dir = packages.prefix(key);
+        if (existsSync(dir)) rows.push({ component: `package:${key}`, kind: 'package', key, retired: true, installed: 'installed', latest: 'built in', status: 'built into the CLI — remove leftover', pending: true, where: dir });
+    }
     for (const key of packages.keys()) {
         const where = packages.locate(key);
         if (!where || where.source === 'dev') continue;
@@ -73,9 +82,9 @@ async function packageRows() {
     return rows;
 }
 
-/** Services declared by installed packages (the module's `services` export). */
+/** Services declared by built-in modules and installed packages (their `services` export). */
 export async function loadServices() {
-    const services = [];
+    const services = mirror.services.map((svc) => ({ ...svc, package: null }));
     for (const key of packages.keys()) {
         if (!packages.locate(key)) continue;
         let loaded = null;
@@ -135,7 +144,10 @@ export async function apply(rows, { io, spinner, restart = true } = {}) {
     for (const row of [...rows].filter((r) => r.pending).sort((a, b) => order[a.kind] - order[b.kind])) {
         const s = spinner();
         try {
-            if (row.kind === 'package') {
+            if (row.kind === 'package' && row.retired) {
+                rmSync(row.where, { recursive: true, force: true });
+                s.stop(`package ${row.key}: built into the CLI now — removed ${row.where}`);
+            } else if (row.kind === 'package') {
                 s.start(`Updating package ${row.key}…`);
                 await packages.install(row.key, { update: true });
                 const after = packages.locate(row.key);

@@ -7,8 +7,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 const home = mkdtempSync(path.join(os.tmpdir(), 'canvas-cli-mirror-'));
 process.env.CANVAS_USER_HOME = home;
 
-const config = await import('../src/lib/config.js');
-const fuse = await import('../src/lib/fuse.js');
+const config = await import('../src/modules/mirror/lib/config.js');
+const fuse = await import('../src/modules/mirror/lib/fuse.js');
 
 describe('mirror config', () => {
     before(() => { config.writeConfig({ ...config.DEFAULTS, mirrors: [] }); });
@@ -70,8 +70,8 @@ describe('mirror config', () => {
 
 describe('mirror wizard helpers', async () => {
     const { parseSelection } = await import('@augmentd-labs/canvas-cli-host/prompt');
-    const { parsePublishSpec } = await import('../src/lib/publish.js');
-    const { hubWorkspaceName, findHubWorkspace } = await import('../src/lib/hub.js');
+    const { parsePublishSpec } = await import('../src/modules/mirror/lib/publish.js');
+    const { hubWorkspaceName, findHubWorkspace } = await import('../src/modules/mirror/lib/hub.js');
     const { pm2Env } = await import('@augmentd-labs/canvas-cli-host/pm2');
 
     test('flagOff reads --no-<flag> from argv (declared booleans default to false)', () => {
@@ -83,7 +83,7 @@ describe('mirror wizard helpers', async () => {
     });
 
     test('edgeBin from mirrors.json wins over the PATH fallback', async () => {
-        const { edgeBinary } = await import('../src/lib/edge.js');
+        const { edgeBinary } = await import('../src/modules/mirror/lib/edge.js');
         const { writeFileSync, mkdirSync } = await import('node:fs');
         const dir = path.join(home, 'edge-checkout', 'bin');
         mkdirSync(dir, { recursive: true });

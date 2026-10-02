@@ -7,7 +7,7 @@ import * as packages from '../../../core/packages.js';
 export default {
     name: 'install',
     aliases: ['add'],
-    description: 'Fetch a package into ~/.canvas/packages/<name> (mirror | server | desktop | all)',
+    description: 'Fetch a package into ~/.canvas/packages/<name> (server | desktop | all)',
     positional: [{ name: 'package', required: true }],
     async run({ args, io }) {
         const names = args.package === 'all' ? packages.keys() : [String(args.package)];

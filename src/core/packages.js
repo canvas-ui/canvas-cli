@@ -9,11 +9,11 @@ import { installIntoPrefix, installedInPrefix } from '@augmentd-labs/canvas-cli-
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 /*
- * Lazily installed CLI packages. The core CLI stays small (auth, remotes,
- * workspaces, contexts…); anything that drags a runtime along — mirrors and
- * canvas-edge, a local canvas-server under pm2, the desktop app — is a
- * separate package fetched on first use into ~/.canvas/packages/<key> and
- * loaded from there. Until then a placeholder module answers with the offer.
+ * Lazily installed CLI packages. Anything that drags a runtime along — a
+ * local canvas-server under pm2, the desktop app — is a separate package
+ * fetched on first use into ~/.canvas/packages/<key> and loaded from there.
+ * (Mirrors were one until 2.11.0; that code is built in now, only the
+ * canvas-edge runtime it drives is still fetched on first use.) Until then a placeholder module answers with the offer.
  *
  * Each package is a workspace in this repo (packages/cli-<key>) published to
  * npm as one self-contained file (scripts/publish-npm.mjs bundles it: a
@@ -22,13 +22,6 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
  * no install step. CANVAS_PACKAGE_SPEC_<KEY> overrides the npm spec.
  */
 export const CATALOG = Object.freeze({
-    mirror: {
-        name: '@augmentd-labs/canvas-cli-mirror',
-        mount: 'remote',
-        description: 'Workspace mirrors on this device (canvas-edge / canvas-fuse), first-run wizard, pm2 supervision',
-        size: '~1 MB, plus the canvas-edge runtime on the first daemon mirror',
-        commands: ['remote mirror …', 'mirror …'],
-    },
     server: {
         name: '@augmentd-labs/canvas-cli-server',
         mount: null,
@@ -46,6 +39,8 @@ export const CATALOG = Object.freeze({
 });
 
 export const PACKAGES_DIR = path.join(CANVAS_HOME, 'packages');
+/** Former packages now built into the CLI; `canvas update` removes their leftovers. */
+export const RETIRED = Object.freeze(['mirror']);
 export const keys = () => Object.keys(CATALOG);
 
 /** The dependency spec written into the prefix (a dist-tag, range, tarball or git URL). */
@@ -53,7 +48,7 @@ export function spec(key) {
     return process.env[`CANVAS_PACKAGE_SPEC_${key.toUpperCase()}`] || 'latest';
 }
 
-/** What gets fetched, for humans: `@augmentd-labs/canvas-cli-mirror@latest`. */
+/** What gets fetched, for humans: `@augmentd-labs/canvas-cli-server@latest`. */
 export const source = (key) => `${CATALOG[key].name}@${spec(key)}`;
 
 export const prefix = (key) => path.join(PACKAGES_DIR, key);

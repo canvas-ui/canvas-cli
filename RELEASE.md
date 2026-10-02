@@ -26,8 +26,8 @@ Watch it: `gh run list --workflow=release.yml --limit 1`.
 
 ## The packages (`packages/*`)
 
-`cli-host` (extension SDK) and the lazily installed `cli-mirror`,
-`cli-server`, `cli-desktop` release the same way: bump the version in their
+`cli-host` (extension SDK) and the lazily installed `cli-server`,
+`cli-desktop` release the same way: bump the version in their
 `package.json`, push. `scripts/publish-npm.mjs` publishes every version npm
 does not have yet; the lazy packages are esbuild-bundled into one file each
 (the compiled CLI cannot resolve bare imports from an external file).

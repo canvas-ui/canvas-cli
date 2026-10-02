@@ -325,14 +325,14 @@ canvas remote bind admin@dev
 
 ### Packages (lazy modules)
 
-The core CLI is auth, remotes, workspaces, contexts, agents and config.
-Anything that drags a runtime along lives in a separate package that is
-fetched on first use into `~/.canvas/packages/<name>` (no global npm, no sudo)
-and loaded from there:
+The core CLI is auth, remotes (including workspace mirrors — `canvas remote
+mirror …`, built in since 2.11.0), workspaces, contexts, agents and config.
+A local server or the desktop app lives in a separate package that is fetched
+on first use into `~/.canvas/packages/<name>` (no global npm, no sudo) and
+loaded from there:
 
 | package | commands | brings |
 |---|---|---|
-| `mirror` | `canvas remote mirror …` (`canvas mirror …` alias) | workspace mirrors, the first-run wizard, the canvas-edge runtime, pm2 supervision |
 | `server` | `canvas server …` | a local canvas-server checkout under pm2 |
 | `desktop` | `canvas desktop …` | the desktop app release for this platform |
 
@@ -359,8 +359,8 @@ canvas update --yes --skip-restart
 | component | how it is checked | how it is updated |
 |---|---|---|
 | `cli` | newest GitHub Release (binary) or the npm registry | a release binary downloads the asset for this platform next to itself, verifies `SHA256SUMS`, runs it once and swaps it in (the same steps as `install.sh`); an npm install runs `npm install -g`; a source checkout is left to `git pull` |
-| `package:<name>` | `latest` on npm vs the installed version | `npm update` in `~/.canvas/packages/<name>` |
-| `service:edge` | `latest` of `@augmentd-labs/canvas-edge` on npm vs `~/.canvas/edge` (mirror package) | `npm update` there, then the daemon is re-created under pm2 (or respawned) when daemon mirrors exist |
+| `package:<name>` | `latest` on npm vs the installed version (a retired package — `mirror` — is removed) | `npm update` in `~/.canvas/packages/<name>` |
+| `service:edge` | `latest` of `@augmentd-labs/canvas-edge` on npm vs `~/.canvas/edge` (built-in mirror module) | `npm update` there, then the daemon is re-created under pm2 (or respawned) when daemon mirrors exist |
 | `service:server` | remote branch HEAD vs `~/.canvas/server` (server package) | `git pull --ff-only` + `npm install`, then `pm2 restart` when it runs |
 
 Packages go first (they carry the service updaters), then services, the CLI
@@ -372,7 +372,7 @@ what it runs to `canvas update` by exporting `services` from its module
 
 ### Mirrors (roaming profile)
 
-`canvas remote mirror` (package `mirror`) keeps workspaces from a hub in sync as real folders on this
+`canvas remote mirror` (alias `canvas mirror`) keeps workspaces from a hub in sync as real folders on this
 machine (`~/Workspaces/<workspace>` by default) through `canvas-fuse --mirror`:
 pinned folders stay available offline, everything else is fetched on demand,
 edits made offline are pushed when the hub is reachable, and a file that

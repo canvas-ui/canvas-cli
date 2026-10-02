@@ -85,12 +85,6 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
-  packages/cli-mirror:
-    dependencies:
-      '@augmentd-labs/canvas-cli-host':
-        specifier: workspace:*
-        version: link:../cli-host
-
   packages/cli-server:
     dependencies:
       '@augmentd-labs/canvas-cli-host':

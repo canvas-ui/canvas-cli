@@ -21,11 +21,12 @@ import edge from './actions/edge.js';
 import { edgeService } from './lib/service.js';
 
 /*
- * @augmentd-labs/canvas-cli-mirror — the `canvas remote mirror` module:
- * workspaces kept in sync as real folders on this device (canvas-edge daemon
- * or canvas-fuse --mirror), the first-run wizard, pm2 supervision. Fetched on
- * demand by the core CLI (`canvas package install mirror`); mounted under
- * `remote` by the core's package catalog.
+ * `canvas remote mirror` — workspaces kept in sync as real folders on this
+ * device (canvas-edge daemon or canvas-fuse --mirror), the first-run wizard,
+ * pm2 supervision. A submodule of `remote`, also reachable as the top-level
+ * `canvas mirror …`. Built into the CLI since 2.11.0 (before: the lazily
+ * installed @augmentd-labs/canvas-cli-mirror package); the canvas-edge runtime
+ * it drives is still fetched on first use (lib/edge.js).
  */
 export default {
     name: 'mirror',
@@ -37,6 +38,8 @@ export default {
     needsConnection: false,
     actions: [init, add, publish, remove, list, status, start, stop, restart, sync, pin, conflicts, direction, docker, supervisor, service, logs, edge],
     submodules: [],
-    // Local services `canvas update` checks and refreshes (see apps/cli/src/modules/update/lib.js).
+    // Also mounted at the top level: `canvas mirror x` === `canvas remote mirror x` (core/registry.js).
+    topLevel: true,
+    // Local services `canvas update` checks and refreshes (modules/update/lib.js).
     services: [edgeService],
 };

@@ -6,14 +6,16 @@ import * as packages from './packages.js';
 /**
  * Static modules plus the lazily installed packages (core/packages.js): an
  * installed package mounts its real module, a missing one mounts a
- * placeholder that offers the install. `mount: 'remote'` hangs the module
- * under `remote` (`canvas remote mirror …`); the bare `canvas mirror …`
- * stays reachable as an alias of the same module.
+ * placeholder that offers the install. A package's `mount: '<module>'`, or a
+ * built-in submodule's `topLevel: true` (mirror under `remote`), keeps the
+ * submodule reachable at the top level too: `canvas mirror …` is the same
+ * module as `canvas remote mirror …`.
  */
 export async function loadRegistry() {
     const raw = Object.values(moduleExports).filter((m) => m && m.name).map((m) => ({ ...m, submodules: [...(m.submodules || [])] }));
     const byRawName = new Map(raw.map((m) => [m.name, m]));
     const aliasTop = [];
+    for (const m of raw) for (const sub of m.submodules) if (sub.topLevel) aliasTop.push([sub.name, sub]);
     for (const key of packages.keys()) {
         let loaded = null;
         try { loaded = await packages.load(key); } catch (err) {
