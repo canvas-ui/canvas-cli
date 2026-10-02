@@ -101,7 +101,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
             const t = PACKAGES[k];
             const srcDir = join(root, t.dir);
             const { name, version } = readPkg(srcDir);
-            if (!packDir && published(name, version)) { console.log(`${name}@${version}: already on npm — skipping`); continue; }
+            if (!packDir && !dryRun && published(name, version)) { console.log(`${name}@${version}: already on npm — skipping`); continue; }
             const target = t.bundle ? await bundled(srcDir, t.bundle, join(out, k)) : packed(srcDir, out);
             if (packDir) {
                 if (t.bundle) execFileSync('npm', ['pack', '--pack-destination', packDir], { cwd: target, stdio: ['ignore', 'ignore', 'inherit'] });

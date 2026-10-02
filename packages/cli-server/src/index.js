@@ -20,6 +20,6 @@ export default {
     needsConnection: false,
     actions: [install, logs, restart, start, status, stop],
     submodules: [],
-    // Local services `canvas update` checks and refreshes (see apps/cli/src/modules/update/lib.js).
+    // Local services `canvas update` checks and refreshes (see canvas-cli/src/modules/update/lib.js).
     services: [serverService],
 };

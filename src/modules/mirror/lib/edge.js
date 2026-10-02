@@ -137,11 +137,11 @@ export async function ensureEdge({ interactive = false, io } = {}) {
     if (!interactive) return false;
     const choice = await select('canvas-edge (the folder sync daemon) is not installed on this device.', [
         { label: 'Install it now', value: 'install', hint: `${EDGE_PACKAGE} → ${EDGE_PREFIX}` },
-        { label: 'Use a local monorepo checkout', value: 'local', hint: 'runtimes/edge — path is remembered in mirrors.json' },
+        { label: 'Use a local canvas-common checkout', value: 'local', hint: 'runtimes/edge — path is remembered in mirrors.json' },
         { label: 'Skip', value: 'skip', hint: 'set CANVAS_EDGE_BIN and run `canvas remote mirror start all` later' },
     ]);
     if (choice === 'local') {
-        const raw = (await input({ message: 'Path to runtimes/edge (or the canvas-edge script)', placeholder: '~/Code/canvas/runtimes/edge' })).trim();
+        const raw = (await input({ message: 'Path to runtimes/edge (or the canvas-edge script)', placeholder: '~/Code/canvas/canvas-common/runtimes/edge' })).trim();
         const p = path.resolve(raw.replace(/^~(?=$|[\\/])/, os.homedir()));
         const bin = existsSync(path.join(p, 'bin', 'canvas-edge')) ? path.join(p, 'bin', 'canvas-edge') : existsSync(p) && !statSync(p).isDirectory() ? p : null;
         if (!bin) { io?.warn?.(`${p}: no bin/canvas-edge there`); return false; }

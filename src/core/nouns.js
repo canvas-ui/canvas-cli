@@ -13,7 +13,7 @@ const joinBody = (body) => (Array.isArray(body) ? body.join(' ') : String(body ?
 /**
  * The noun vocabulary. A noun is a document schema, so this table is a
  * mapping, not an invention: labels agree with the web
- * (apps/web/src/lib/schema-meta.ts) and the ids come from the same package the
+ * (canvas-web/src/lib/schema-meta.ts) and the ids come from the same package the
  * server's registry serves at /rest/v2/schemas.
  *
  * Nouns without a `build` are read-only: nothing in the CLI creates an email

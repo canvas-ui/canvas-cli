@@ -10,12 +10,12 @@ export const PM2_APP = 'canvas-server';
 export const SERVER_HOME = path.join(CANVAS_HOME, 'server');
 export const SERVER_REPO = process.env.CANVAS_SERVER_GIT || 'https://github.com/canvas-ui/canvas-server.git';
 
-/** A canvas-server checkout: CANVAS_SERVER_ROOT, the CLI-managed clone, or a sibling of the monorepo. */
+/** A canvas-server checkout: CANVAS_SERVER_ROOT, the CLI-managed clone, or a sibling of canvas-cli. */
 export function findServerRoot() {
     const candidates = [
         process.env.CANVAS_SERVER_ROOT,
         SERVER_HOME,
-        // <container>/canvas-server next to the monorepo (dev)
+        // <container>/canvas-server next to canvas-cli (dev)
         path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../../../../canvas-server'),
     ].filter(Boolean);
     for (const c of candidates) if (isValidRoot(path.resolve(c))) return path.resolve(c);

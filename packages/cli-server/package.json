@@ -1,7 +1,7 @@
 {
     "name": "@augmentd-labs/canvas-cli-server",
-    "version": "0.2.0",
-    "description": "Canvas CLI package: `canvas server` — install and supervise a local canvas-server (pm2)",
+    "version": "0.2.1",
+    "description": "Canvas CLI package: `canvas server` \u2014 install and supervise a local canvas-server (pm2)",
     "license": "AGPL-3.0-or-later",
     "type": "module",
     "exports": {

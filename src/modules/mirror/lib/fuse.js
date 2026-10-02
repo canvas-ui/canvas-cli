@@ -24,9 +24,9 @@ export function fuseBinary() {
     const candidates = [
         process.env.CANVAS_FUSE_BIN,
         path.join(os.homedir(), '.cargo', 'bin', 'canvas-fuse'),
-        // Dev checkout: <container>/canvas-fuse next to the monorepo.
-        path.resolve(HERE, '../../../../../../../canvas-fuse/target/release/canvas-fuse'),
-        path.resolve(HERE, '../../../../../../../canvas-fuse/target/debug/canvas-fuse'),
+        // Dev checkout: <container>/canvas-fuse next to canvas-cli.
+        path.resolve(HERE, '../../../../../canvas-fuse/target/release/canvas-fuse'),
+        path.resolve(HERE, '../../../../../canvas-fuse/target/debug/canvas-fuse'),
     ].filter(Boolean);
     for (const c of candidates) if (existsSync(c)) return c;
     return 'canvas-fuse'; // PATH lookup at spawn time

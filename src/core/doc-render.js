@@ -9,7 +9,7 @@ import { featuresToTags } from '@augmentd-labs/canvas-schemas';
  * `20260826`, so five of them look identical. A file without size or location
  * hides the one thing that distinguishes an uploaded copy from a device
  * pointer. So columns are per-schema, the way the web renders them
- * (apps/web/src/lib/document-display.ts), rather than one generic row.
+ * (canvas-web/src/lib/document-display.ts), rather than one generic row.
  *
  * `id` comes first everywhere because it is what the next command takes
  * (`note get <id>`, `note rm <id>`).
