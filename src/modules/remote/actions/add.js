@@ -1,5 +1,6 @@
 'use strict';
 
+import { normalizeTls, loadTls } from '@augmentd-labs/canvas-api-client/tls';
 import { parseRemoteIdentifier } from '../../../core/transport/address.js';
 import { input, password } from '../../../core/prompt.js';
 import { UsageError, CanvasError } from '../../../core/errors.js';
@@ -9,7 +10,7 @@ export default {
     name: 'add',
     description: 'Add a remote',
     positional: [{ name: 'id', required: true }, { name: 'url', required: true }],
-    flags: { token: 'string', apiBase: 'string' },
+    flags: { token: 'string', apiBase: 'string', 'tls-cert': 'string', 'tls-key': 'string' },
     async run({ args, flags, client, session, io }) {
         if (!args.id) throw new UsageError('Remote identifier required (user@remote)');
         if (!args.url) throw new UsageError('Remote URL required');
@@ -31,13 +32,15 @@ export default {
             url: args.url,
             apiBase: flags.apiBase || '/rest/v2',
             version: null,
+            ...((flags['tls-cert'] || flags['tls-key']) ? { tls: normalizeTls({ certFile: flags['tls-cert'], keyFile: flags['tls-key'] }) } : {}),
             auth: { method: token ? 'token' : 'password', tokenType: 'jwt', token: token || '' },
         };
 
+        loadTls(cfg.url, cfg.tls);
         io.info(`Testing '${args.id}'...`);
         let reachable = false;
+        const c = client.createTransient(cfg);
         try {
-            const c = client.createTransient(cfg);
             const info = await c.ping();
             reachable = true;
             if (info?.version) {
@@ -48,7 +51,7 @@ export default {
             }
         } catch (e) {
             io.warn(`Connection test failed: ${e.message}`);
-        }
+        } finally { await c.dispose(); }
 
         client.saveRemote(args.id, cfg);
         io.success(`Remote '${args.id}' added`);

@@ -8,15 +8,29 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: canvas-cli
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: canvas-cli
+      - uses: actions/checkout@v4
+        with:
+          repository: canvas-ui/canvas-common
+          path: canvas-common
       # No version input: pnpm/action-setup reads the packageManager field.
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: canvas-cli/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: canvas-cli/pnpm-lock.yaml
       - uses: oven-sh/setup-bun@v2
+      - run: sudo apt-get update && sudo apt-get install -y nginx openssl
+      - run: pnpm --dir ../canvas-common install --frozen-lockfile --ignore-scripts
       - run: pnpm install --frozen-lockfile
       - run: pnpm run lint
       - run: pnpm -r --if-present run lint
@@ -25,6 +39,7 @@ jobs:
       # cross-compiles all five from this one Linux runner in well under a
       # minute, and a broken target belongs in review, not in a release.
       - run: pnpm run build:all
+      - run: CANVAS_TEST_CLI_BIN="$PWD/dist/canvas-linux" node --test tests/tls.test.js
       - run: bash scripts/verify-binaries.sh "$(node -p "require('./package.json').version")"
       # Stage every npm package (bundles included) — a broken bundle fails here.
       - run: node scripts/publish-npm.mjs --pack artifacts

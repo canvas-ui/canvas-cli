@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@augmentd-labs/canvas-api-client':
-        specifier: ^0.3.0
-        version: 0.3.0
+        specifier: ^0.4.0
+        version: 0.4.0
       '@augmentd-labs/canvas-cli-host':
         specifier: workspace:*
         version: link:packages/cli-host
@@ -76,8 +76,8 @@ importers:
   packages/cli-host:
     dependencies:
       '@augmentd-labs/canvas-api-client':
-        specifier: ^0.3.0
-        version: 0.3.0
+        specifier: ^0.4.0
+        version: 0.4.0
       '@clack/prompts':
         specifier: ^1.7.0
         version: 1.7.0
@@ -93,8 +93,9 @@ importers:
 
 packages:
 
-  '@augmentd-labs/canvas-api-client@0.3.0':
-    resolution: {integrity: sha512-YQk0K6rTjJxizRsZc5c3WP22N7sHAHvEYXp3KBtWjPUhEVee3wK21o+wvdvy6DPWgkvrAPNuxsJl8RiHreg8qg==}
+  '@augmentd-labs/canvas-api-client@0.4.0':
+    resolution: {tarball: https://registry.npmjs.org/@augmentd-labs/canvas-api-client/-/canvas-api-client-0.4.0.tgz}
+    version: 0.4.0
     engines: {node: '>=20'}
 
   '@augmentd-labs/canvas-protocol@0.4.0':
@@ -411,6 +412,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@socket.io/component-emitter@3.1.2':
+    resolution: {integrity: sha512-9BCxFwvbGg/RsZK9tjXd8s4UcwR0MWeFQ1XEKIQVVvAGJyINdrqKMcTRyLoK8Rse1GjzLV9cwjWV1olXRWEXVA==}
+
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
 
@@ -570,6 +574,13 @@ packages:
 
   emoji-regex@8.0.0:
     resolution: {integrity: sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==}
+
+  engine.io-client@6.6.6:
+    resolution: {integrity: sha512-iY6QdftLQ9pyiPoX082bpf/u1UewnOaJrtJIF9T0++QB34lZrj0uP+Q/bj8AlUsAxqhnkTV2BS8SBZSxOmoV5Q==}
+
+  engine.io-parser@5.2.3:
+    resolution: {integrity: sha512-HqD3yTBfnBxIrbnM1DoD6Pcq8NECnh8d4As1Qgh0z5Gg3jRRIqijury0CL3ghu/edArpUYiYqQiDUQBIs4np3Q==}
+    engines: {node: '>=10.0.0'}
 
   esbuild@0.28.2:
     resolution: {integrity: sha512-HKVLS8dvII+xoKW9kmqxbRKrnWEXfJJr/FZhhJmiqIB0e053QNYFqOBouTMO/k5sID4MvCiUCvv8b9M4h32wIA==}
@@ -874,6 +885,10 @@ packages:
   undici-types@7.18.2:
     resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
 
+  undici@6.29.0:
+    resolution: {integrity: sha512-R+RODBqp6i2pPflGdq+xIOUkl+RNfGgHwoinecKu/JCuf2uO06cOKoDbI2P7Dn6KcswdKwrczbU6IYJ6K8X+wg==}
+    engines: {node: '>=18.17'}
+
   uri-js@4.4.1:
     resolution: {integrity: sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==}
 
@@ -886,15 +901,37 @@ packages:
     resolution: {integrity: sha512-BN22B5eaMMI9UMtjrGd5g5eCYPpCPDUy0FJXbYsaT5zYxjFOckS53SQDE3pWkVoWpHXVb3BrYcEN4Twa55B5cA==}
     engines: {node: '>=0.10.0'}
 
+  ws@8.21.3:
+    resolution: {integrity: sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
+  xmlhttprequest-ssl@2.1.2:
+    resolution: {integrity: sha512-TEU+nJVUUnA4CYJFLvK5X9AOeH4KvDvhIfm0vV1GaQRtchnG0hgK5p8hw/xjv8cunWYCsiPCSDzObPyhEwq3KQ==}
+    engines: {node: '>=0.4.0'}
+
   yocto-queue@0.1.0:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
 
 snapshots:
 
-  '@augmentd-labs/canvas-api-client@0.3.0':
+  '@augmentd-labs/canvas-api-client@0.4.0':
     dependencies:
       '@augmentd-labs/canvas-protocol': 0.4.0
+      engine.io-client: 6.6.6
+      undici: 6.29.0
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
 
   '@augmentd-labs/canvas-protocol@0.4.0': {}
 
@@ -1103,6 +1140,8 @@ snapshots:
   '@oven/bun-windows-x64@1.3.14':
     optional: true
 
+  '@socket.io/component-emitter@3.1.2': {}
+
   '@types/estree@1.0.9': {}
 
   '@types/json-schema@7.0.15': {}
@@ -1293,6 +1332,20 @@ snapshots:
   deep-is@0.1.4: {}
 
   emoji-regex@8.0.0: {}
+
+  engine.io-client@6.6.6:
+    dependencies:
+      '@socket.io/component-emitter': 3.1.2
+      debug: 4.4.3
+      engine.io-parser: 5.2.3
+      ws: 8.21.3
+      xmlhttprequest-ssl: 2.1.2
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+
+  engine.io-parser@5.2.3: {}
 
   esbuild@0.28.2:
     optionalDependencies:
@@ -1597,6 +1650,8 @@ snapshots:
 
   undici-types@7.18.2: {}
 
+  undici@6.29.0: {}
+
   uri-js@4.4.1:
     dependencies:
       punycode: 2.3.1
@@ -1606,5 +1661,9 @@ snapshots:
       isexe: 2.0.0
 
   word-wrap@1.2.5: {}
+
+  ws@8.21.3: {}
+
+  xmlhttprequest-ssl@2.1.2: {}
 
   yocto-queue@0.1.0: {}

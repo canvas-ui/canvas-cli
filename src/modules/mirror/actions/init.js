@@ -33,6 +33,8 @@ export default {
         hub: 'string',
         'hub-url': 'string',   // log in to a new server non-interactively (with --email/--password)
         'hub-name': 'string',
+        'tls-cert': 'string',
+        'tls-key': 'string',
         email: 'string',
         password: 'string',
         root: 'string',

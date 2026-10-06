@@ -468,3 +468,37 @@ listed in [NOTICE](NOTICE).
 
 ---
 This project is funded by [Augmentd Labs](https://augmentd.eu/en/labs)
+
+### Remotes behind nginx client certificate authentication
+
+Configure the identity before Canvas login:
+
+```sh
+canvas remote add user@private https://canvas.example.org --tls-cert /absolute/path/client-chain.crt --tls-key /absolute/path/client.key
+canvas remote tls set user@private --tls-cert /absolute/path/client-chain.crt --tls-key /absolute/path/client.key
+canvas remote tls show user@private
+canvas remote tls clear user@private
+```
+
+The certificate file contains the leaf first, then issuing intermediates. Use a
+protected unencrypted RSA or EC PEM private key (`chmod 600` on Unix; a user-only
+ACL on Windows). Certificate/key paths are saved under `tls.certFile` and
+`tls.keyFile` in the shared remotes store. Canvas password/API-token login remains
+required. Server certificate verification stays enabled.
+
+Mirror onboarding accepts the same `--tls-cert`/`--tls-key` options when using
+`--hub-url`; an existing selected hub uses its saved TLS settings. Daemon mirrors
+require canvas-edge 0.5.0 or newer; FUSE mirrors require canvas-fuse 0.10.0 or newer.
+Generated Docker configurations bind the certificate/key read-only and set
+`CANVAS_TLS_CERT`/`CANVAS_TLS_KEY` to container paths. The source paths must exist
+on the Docker host; move certificate files securely when deploying elsewhere.
+
+After renewal, replace the files at the same paths and restart daemon mirrors,
+mounts, and containers. Short CLI commands load files on each invocation. TLS
+configuration survives login/logout and remote renames. Clearing configuration
+does not delete certificate/key files or Windows native imports.
+
+For coordinated development before canvas-api-client 0.4.0 is published, pack it
+from the sibling canvas-common checkout and install that tarball locally. Publish
+the shared package before releasing this CLI; do not substitute production
+certificate files into tests.

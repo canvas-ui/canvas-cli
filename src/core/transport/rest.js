@@ -2,6 +2,7 @@
 
 import { CanvasApiClient } from '@augmentd-labs/canvas-api-client';
 import { API_BASE, DEFAULT_TIMEOUT_MS } from '@augmentd-labs/canvas-protocol';
+import { createTlsTransport } from '@augmentd-labs/canvas-api-client/tls';
 import session from '../session.js';
 import { remotes as remotesStore, resolveAlias } from '../storage.js';
 import { CanvasError, AuthError, UsageError } from '../errors.js';
@@ -20,7 +21,9 @@ import {
  */
 export class RemoteClient extends CanvasApiClient {
     constructor(remote) {
+        const transport = createTlsTransport(remote.url, remote.tls);
         super({
+            fetch: transport.fetch,
             baseUrl: remote.url,
             apiBase: remote.apiBase || API_BASE,
             timeout: remote.timeout || DEFAULT_TIMEOUT_MS,
@@ -28,6 +31,7 @@ export class RemoteClient extends CanvasApiClient {
             userAgent: 'canvas-cli',
         });
         this.remote = remote;
+        this.dispose = transport.dispose;
     }
 
     token() { return this.remote?.auth?.token || null; }
@@ -43,22 +47,27 @@ export class CanvasClient {
 
     saveRemote(id, cfg) {
         remotesStore.set(id, { ...cfg, lastSynced: new Date().toISOString() });
-        this._cache.delete(id);
+        this.clearCache(id);
     }
 
     updateRemote(id, patch) {
         const cur = remotesStore.get(id);
         if (!cur) throw new CanvasError(`Unknown remote: ${id}`);
         remotesStore.set(id, { ...cur, ...patch });
-        this._cache.delete(id);
+        this.clearCache(id);
     }
 
     removeRemote(id) {
         remotesStore.delete(id);
-        this._cache.delete(id);
+        this.clearCache(id);
     }
 
-    clearCache(id) { id ? this._cache.delete(id) : this._cache.clear(); }
+    clearCache(id) {
+        for (const key of id ? [id] : [...this._cache.keys()]) {
+            void this._cache.get(key)?.dispose().catch(() => {});
+            this._cache.delete(key);
+        }
+    }
 
     client(id) {
         const remoteId = id || session.boundRemote();

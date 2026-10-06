@@ -1,5 +1,6 @@
 'use strict';
 
+import { normalizeTls, loadTls } from '@augmentd-labs/canvas-api-client/tls';
 import { input, password, select } from '@augmentd-labs/canvas-cli-host/prompt';
 import { CanvasError, UsageError } from '@augmentd-labs/canvas-cli-host/errors';
 import { parseRemoteIdentifier } from '@augmentd-labs/canvas-cli-host/address';
@@ -25,7 +26,7 @@ export async function resolveHub(flags, client, session, { interactive = true, a
         if (!client.getRemote(flags.hub)) throw new UsageError(`Unknown remote '${flags.hub}' — add it with \`canvas remote add\``);
         return flags.hub;
     }
-    if (flags['hub-url']) return loginToHub(client, session, io, { url: flags['hub-url'], email: flags.email, password: flags.password, name: flags['hub-name'] });
+    if (flags['hub-url']) return loginToHub(client, session, io, { url: flags['hub-url'], email: flags.email, password: flags.password, name: flags['hub-name'], tls: (flags['tls-cert'] || flags['tls-key']) ? { certFile: flags['tls-cert'], keyFile: flags['tls-key'] } : undefined });
     const ids = Object.keys(client.remotes());
     if (ids.length === 0) {
         if (allowLogin && interactive) return loginToHub(client, session, io, {});
@@ -51,7 +52,7 @@ export async function resolveHub(flags, client, session, { interactive = true, a
  * remote entry (`<user>@<name>`), JWT, device registration. Returns the remote
  * id. Any missing piece is prompted for; `--yes` runs need all of them as flags.
  */
-export async function loginToHub(client, session, io, { url, email, password: pw, name }) {
+export async function loginToHub(client, session, io, { url, email, password: pw, name, tls }) {
     if (!url) url = (await input('Canvas server URL (e.g. https://canvas.example.org): ')).trim();
     if (!url) throw new UsageError('Hub URL required');
     if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
@@ -71,12 +72,15 @@ export async function loginToHub(client, session, io, { url, email, password: pw
     const user = email.split('@')[0].replace(/[^a-z0-9._-]/gi, '') || 'user';
     const remoteId = `${user}@${name}`;
     if (!parseRemoteIdentifier(remoteId)) throw new UsageError(`Cannot build a remote id from '${email}' and '${name}'`);
+    tls = normalizeTls(tls);
+    loadTls(url, tls);
     if (client.getRemote(remoteId)) {
         const existing = client.getRemote(remoteId);
         if (existing.url.replace(/\/+$/, '') !== url) throw new CanvasError(`Remote '${remoteId}' already points at ${existing.url}; pick another name`);
+        if (tls) client.updateRemote(remoteId, { tls });
         io?.info(`Remote '${remoteId}' exists — refreshing its login`);
     } else {
-        client.saveRemote(remoteId, { url, apiBase: '/rest/v2', version: null, auth: { method: 'password', tokenType: 'jwt', token: '' } });
+        client.saveRemote(remoteId, { url, ...(tls ? { tls } : {}), apiBase: '/rest/v2', version: null, auth: { method: 'password', tokenType: 'jwt', token: '' } });
     }
 
     client.clearCache(remoteId);

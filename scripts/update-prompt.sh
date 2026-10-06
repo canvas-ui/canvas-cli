@@ -112,7 +112,8 @@ _canvas_should_refresh_context_url() {
 _canvas_fetch_context_url() {
     _canvas_have jq || return 1
     _canvas_have curl || return 1
-    local remote context_id token api_url response url
+    local remote context_id token api_url response url cert_file key_file
+    local -a tls_args=()
     remote=$(_canvas_get_bound_remote) || return 1
     context_id=$(_canvas_get_context_id) || return 1
     [ -n "$remote" ] && [ -n "$context_id" ] || return 1
@@ -120,7 +121,14 @@ _canvas_fetch_context_url() {
     [ -n "$token" ] || return 1
     api_url=$(_canvas_build_api_url "$remote") || return 1
 
-    response=$(curl -fsS \
+    cert_file=$(_canvas_get_remote_value "$remote" tls.certFile)
+    key_file=$(_canvas_get_remote_value "$remote" tls.keyFile)
+    if [ -n "$cert_file" ] || [ -n "$key_file" ]; then
+        [ -n "$cert_file" ] && [ -n "$key_file" ] || return 1
+        case "$api_url" in https://*) ;; *) return 1 ;; esac
+        tls_args=(--cert "$cert_file" --key "$key_file")
+    fi
+    response=$(curl -fsS "${tls_args[@]}" \
         --max-time 0.5 \
         --connect-timeout 0.3 \
         -H "Authorization: Bearer $token" \

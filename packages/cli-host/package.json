@@ -1,6 +1,6 @@
 {
     "name": "@augmentd-labs/canvas-cli-host",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Canvas CLI extension SDK: prompts, errors, paths, storage, device identity, pm2 and prefix-install helpers shared by the core CLI and its lazily installed packages",
     "license": "AGPL-3.0-or-later",
     "type": "module",
@@ -23,7 +23,7 @@
     },
     "engines": { "node": ">=20" },
     "dependencies": {
-        "@augmentd-labs/canvas-api-client": "^0.3.0",
+        "@augmentd-labs/canvas-api-client": "^0.4.0",
         "@clack/prompts": "^1.7.0",
         "debug": "^4.4.3"
     },

@@ -11,6 +11,7 @@ import { findHubWorkspace, listHubWorkspaces, resolveHub } from '../lib/hub.js';
  * itself from the environment (runtimes/edge Dockerfile); nothing is written
  * on this device. Fill in the folder to bind at /data.
  */
+const shellStr = v => "'" + String(v).replace(/'/g, "'\"'\"'") + "'";
 const yamlStr = (v) => JSON.stringify(String(v));
 
 export default {
@@ -34,7 +35,12 @@ export default {
         const deviceId = flags['device-id'] || `edge-${ws.name}`.replace(/[^a-zA-Z0-9._-]+/g, '-');
         const deviceName = flags['device-name'] || deviceId;
         const image = flags.image || 'ghcr.io/canvas-ui/canvas-edge:latest';
+        const tlsMounts = remote.tls ? [
+            { source: remote.tls.certFile, target: '/run/canvas-tls/client.crt' },
+            { source: remote.tls.keyFile, target: '/run/canvas-tls/client.key' },
+        ] : [];
         const env = {
+            ...(remote.tls ? { CANVAS_TLS_CERT: '/run/canvas-tls/client.crt', CANVAS_TLS_KEY: '/run/canvas-tls/client.key' } : {}),
             CANVAS_HUB_URL: remote.url,
             CANVAS_HUB_TOKEN: token,
             CANVAS_WORKSPACE: ws.name,
@@ -46,8 +52,9 @@ export default {
         const name = `canvas-edge-${ws.name}`.replace(/[^a-zA-Z0-9._-]+/g, '-');
         if (flags.run) {
             const parts = ['docker run -d', `--name ${name}`, '--restart unless-stopped',
-                ...Object.entries(env).map(([k, v]) => `-e ${k}=${JSON.stringify(v)}`),
-                `-v ${JSON.stringify(folder)}:/data`, `-v ${name}-config:/config`, `-v ${name}-state:/state`, image];
+                ...Object.entries(env).map(([k, v]) => `-e ${shellStr(`${k}=${v}`)}`),
+                ...tlsMounts.map(m => `-v ${shellStr(`${m.source}:${m.target}:ro`)}`),
+                `-v ${shellStr(`${folder}:/data`)}`, `-v ${name}-config:/config`, `-v ${name}-state:/state`, image];
             io.print(parts.join(' \\\n  '));
             return;
         }
@@ -61,6 +68,7 @@ export default {
             '    environment:',
             ...Object.entries(env).map(([k, v]) => `      ${k}: ${yamlStr(v)}`),
             '    volumes:',
+            ...tlsMounts.flatMap(m => ['      - type: bind', `        source: ${yamlStr(m.source)}`, `        target: ${yamlStr(m.target)}`, '        read_only: true']),
             `      - ${yamlStr(folder)}:/data`,
             `      - ${name}-config:/config`,
             `      - ${name}-state:/state`,
@@ -69,6 +77,7 @@ export default {
             `  ${name}-state:`,
         ];
         io.print(lines.join('\n'));
+        if (remote.tls) io.warn('Certificate and key source paths must exist on the Docker host. Restart the container after renewal.');
         if (!flags.token) io.warn(`Token is ${remoteId}'s own; mint one for the container instead and pass --token.`);
     },
 };

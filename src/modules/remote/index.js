@@ -12,6 +12,7 @@ import rename from './actions/rename.js';
 import show from './actions/show.js';
 import sync from './actions/sync.js';
 
+import tls from './tls/index.js';
 import device from './device/index.js';
 import mirror from '../mirror/index.js';
 import resolve from './resolve.js';
@@ -30,5 +31,5 @@ export default {
     // `remote admin@dev device show`. Unknown tokens stay positionals.
     resourceArg: { name: 'remote', resolve, optional: true },
     actions: [add, bind, current, list, login, logout, ping, remove, rename, show, sync],
-    submodules: [device, mirror],
+    submodules: [device, mirror, tls],
 };
