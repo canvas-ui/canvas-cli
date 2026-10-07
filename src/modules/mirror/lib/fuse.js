@@ -13,7 +13,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 /*
  * Thin wrapper around the canvas-fuse binary. The mirror engine lives there
- * (persistent Home tree, content cache, write-back queue, reconcile); this
+ * (Home as a real folder, index + base ledger, write-back queue, reconcile
+ * with a folder scan on every mount); this
  * module only turns a mirrors.json entry into the right command line and reads
  * the daemon's status back. Credentials never go on the command line: the
  * mount resolves them from ~/.canvas/config/remotes.json via `--remote <id>`,
@@ -44,6 +45,8 @@ export async function fuseAvailable() {
 export function mountArgs(mirror, { detach = false } = {}) {
     // -w names the mount dir (<root>/<folderName>); the hub resolves it case-insensitively.
     const args = ['mount', '-w', mirror.folderName || mirror.workspaceName, mirror.root, '--remote', mirror.remote, '--mirror'];
+    // canvas-fuse >= 0.11 keeps every file local and ignores pins (accepted
+    // for older binaries).
     for (const pin of mirror.pins || []) args.push('--pin', pin);
     for (const glob of mirror.ignore || []) args.push('--ignore', glob);
     if (mirror.conflicts) args.push('--conflicts', mirror.conflicts);

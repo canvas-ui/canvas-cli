@@ -25,7 +25,7 @@ export const DIRECTIONS = ['bi', 'pull', 'push'];
 // per FUSE mount / for the edge daemon), 'edge' (a FUSE mount supervised by the
 // canvas-edge daemon as a `fuse` unit — daemon entries are always edge-run).
 export const SUPERVISORS = ['manual', 'pm2', 'edge'];
-// fuse = canvas-fuse --mirror (Linux, on-demand + pins); daemon = canvas-edge real folder.
+// fuse = canvas-fuse --mirror (Linux, real folder under a FUSE view; pins ignored since 0.11); daemon = canvas-edge real folder.
 export const CLIENTS = ['fuse', 'daemon'];
 
 const store = new JsonFile(FILE_MIRRORS, { ...DEFAULTS, mirrors: [] });

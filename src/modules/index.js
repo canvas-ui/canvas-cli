@@ -11,3 +11,5 @@ export { default as alias } from './alias/index.js';
 export { default as role } from './role/index.js';
 export { default as pkg } from './package/index.js';
 export { default as update } from './update/index.js';
+export { default as init } from './init/index.js';
+export { default as runtime } from './runtime/index.js';
