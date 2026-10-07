@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { input, password, select, isTTY } from '@augmentd-labs/canvas-cli-host/prompt';
 import { noStart } from '../mirror/lib/config.js';
 import { runtimeInstallation } from '../runtime/install.js';
+import { runtimeConfigFile } from '../runtime/config.js';
 
 export const initFlags = { name: 'string', model: 'string', 'ollama-url': 'string', 'server-url': 'string', remote: 'string',
   'token-file': 'string', 'stt-url': 'string', 'tts-url': 'string', 'stt-model': 'string', voice: 'string',
@@ -32,8 +33,8 @@ export async function initialize(kind, { args, flags, client, session, io }) {
   if (options['server-url'] && !token && !options['token-file'] && interactive) token = await password('Canvas server API token');
   if (options['server-url'] && !token && !options['token-file']) throw new Error('Registration needs --token-file, CANVAS_PAIRING_TOKEN, or an authenticated --remote');
   io.info?.('Preparing the local Canvas runtime…');
-  const install = await runtimeInstallation({ background: !options.foreground && !noStart(flags) });
-  const script = path.join(install.dir, 'bin', `canvas-${kind}.js`);
+  const install = await runtimeInstallation({ kind, background: !options.foreground && !noStart(flags) });
+  const script = install.script;
   const runtimeArgs = [script, root, noStart(flags) || !options.foreground ? '--init-only' : '--foreground'];
   for (const key of Object.keys(initFlags)) {
     if (typeof options[key] === 'string' && options[key] && !['remote'].includes(key)) runtimeArgs.push(`--${key}`, options[key]);
@@ -45,7 +46,7 @@ export async function initialize(kind, { args, flags, client, session, io }) {
   });
   await run(install.node, runtimeArgs, env);
   if (!options.foreground && !noStart(flags)) {
-    const cfg = JSON.parse(fs.readFileSync(path.join(root, '.workspace/runtime.json'), 'utf8'));
+    const cfg = JSON.parse(fs.readFileSync(runtimeConfigFile(root, kind), 'utf8'));
     const launch = [script, root, '--foreground'];
     for (const key of ['host','port']) if (options[key]) launch.push(`--${key}`, options[key]);
     await run(install.node, [install.pm2, 'start', install.node, '--name', `canvas-${cfg.instanceId}`, '--interpreter', 'none', '--', ...launch], install.env);
