@@ -16,18 +16,30 @@ export default { name: 'runtime', description: 'Manage local workspace and agent
         try { connections = JSON.parse(fs.readFileSync(path.join(root, '.workspace/connections.json'), 'utf8')); } catch { /* no remotes */ }
         let online = false;
         if (endpoint) online = await fetch(`${endpoint.url}/rest/v2/runtime/status`, { headers: { Authorization: `Bearer ${config.token}` }, signal: AbortSignal.timeout(2000) }).then(r => r.ok).catch(() => false);
-        io.output({ root, kind: config.kind, instanceId: config.instanceId, online, endpoint: online ? endpoint.url : null, connections }); return;
+        io.output({ root, kind: config.kind, instanceId: config.instanceId, online, endpoint: online ? endpoint.url : null,
+          connections: online ? connections : connections.map(c => ({ ...c, connected: false, registered: false })) }); return;
       }
       if (action === 'detach') {
-        for (const remote of config.remotes || []) {
-          const response = await fetch(`${remote.url}/rest/v2/edge/registrations/${config.instanceId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${remote.token}` } });
-          if (!response.ok && response.status !== 404) throw new Error(`Could not detach from ${remote.url}: HTTP ${response.status}`);
-        }
+        const remotes = config.remotes || [];
         config.remotes = [];
-        fs.writeFileSync(file, JSON.stringify(config, null, 2), { mode: 0o600 });
+        fs.writeFileSync(`${file}.tmp`, JSON.stringify(config, null, 2), { mode: 0o600 });
+        fs.renameSync(`${file}.tmp`, file);
+        // Detach must also work for a foreground process or an offline hub.
+        try {
+          const endpoint = JSON.parse(fs.readFileSync(path.join(root, '.workspace/endpoint.json'), 'utf8'));
+          const response = await fetch(`${endpoint.url}/rest/v2/runtime/status`, { headers: { Authorization: `Bearer ${config.token}` }, signal: AbortSignal.timeout(2000) });
+          if (response.ok && (await response.json()).payload.instanceId === config.instanceId) process.kill(endpoint.pid, 'SIGHUP');
+        } catch { /* stopped runtime */ }
+        for (const remote of remotes) {
+          try {
+            const response = await fetch(`${remote.url}/rest/v2/edge/registrations/${config.instanceId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${remote.token}` }, signal: AbortSignal.timeout(10000) });
+            if (!response.ok && response.status !== 404) throw new Error(`HTTP ${response.status}`);
+          } catch (error) { io.warn?.(`Detached locally; remove the offline registration on ${remote.url}: ${error.message}`); }
+        }
+        io.success('Runtime detached; local data and API are preserved'); return;
       }
       const install = await runtimeInstallation({ background: true });
-      let command = [action === 'detach' ? 'restart' : action, `canvas-${config.instanceId}`];
+      let command = [action, `canvas-${config.instanceId}`];
       if (action === 'start') command = ['start', install.node, '--name', `canvas-${config.instanceId}`, '--interpreter', 'none', '--', path.join(install.dir,'bin',`canvas-${config.kind === 'agent' ? 'agent' : 'workspace'}.js`), root, '--foreground'];
       await new Promise((resolve,reject) => { const child = spawn(install.node, [install.pm2, ...command], { stdio: 'inherit', env: install.env }); child.once('error',reject); child.once('exit',code => code === 0 ? resolve() : reject(new Error(`PM2 exited ${code}`))); });
     } })) };

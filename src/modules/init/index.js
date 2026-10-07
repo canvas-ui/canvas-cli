@@ -25,6 +25,7 @@ export async function initialize(kind, { args, flags, client, session, io }) {
     ]);
   }
   const remote = options.remote ? client.getRemote(options.remote) : (!options['server-url'] && !flags['local-only'] ? client.getRemote(session.boundRemote()) : null);
+  if (options.remote && !remote) throw new Error(`Unknown remote: ${options.remote}`);
   options['server-url'] ||= remote?.url;
   if (!options['server-url'] && interactive && !flags['local-only']) options['server-url'] = await input({ message: 'Canvas server URL (empty for local-only)', defaultValue: '' });
   let token = remote?.auth?.token || process.env.CANVAS_PAIRING_TOKEN;
