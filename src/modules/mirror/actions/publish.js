@@ -2,7 +2,7 @@
 
 import { UsageError } from '@augmentd-labs/canvas-cli-host/errors';
 import { yesNo } from '@augmentd-labs/canvas-cli-host/prompt';
-import { CONFLICT_MODES, DELETE_MODES, DIRECTIONS, readConfig, splitList, noStart } from '../lib/config.js';
+import { CONFLICT_MODES, DEFAULT_CONFLICT_MODE, DELETE_MODES, DIRECTIONS, readConfig, splitList, noStart } from '../lib/config.js';
 import { resolveHub } from '../lib/hub.js';
 import { configurePublishedMirror, ensureHubWorkspace, inspectFolder, parsePublishSpec } from '../lib/publish.js';
 import { ensureEdgeService } from '../lib/edge.js';
@@ -27,7 +27,7 @@ export default {
         if (info.mirrored) throw new UsageError(`${spec.folder} is already mirrored as ${info.mirrored.id}`);
 
         const remoteId = await resolveHub(flags, client, session, { interactive, io });
-        const conflicts = flags.conflicts || 'prompt';
+        const conflicts = flags.conflicts || DEFAULT_CONFLICT_MODE;
         if (!CONFLICT_MODES.includes(conflicts)) throw new UsageError(`--conflicts must be ${CONFLICT_MODES.join('|')}`);
         const deletes = flags.deletes || 'propagate';
         if (!DELETE_MODES.includes(deletes)) throw new UsageError(`--deletes must be ${DELETE_MODES.join('|')}`);

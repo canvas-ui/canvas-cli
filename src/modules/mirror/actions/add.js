@@ -26,7 +26,7 @@ export default {
             remoteId, workspaceId: ws.id, workspaceName: ws.name, folderName: ws.folderName, root,
             pins: [...specPins, ...splitList(flags.pin).map((p) => parseWorkspaceSpec(`x:${p}`).pins[0])],
             ignore: splitList(flags.ignore),
-            conflicts: flags.conflicts || 'prompt',
+            conflicts: flags.conflicts || undefined,
             deletes: flags.deletes || 'propagate',
             direction: flags.direction || 'bi',
             stateDir: flags['state-dir'] || null,

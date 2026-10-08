@@ -22,7 +22,10 @@ describe('mirror config', () => {
 
     test('build/upsert/find/remove', () => {
         const root = path.join(home, 'Workspaces');
-        const m = config.buildMirror({ remoteId: 'admin@dev', workspaceId: 'uuid-1', workspaceName: 'devel', root, pins: ['UI/**'], conflicts: 'rename' });
+        const m = config.buildMirror({ remoteId: 'admin@dev', workspaceId: 'uuid-1', workspaceName: 'devel', root, pins: ['UI/**'] });
+        assert.equal(m.conflicts, 'rename');
+        const args = fuse.mountArgs(m);
+        assert.equal(args[args.indexOf('--conflicts') + 1], 'rename');
         assert.equal(m.id, 'admin@dev/devel');
         assert.equal(m.mountpoint, path.join(root, 'devel'));
         config.upsertMirror(m);

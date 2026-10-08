@@ -6,7 +6,7 @@ import path from 'node:path';
 import { input, intro, log, multiSelect, note, outro, select, spinner, yesNo } from '@augmentd-labs/canvas-cli-host/prompt';
 import { UsageError } from '@augmentd-labs/canvas-cli-host/errors';
 import { ensureDeviceRegistered } from '@augmentd-labs/canvas-cli-host/device-registration';
-import { CLIENTS, CONFLICT_MODES, DELETE_MODES, DIRECTIONS, buildMirror, defaultRoot, findMirror, flagOff, listMirrors, parseWorkspaceSpec, readConfig, setRoot, splitList, upsertMirror, noStart } from '../lib/config.js';
+import { CLIENTS, CONFLICT_MODES, DEFAULT_CONFLICT_MODE, DELETE_MODES, DIRECTIONS, buildMirror, defaultRoot, findMirror, flagOff, listMirrors, parseWorkspaceSpec, readConfig, setRoot, splitList, upsertMirror, noStart } from '../lib/config.js';
 import { ensurePM2 } from '../lib/pm2.js';
 import { findHubWorkspace, listHubWorkspaces, resolveHub } from '../lib/hub.js';
 import { configurePublishedMirror, ensureHubWorkspace, inspectFolder, parsePublishSpec } from '../lib/publish.js';
@@ -135,11 +135,11 @@ async function pickModes(flags, interactive) {
     let conflicts = flags.conflicts;
     if (!conflicts && interactive) {
         conflicts = await select('When a file changed here AND on the hub:', [
-            { label: 'Keep the hub version, park mine in the hub inbox', value: 'prompt', hint: 'decide later in the web UI (recommended)' },
-            { label: 'Keep both', value: 'rename', hint: 'mine becomes "name (conflict from <device> <date>)"' },
+            { label: 'Keep both', value: 'rename', hint: 'mine becomes "name (conflict from <device> <date>)" (recommended)' },
+            { label: 'Keep the hub version, park mine in the hub inbox', value: 'prompt', hint: 'decide later in the web UI' },
         ]);
     }
-    conflicts = conflicts || 'prompt';
+    conflicts = conflicts || DEFAULT_CONFLICT_MODE;
     if (!CONFLICT_MODES.includes(conflicts)) throw new UsageError(`--conflicts must be ${CONFLICT_MODES.join('|')}`);
     const deletes = flags.deletes || 'propagate';
     if (!DELETE_MODES.includes(deletes)) throw new UsageError(`--deletes must be ${DELETE_MODES.join('|')}`);

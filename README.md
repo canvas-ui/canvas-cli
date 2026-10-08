@@ -377,8 +377,11 @@ machine (`~/Workspaces/<workspace>` by default) through `canvas-fuse --mirror`:
 pinned folders stay available offline, everything else is fetched on demand,
 edits made offline are pushed when the hub is reachable, and a file that
 changed on both sides is never overwritten — the hub's version keeps the name
-and yours lands in the hub's conflict inbox (or, with `--conflicts rename`,
-next to it as `name (conflict from <device> <date>).ext`).
+and yours is saved next to it as `name (conflict from <device> <date>).ext`
+(`--conflicts rename`, the default). Use `--conflicts prompt` for the hub's
+conflict inbox instead. Existing mirrors with `conflicts: "prompt"` keep that
+setting; change it to `"rename"` in `mirrors.json` and restart the mirror to
+use conflict copies.
 
 `canvas remote mirror init` is the first-run wizard (arrow-key prompts on a
 terminal, plain readline when piped): log in to a server (or pick a
@@ -400,7 +403,7 @@ again later to add more or to restart what is configured. Folder names keep the 
 ```bash
 canvas remote mirror init                                  # wizard: hub login, root, mirror and/or publish, start
 canvas remote mirror init --hub-url https://canvas.example.org --email me@x.org --password … \
-    --root ~/Workspaces --workspace Universe,devel:UI/,Docs/ --publish ~/Code/UI:ui --conflicts prompt --service --yes
+    --root ~/Workspaces --workspace Universe,devel:UI/,Docs/ --publish ~/Code/UI:ui --conflicts rename --service --yes
 canvas remote mirror add work --pin Contracts/ --conflicts rename
 canvas remote mirror publish ~/Code/UI --name ui           # this folder becomes workspace 'ui' on the hub, synced in place (daemon)
 canvas remote mirror publish ~/Notes --attach              # sync into an existing hub workspace of the same name
