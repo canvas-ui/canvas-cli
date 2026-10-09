@@ -30,7 +30,8 @@ test('source installations select independent agent and private workspace execut
 
 test('managed installs use separate dependency trees and honor Git package bin paths', async () => {
     const configurations = [
-        ['agent', '@augmentd-labs/canvas-agent-runtime', '^0.1.0', 'bin/canvas-agent.js'],
+        // A Git spec that differs from the default: the installed spec must stick without a reinstall.
+        ['agent', '@augmentd-labs/canvas-agent-runtime', 'github:canvas-ui/canvas-agentd#main', 'src/local.js'],
         ['workspace', '@augmentd-labs/canvas-workspaced', 'git+https://github.com/canvas-ui/canvas-common.git#main', 'runtimes/workspaced/bin/canvas-workspace.js'],
     ];
     process.env.CANVAS_RUNTIME_NO_DEV = '1';
@@ -46,7 +47,14 @@ test('managed installs use separate dependency trees and honor Git package bin p
             assert.equal(installed.script, path.join(dir, script));
         }
         const agentDeps = JSON.parse(fs.readFileSync(path.join(prefix, 'agent/package.json'))).dependencies;
-        assert.deepEqual(Object.keys(agentDeps), ['@augmentd-labs/canvas-agent-runtime']);
+        assert.deepEqual(agentDeps, { '@augmentd-labs/canvas-agent-runtime': 'github:canvas-ui/canvas-agentd#main' });
+        // An explicit --runtime-package that differs from the installed spec triggers a reinstall through npm.
+        // The install runs `npm` from the managed node's directory: a fake one there proves no network is touched.
+        fs.mkdirSync(path.join(home, 'fakebin'));
+        process.env.CANVAS_RUNTIME_NODE = path.join(home, 'fakebin/node');
+        fs.writeFileSync(path.join(home, 'fakebin/npm'), '#!/bin/sh\necho "fake npm" >&2; exit 1\n', { mode: 0o755 });
+        fs.symlinkSync(process.execPath, process.env.CANVAS_RUNTIME_NODE);
+        await assert.rejects(runtimeInstallation({ kind: 'agent', pkg: 'github:canvas-ui/canvas-agentd#v0.4.0' }), /fake npm[^]*--runtime-package/);
     } finally {
         delete process.env.CANVAS_RUNTIME_NO_DEV;
         delete process.env.CANVAS_RUNTIME_NODE;

@@ -8,7 +8,9 @@ import { runtimeConfigFile } from '../runtime/config.js';
 
 export const initFlags = { name: 'string', model: 'string', 'ollama-url': 'string', 'server-url': 'string', remote: 'string',
   'token-file': 'string', 'stt-url': 'string', 'tts-url': 'string', 'stt-model': 'string', voice: 'string',
-  host: 'string', port: 'string', foreground: 'boolean', 'no-start': 'boolean', 'local-only': 'boolean', yes: 'boolean' };
+  host: 'string', port: 'string', 'runtime-package': 'string', foreground: 'boolean', 'no-start': 'boolean', 'local-only': 'boolean', yes: 'boolean' };
+// CLI-only flags: consumed here, never forwarded to the runtime executable.
+const cliFlags = ['remote', 'runtime-package'];
 export async function initialize(kind, { args, flags, client, session, io }) {
   const root = path.resolve(args.path || process.cwd());
   const interactive = isTTY() && !flags.yes;
@@ -33,11 +35,11 @@ export async function initialize(kind, { args, flags, client, session, io }) {
   if (options['server-url'] && !token && !options['token-file'] && interactive) token = await password('Canvas server API token');
   if (options['server-url'] && !token && !options['token-file']) throw new Error('Registration needs --token-file, CANVAS_PAIRING_TOKEN, or an authenticated --remote');
   io.info?.('Preparing the local Canvas runtime…');
-  const install = await runtimeInstallation({ kind, background: !options.foreground && !noStart(flags) });
+  const install = await runtimeInstallation({ kind, background: !options.foreground && !noStart(flags), pkg: options['runtime-package'] });
   const script = install.script;
   const runtimeArgs = [script, root, noStart(flags) || !options.foreground ? '--init-only' : '--foreground'];
   for (const key of Object.keys(initFlags)) {
-    if (typeof options[key] === 'string' && options[key] && !['remote'].includes(key)) runtimeArgs.push(`--${key}`, options[key]);
+    if (typeof options[key] === 'string' && options[key] && !cliFlags.includes(key)) runtimeArgs.push(`--${key}`, options[key]);
   }
   const env = { ...install.env, ...(token ? { CANVAS_PAIRING_TOKEN: token } : {}) };
   const run = (file, argv, runEnv) => new Promise((resolve, reject) => {

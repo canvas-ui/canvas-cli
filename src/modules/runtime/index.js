@@ -5,7 +5,7 @@ import { runtimeInstallation } from './install.js';
 import { runtimeConfigFile } from './config.js';
 
 export default { name: 'runtime', description: 'Manage local workspace and agent processes', needsConnection: false, defaultAction: 'status',
-  actions: ['status','start','stop','restart','logs','token','detach'].map(action => ({ name: action, description: `${action} a local runtime`, positional: [{ name: 'path' }], flags: { kind: 'string' },
+  actions: ['status','start','stop','restart','logs','token','detach'].map(action => ({ name: action, description: `${action} a local runtime`, positional: [{ name: 'path' }], flags: { kind: 'string', 'runtime-package': 'string' },
     async run({ args, flags = {}, io }) {
       const root = path.resolve(args.path || process.cwd());
       const file = runtimeConfigFile(root, flags.kind);
@@ -40,7 +40,7 @@ export default { name: 'runtime', description: 'Manage local workspace and agent
         }
         io.success('Runtime detached; local data and API are preserved'); return;
       }
-      const install = await runtimeInstallation({ kind: config.kind, background: true });
+      const install = await runtimeInstallation({ kind: config.kind, background: true, pkg: flags['runtime-package'] });
       let command = [action, `canvas-${config.instanceId}`];
       if (action === 'start') command = ['start', install.node, '--name', `canvas-${config.instanceId}`, '--interpreter', 'none', '--', install.script, root, '--foreground'];
       await new Promise((resolve,reject) => { const child = spawn(install.node, [install.pm2, ...command], { stdio: 'inherit', env: install.env }); child.once('error',reject); child.once('exit',code => code === 0 ? resolve() : reject(new Error(`PM2 exited ${code}`))); });
