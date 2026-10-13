@@ -59,13 +59,15 @@ archived:
 
 | Platform | Architecture | Asset |
 | --- | --- | --- |
-| **Linux** | x64 | `canvas-linux` |
-| **Linux** | ARM64 | `canvas-linux-arm` |
-| **macOS** | x64 | `canvas-macos` |
-| **macOS** | ARM64 (Apple Silicon) | `canvas-macos-arm` |
-| **Windows** | x64 | `canvas-windows.exe` |
+| **Linux** | x64 | [canvas-linux](https://github.com/canvas-ui/canvas-cli/releases/latest/download/canvas-linux) |
+| **Linux** | ARM64 | [canvas-linux-arm](https://github.com/canvas-ui/canvas-cli/releases/latest/download/canvas-linux-arm) |
+| **macOS** | x64 | [canvas-macos](https://github.com/canvas-ui/canvas-cli/releases/latest/download/canvas-macos) |
+| **macOS** | ARM64 (Apple Silicon) | [canvas-macos-arm](https://github.com/canvas-ui/canvas-cli/releases/latest/download/canvas-macos-arm) |
+| **Windows** | x64 | [canvas-windows.exe](https://github.com/canvas-ui/canvas-cli/releases/latest/download/canvas-windows.exe) |
 
-Grab them from the [releases page](https://github.com/canvas-ui/canvas-cli/releases/latest).
+These stable URLs always resolve to the latest published release.
+Download [SHA256SUMS](https://github.com/canvas-ui/canvas-cli/releases/latest/download/SHA256SUMS)
+to verify the binary.
 
 ```bash
 sha256sum -c SHA256SUMS --ignore-missing   # every release ships SHA256SUMS

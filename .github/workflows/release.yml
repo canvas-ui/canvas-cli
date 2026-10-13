@@ -61,7 +61,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VER: ${{ steps.cli.outputs.version }}
         run: |
-          gh release create "v$VER" --target "$GITHUB_SHA" --title "canvas-cli v$VER" \
+          gh release create "v$VER" --latest --target "$GITHUB_SHA" --title "canvas-cli v$VER" \
             --notes "Single-file canvas CLI binaries (bun-compiled) for Linux x64/arm64, macOS x64/arm64 and Windows x64. npm: \`@augmentd-labs/canvas-cli@$VER\`." \
             dist/canvas-linux dist/canvas-linux-arm dist/canvas-macos dist/canvas-macos-arm dist/canvas-windows.exe dist/SHA256SUMS
       # After the Release, so a registry hiccup never costs the binaries.
