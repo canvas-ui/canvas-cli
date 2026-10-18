@@ -36,7 +36,7 @@ let cached = null;
  * axis a fleet actually differs along. Linux only; /etc/os-release is the one
  * cross-distro contract for it.
  *
- * NB: canvas-server/src/core/device/ServerDevice.js carries the same probe.
+ * NB: canvas-server/src/hub/devices/ServerDevice.js carries the same probe.
  * Separate packages with no shared dependency, and the file format is frozen by
  * spec — cheaper duplicated than coupled.
  */
