@@ -60,3 +60,33 @@ test('managed installs use separate dependency trees and honor Git package bin p
         delete process.env.CANVAS_RUNTIME_NODE;
     }
 });
+
+test('runtime token --rotate rewrites a stopped runtime and asks a running one', async (t) => {
+    const { default: runtime } = await import('../src/modules/runtime/index.js');
+    const token = runtime.actions.find(action => action.name === 'token');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'canvas-cli-rotate-'));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const file = path.join(root, '.workspace/runtime.json');
+    fs.mkdirSync(path.dirname(file));
+    fs.writeFileSync(file, JSON.stringify({ kind: 'workspace', token: 'canvas-local-old' }));
+    const outputs = [];
+    const io = { output: value => outputs.push(value) };
+
+    await token.run({ args: { path: root }, flags: { rotate: true }, io });
+    const offline = JSON.parse(fs.readFileSync(file, 'utf8')).token;
+    assert.match(offline, /^canvas-local-[0-9a-f]{64}$/);
+    assert.equal(outputs.pop(), offline);
+    assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+
+    const http = await import('node:http');
+    const server = http.createServer((req, res) => {
+        assert.equal(req.headers.authorization, `Bearer ${offline}`);
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ payload: req.url === '/rest/v2/runtime/token' ? { token: 'canvas-local-new' } : {} }));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => server.close());
+    fs.writeFileSync(path.join(root, '.workspace/endpoint.json'), JSON.stringify({ url: `http://127.0.0.1:${server.address().port}` }));
+    await token.run({ args: { path: root }, flags: { rotate: true }, io });
+    assert.equal(outputs.pop(), 'canvas-local-new');
+});

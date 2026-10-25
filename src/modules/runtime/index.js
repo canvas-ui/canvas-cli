@@ -1,16 +1,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { runtimeInstallation } from './install.js';
 import { runtimeConfigFile } from './config.js';
 
 export default { name: 'runtime', description: 'Manage local workspace and agent processes', needsConnection: false, defaultAction: 'status',
-  actions: ['status','start','stop','restart','logs','token','detach'].map(action => ({ name: action, description: `${action} a local runtime`, positional: [{ name: 'path' }], flags: { kind: 'string', 'runtime-package': 'string' },
+  actions: ['status','start','stop','restart','logs','token','detach'].map(action => ({ name: action, description: `${action} a local runtime`, positional: [{ name: 'path' }], flags: { kind: 'string', 'runtime-package': 'string', ...(action === 'token' ? { rotate: 'boolean' } : {}) },
     async run({ args, flags = {}, io }) {
       const root = path.resolve(args.path || process.cwd());
       const file = runtimeConfigFile(root, flags.kind);
       const state = path.dirname(file);
       const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (action === 'token' && flags.rotate) { io.output(await rotateToken({ file, state, config })); return; }
       if (action === 'token') { io.output(config.token); return; }
       if (action === 'status') {
         let endpoint = null, connections = [];
@@ -24,8 +26,7 @@ export default { name: 'runtime', description: 'Manage local workspace and agent
       if (action === 'detach') {
         const remotes = config.remotes || [];
         config.remotes = [];
-        fs.writeFileSync(`${file}.tmp`, JSON.stringify(config, null, 2), { mode: 0o600 });
-        fs.renameSync(`${file}.tmp`, file);
+        writeConfig(file, config);
         // Detach must also work for a foreground process or an offline hub.
         try {
           const endpoint = JSON.parse(fs.readFileSync(path.join(state, 'endpoint.json'), 'utf8'));
@@ -45,3 +46,30 @@ export default { name: 'runtime', description: 'Manage local workspace and agent
       if (action === 'start') command = ['start', install.node, '--name', `canvas-${config.instanceId}`, '--interpreter', 'none', '--', install.script, root, '--foreground'];
       await new Promise((resolve,reject) => { const child = spawn(install.node, [install.pm2, ...command], { stdio: 'inherit', env: install.env }); child.once('error',reject); child.once('exit',code => code === 0 ? resolve() : reject(new Error(`PM2 exited ${code}`))); });
     } })) };
+
+function writeConfig(file, config) {
+  fs.writeFileSync(`${file}.tmp`, JSON.stringify(config, null, 2), { mode: 0o600 });
+  fs.renameSync(`${file}.tmp`, file);
+}
+
+/**
+ * A new local owner token. A running runtime replaces it itself (it holds the
+ * config in memory and drops sockets on the old token); a stopped one is
+ * rewritten here.
+ */
+async function rotateToken({ file, state, config }) {
+  let endpoint = null;
+  try { endpoint = JSON.parse(fs.readFileSync(path.join(state, 'endpoint.json'), 'utf8')); } catch { /* stopped */ }
+  if (endpoint?.url) {
+    const headers = { Authorization: `Bearer ${config.token}` };
+    const status = await fetch(`${endpoint.url}/rest/v2/runtime/status`, { headers, signal: AbortSignal.timeout(2000) }).catch(() => null);
+    if (status?.ok) {
+      const response = await fetch(`${endpoint.url}/rest/v2/runtime/token`, { method: 'POST', headers, signal: AbortSignal.timeout(10000) });
+      if (!response.ok) throw new Error(response.status === 404 ? 'This runtime cannot rotate its token; update it first' : `Token rotation failed: HTTP ${response.status}`);
+      return (await response.json()).payload.token;
+    }
+  }
+  config.token = `canvas-local-${randomBytes(32).toString('hex')}`;
+  writeConfig(file, config);
+  return config.token;
+}
