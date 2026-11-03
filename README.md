@@ -23,6 +23,19 @@ prompt integration into your rc file.
 
 No runtime is required — the binaries are bun-compiled and self-contained.
 
+To initialize a local agent, select the AgentD repository or a downloaded archive:
+
+```bash
+canvas init agent . --runtime-package git@github.com:canvas-ui/canvas-agentd.git
+canvas init agent . --runtime-package ~/Downloads/canvas-agentd-main.zip
+canvas init agent . --runtime-package ./canvas-agentd-0.3.2.tgz
+```
+
+Local runtimes support Linux x64/arm64. Git sources use your Git credentials;
+ZIP archives require `unzip` and are packed and cached under `~/.canvas/runtime/agent`.
+Subsequent starts reuse the installed package. Without an explicit source, managed
+agent installation uses `https://github.com/canvas-ui/canvas-agentd.git`.
+
 Flags can be passed through the pipe:
 
 ```bash
