@@ -54,7 +54,7 @@ test('managed installs use separate dependency trees and honor Git package bin p
         process.env.CANVAS_RUNTIME_NODE = path.join(home, 'fakebin/node');
         fs.writeFileSync(path.join(home, 'fakebin/npm'), '#!/bin/sh\necho "fake npm" >&2; exit 1\n', { mode: 0o755 });
         fs.symlinkSync(process.execPath, process.env.CANVAS_RUNTIME_NODE);
-        await assert.rejects(runtimeInstallation({ kind: 'agent', pkg: 'github:canvas-ui/canvas-agentd#v0.4.0' }), /fake npm[^]*--runtime-package/);
+        await assert.rejects(runtimeInstallation({ kind: 'agent', pkg: '^0.4.0' }), /fake npm[^]*--runtime-package/);
     } finally {
         delete process.env.CANVAS_RUNTIME_NO_DEV;
         delete process.env.CANVAS_RUNTIME_NODE;

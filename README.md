@@ -32,7 +32,8 @@ canvas init agent . --runtime-package ./canvas-agentd-0.3.2.tgz
 ```
 
 Local runtimes support Linux x64/arm64. Git sources use your Git credentials;
-ZIP archives require `unzip` and are packed and cached under `~/.canvas/runtime/agent`.
+Git repositories are cloned without submodules and packed for installation. ZIP
+archives require `unzip`. Both sources are cached under `~/.canvas/runtime/agent`.
 Subsequent starts reuse the installed package. Without an explicit source, managed
 agent installation uses `https://github.com/canvas-ui/canvas-agentd.git`.
 

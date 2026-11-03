@@ -37,7 +37,15 @@ test('ZIP, tarball and Git packages install an executable with its runtime depen
     await exec('git', ['init', '-q', source]);
     await exec('git', ['add', '.'], { cwd: source });
     await exec('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'fixture'], { cwd: source });
-    for (const [label, spec] of [['zip', archive], ['git', `git+file://${source}`]]) {
+    const { stdout: revision } = await exec('git', ['rev-parse', 'HEAD'], { cwd: source });
+    fs.writeFileSync(path.join(source, '.gitmodules'), '[submodule "src/db"]\n path = src/db\n url = file:///nonexistent/canvas-private-db.git\n');
+    await exec('git', ['update-index', '--add', '--cacheinfo', `160000,${revision.trim()},src/db`], { cwd: source });
+    await exec('git', ['add', '.gitmodules'], { cwd: source });
+    await exec('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'inaccessible submodule'], { cwd: source });
+    await exec('git', ['tag', 'runtime-test'], { cwd: source });
+    const gitArchive = await preparePackageSource(`git+file://${source}#runtime-test`, options);
+    assert.match(gitArchive, /\.tgz$/);
+    for (const [label, spec] of [['zip', archive], ['git', gitArchive]]) {
         const destination = path.join(root, label);
         fs.mkdirSync(destination);
         fs.writeFileSync(path.join(destination, 'package.json'), JSON.stringify({ private: true, dependencies: { 'canvas-agentd': spec } }));
