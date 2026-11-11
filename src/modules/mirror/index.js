@@ -12,6 +12,7 @@ import restart from './actions/restart.js';
 import sync from './actions/sync.js';
 import pin from './actions/pin.js';
 import conflicts from './actions/conflicts.js';
+import deletes from './actions/deletes.js';
 import direction from './actions/direction.js';
 import docker from './actions/docker.js';
 import supervisor from './actions/supervisor.js';
@@ -36,7 +37,7 @@ export default {
     defaultAction: 'status',
     defaultPluralAction: 'list',
     needsConnection: false,
-    actions: [init, add, publish, remove, list, status, start, stop, restart, sync, pin, conflicts, direction, docker, supervisor, service, logs, edge],
+    actions: [init, add, publish, remove, list, status, start, stop, restart, sync, pin, conflicts, deletes, direction, docker, supervisor, service, logs, edge],
     submodules: [],
     // Also mounted at the top level: `canvas mirror x` === `canvas remote mirror x` (core/registry.js).
     topLevel: true,

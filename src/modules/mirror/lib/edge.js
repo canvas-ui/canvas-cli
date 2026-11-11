@@ -98,6 +98,8 @@ function request(method, urlPath, body) {
 export async function edgeStatus() { return request('GET', '/status'); }
 export async function edgeReload() { return request('POST', '/reload'); }
 export async function edgeResync(id) { return request('POST', `/mirrors/${encodeURIComponent(id)}/resync`); }
+export async function edgeHeldDeletes(id) { return request('GET', `/mirrors/${encodeURIComponent(id)}/deletes`); }
+export async function edgeSettleDeletes(id, verb) { return request('POST', `/mirrors/${encodeURIComponent(id)}/deletes/${verb}`); }
 export async function edgeRunning() { try { await edgeStatus(); return true; } catch { return false; } }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

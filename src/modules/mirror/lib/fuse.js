@@ -99,6 +99,7 @@ export async function conflicts(mountpoint) {
     if (!res.ok) return [];
     try { return JSON.parse(res.stdout || '[]'); } catch { return []; }
 }
+export async function deletes(mountpoint, op) { return run(['deletes', op, mountpoint]); }
 export async function trash(mountpoint, op, key) { return run(['trash', op, mountpoint, ...(key ? [key] : [])]); }
 
 /** Stream a foreground mount (used by `mirror start --foreground`). */
