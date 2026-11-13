@@ -6,18 +6,17 @@ import { promisify } from 'node:util';
 import { walkFiles, ingestFile, guessMime, fsMeta, readXattrs } from './ingest.js';
 import { parseTargets, targetBody } from './docbuilders.js';
 import device from '../../dot/lib/device.js';
-import { UsageError } from '../../../core/errors.js';
+import { UsageError, CanvasError } from '../../../core/errors.js';
 
 const statAsync = promisify(stat);
 const BATCH_SIZE = 50;
 
 /**
- * Streaming upload body for a local file. Under Bun (the compiled binary),
- * Bun.file() is a Blob with known size — Bun fetch's best-supported body;
- * under node a Readable streams via fetch duplex:'half'. Both avoid
- * buffering whole files in memory.
+ * Streaming upload body for a local file: a Readable the api client sends as
+ * a duplex:'half' stream, so whole files never sit in memory. Not Bun.file():
+ * a Blob body segfaults fetch inside bun-compiled executables (Bun 1.3.14).
  */
-const blobBodyForPath = (fp) => (typeof Bun !== 'undefined' ? Bun.file(fp) : createReadStream(fp));
+const blobBodyForPath = (fp) => createReadStream(fp);
 
 /**
  * Shared file ingestion for the `add`(=upload) / `upload` / `index` verbs, over a
@@ -42,11 +41,10 @@ const blobBodyForPath = (fp) => (typeof Bun !== 'undefined' ? Bun.file(fp) : cre
  */
 export async function ingestPath(ctx, { mode, adapter, useTargets = true }) {
     const { args, flags, io } = ctx;
-    const srcRaw = args.source ?? args.type;
-    if (!srcRaw) { throw new UsageError('Path required (e.g. /path/to/file-or-dir)'); }
+    const sources = [args.source, ...(args.rest || [])].filter(Boolean);
+    if (sources.length === 0) { throw new UsageError('Path required (e.g. /path/to/file-or-dir)'); }
 
     const targets = useTargets ? parseTargets(flags) : null;
-    const absPath = resolve(srcRaw);
     const extraExclude = flags.exclude
         ? String(flags.exclude).split(',').map(s => s.trim()).filter(Boolean)
         : [];
@@ -56,20 +54,22 @@ export async function ingestPath(ctx, { mode, adapter, useTargets = true }) {
     const contentTimeline = flags.timeline || 'content';
     const verb = mode === 'upload' ? 'uploaded' : 'indexed';
 
-    let pathStat;
-    try { pathStat = await statAsync(absPath); }
-    catch { throw new UsageError(`Path not found: ${absPath}`); }
-    if (!pathStat.isFile() && !pathStat.isDirectory()) {
-        throw new UsageError('Path must be a regular file or directory');
-    }
-
     const files = [];
-    if (pathStat.isDirectory()) {
-        io.info(`Scanning ${absPath} ...`);
-        for await (const fp of walkFiles(absPath, { exclude: extraExclude, noDefaults })) { files.push(fp); }
-        io.info(`Found ${files.length} file(s)`);
-    } else {
-        files.push(absPath);
+    for (const src of sources) {
+        const absPath = resolve(src);
+        let pathStat;
+        try { pathStat = await statAsync(absPath); }
+        catch { throw new UsageError(`Path not found: ${absPath}`); }
+        if (pathStat.isDirectory()) {
+            io.info(`Scanning ${absPath} ...`);
+            const before = files.length;
+            for await (const fp of walkFiles(absPath, { exclude: extraExclude, noDefaults })) { files.push(fp); }
+            io.info(`Found ${files.length - before} file(s)`);
+        } else if (pathStat.isFile()) {
+            files.push(absPath);
+        } else {
+            throw new UsageError(`Path must be a regular file or directory: ${absPath}`);
+        }
     }
     if (files.length === 0) { io.warn('No files to process'); return; }
 
@@ -150,4 +150,6 @@ export async function ingestPath(ctx, { mode, adapter, useTargets = true }) {
         `${mode === 'upload' ? 'Uploaded' : 'Indexed'} ${done} file(s) into ${adapter.label}${targetDesc}` +
         (failed ? `  (${failed} skipped)` : ''),
     );
+    // A partial ingest still exits non-zero, so scripts and desktop hooks see it.
+    if (failed) { throw new CanvasError(`${failed} of ${files.length} file(s) failed`); }
 }
