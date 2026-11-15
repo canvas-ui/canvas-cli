@@ -2,7 +2,7 @@
 
 import { CanvasError, UsageError } from '@augmentd-labs/canvas-cli-host/errors';
 import { isTTY, yesNo } from '@augmentd-labs/canvas-cli-host/prompt';
-import { fuseAvailable, mount, setPaused as setMountPaused, unmount } from './fuse.js';
+import { fuseAvailable, isMounted, mount, mountError, setPaused as setMountPaused, unmount } from './fuse.js';
 import { FUSE_INSTALL_PATH, fuseTarget, hasFusermount, installFuse } from './fuse-release.js';
 import { STARTUP_HINT, restartProcess, save, startProcess } from './pm2.js';
 import { ensureEdgeService, restartEdgeService } from './edge.js';
@@ -52,9 +52,15 @@ export async function startMirrors(mirrors, io, { restart = false } = {}) {
                     io.success(`${restart ? 'Restarted' : started ? 'Started' : 'Already running'}: ${name} → ${mirror.mountpoint}`);
                 } else {
                     if (restart) await unmount(mirror.mountpoint).catch(() => null);
+                    else if (await isMounted(mirror.mountpoint)) {
+                        io.success(`Already mounted: ${mirror.mountpoint}`);
+                        results.push({ mirror, ok: true });
+                        continue;
+                    }
                     const res = await mount(mirror);
-                    if (!res.ok) throw new Error(res.stderr.trim() || res.stdout.trim() || 'mount failed');
-                    io.success(`${restart ? 'Remounted' : 'Mounted'} ${mirror.mountpoint}`);
+                    if (!res.ok) throw new Error(mountError(res));
+                    if (res.starting) io.info(`${mirror.mountpoint}: still preparing (scanning the folder) — \`canvas mirror status ${mirror.workspaceName}\` shows when it is up`);
+                    else io.success(`${restart ? 'Remounted' : 'Mounted'} ${mirror.mountpoint}`);
                 }
                 results.push({ mirror, ok: true });
             } catch (e) {
@@ -101,4 +107,16 @@ export async function setPaused(ref, paused, io) {
         const reason = res.stderr.trim() || 'daemon not running';
         io.warn(`${mirror.workspaceName}: ${/unrecognized subcommand/.test(reason) ? 'this canvas-fuse cannot pause (needs 0.18.0 or newer) — `canvas update fuse`, then `canvas mirror restart`' : reason}`);
     }
+}
+
+/**
+ * `mirror start|restart <workspace>` take a name only: where a mirror lives
+ * is decided when it is set up. A stray path would otherwise be dropped and
+ * the mirror started somewhere the user did not ask for.
+ */
+export function rejectExtraArgs(action, rest, targets) {
+    if (!rest?.length) return;
+    const where = targets.length === 1 ? ` ('${targets[0].workspaceName}' is at ${targets[0].mountpoint})` : '';
+    const name = targets.length === 1 ? targets[0].workspaceName : '<workspace>';
+    throw new UsageError(`\`mirror ${action}\` takes a workspace name only, not '${rest.join(' ')}'${where}. A mirror's folder is set when it is created; to put it elsewhere: \`canvas mirror remove ${name}\`, then \`canvas workspace ${name} mount <path>\`.`);
 }

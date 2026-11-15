@@ -450,6 +450,35 @@ canvas workspace universe mount                            # later: path and set
 canvas workspace me@work:devel mount /data/canvas --service
 ```
 
+**Where a mirror lives.** The folder is chosen once, when the mirror is set up
+(`workspace <name> mount <path>`, `mirror add --root <path>`, or the wizard),
+and saved in `config/mirrors.json`; `canvas mirror list` shows it. After that
+every command addresses the mirror by workspace name:
+
+| You want to | Run |
+|---|---|
+| mount a workspace for the first time | `canvas workspace <name> mount <path>` |
+| start it again later (same folder) | `canvas workspace <name> mount` or `canvas mirror start <name>` |
+| watch it run in the terminal | `canvas mirror start <name> --foreground` (stop the background mount first) |
+| stop it | `canvas mirror stop <name>` |
+| put it in another folder | `canvas mirror remove <name>`, then `canvas workspace <name> mount <new path>` |
+
+`mirror start` and `mirror restart` take no path: `canvas mirror start universe
+/data/Workspaces` is refused with the commands above instead of starting the
+mirror where it was. `mirror remove` only forgets the entry — the folder and
+its sync history stay, so mounting the same path again continues where it
+left off, and a new path starts a fresh copy (move the old folder's files in
+before or after; files the hub already holds are matched by content, not
+transferred). A workspace set up with the canvas-edge client
+(`client: daemon` in `mirrors.json`) has to be removed before it can be
+mounted with canvas-fuse. The default root for a `mount` without a path is
+`root` in `mirrors.json`; an explicit path does not change it.
+
+Starting reports what happened: `Mounted` once the folder is really mounted,
+`Already mounted` when it was, the mount's own error when it failed, and
+"still preparing" when a large folder is being scanned for longer than the
+command waits (`canvas mirror status` shows when it is up).
+
 `mirror pause` needs canvas-fuse 0.18.0 or newer and is kept by the mount
 across restarts; canvas-edge folders have no pause (`mirror stop` instead).
 

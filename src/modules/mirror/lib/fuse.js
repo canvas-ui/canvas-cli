@@ -69,8 +69,33 @@ async function run(args, { timeout = 60000 } = {}) {
     }
 }
 
+/**
+ * Start a detached mount. canvas-fuse (≥ 0.18.1) answers once the mount is up
+ * or has failed. A large folder is scanned first, which can outlast the wait:
+ * `starting` then says the daemon is still preparing, not that it failed.
+ */
 export async function mount(mirror) {
-    return run(mountArgs(mirror, { detach: true }), { timeout: 120000 });
+    try {
+        const { stdout, stderr } = await execFileAsync(fuseBinary(), mountArgs(mirror, { detach: true }), { timeout: 120000, maxBuffer: 16 * 1024 * 1024 });
+        return { ok: true, stdout: String(stdout || ''), stderr: String(stderr || '') };
+    } catch (err) {
+        if (err.code === 'ENOENT') throw new CanvasError('canvas-fuse binary not found. `canvas workspace <name> mount` installs it; or set CANVAS_FUSE_BIN.');
+        if (err.killed) return { ok: true, starting: true, stdout: '', stderr: '' };
+        return { ok: false, stdout: String(err.stdout || ''), stderr: String(err.stderr || err.message || '') };
+    }
+}
+
+/** The last `Error: …` line canvas-fuse printed, without its progress output. */
+export function mountError(res) {
+    const lines = `${res.stderr}\n${res.stdout}`.split('\n').map((l) => l.trim()).filter(Boolean);
+    const error = lines.findLast((l) => l.startsWith('Error:'));
+    return (error ? error.replace(/^Error:\s*/, '') : lines.at(-1)) || 'mount failed';
+}
+
+/** Whether a live canvas-fuse daemon already serves this mountpoint. */
+export async function isMounted(mountpoint) {
+    const st = await statusFor(mountpoint);
+    return Boolean(st?.alive && st?.mounted);
 }
 
 export async function unmount(mountpoint) {

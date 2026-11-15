@@ -41,6 +41,26 @@ describe('mirror config', () => {
         assert.equal(release.fuseService.id, 'fuse');
     });
 
+    test('a failed mount is reported by its error line, not the progress output', () => {
+        const stderr = 'preparing local mirror at /data/Universe; locating sync history\n[2026-11-15T19:32:02Z INFO  canvas_fuse::mirror::startup] mirror startup: validating local mirror\nError: mirror directory identity changed\n';
+        assert.equal(fuse.mountError({ stderr, stdout: '' }), 'mirror directory identity changed');
+        assert.equal(fuse.mountError({ stderr: 'something odd\n', stdout: '' }), 'something odd');
+        assert.equal(fuse.mountError({ stderr: '', stdout: '' }), 'mount failed');
+    });
+
+    test('mirror start refuses a stray path and says how to move a mirror', async () => {
+        const { rejectExtraArgs } = await import('../src/modules/mirror/lib/lifecycle.js');
+        const m = { workspaceName: 'universe', mountpoint: '/home/u/Workspaces/Universe' };
+        assert.doesNotThrow(() => rejectExtraArgs('start', [], [m]));
+        assert.throws(() => rejectExtraArgs('start', ['/data/Workspaces'], [m]), (err) => {
+            assert.match(err.message, /takes a workspace name only, not '\/data\/Workspaces'/);
+            assert.match(err.message, /is at \/home\/u\/Workspaces\/Universe/);
+            assert.match(err.message, /canvas mirror remove universe/);
+            assert.match(err.message, /canvas workspace universe mount <path>/);
+            return true;
+        });
+    });
+
     test('parseWorkspaceSpec folds folders into globs', () => {
         assert.deepEqual(config.parseWorkspaceSpec('devel'), { name: 'devel', pins: [] });
         assert.deepEqual(config.parseWorkspaceSpec('devel:UI/,Docs, Notes/**'), { name: 'devel', pins: ['UI/**', 'Docs/**', 'Notes/**'] });
