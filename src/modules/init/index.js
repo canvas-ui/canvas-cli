@@ -7,7 +7,7 @@ import { runtimeInstallation } from '../runtime/install.js';
 import { runtimeConfigFile } from '../runtime/config.js';
 
 export const initFlags = { name: 'string', model: 'string', 'ollama-url': 'string', 'server-url': 'string', remote: 'string',
-  'token-file': 'string', 'stt-url': 'string', 'tts-url': 'string', 'stt-model': 'string', voice: 'string',
+  'token-file': 'string', 'stt-url': 'string', 'tts-url': 'string', 'stt-model': 'string', 'tts-model': 'string', voice: 'string',
   host: 'string', port: 'string', 'runtime-package': 'string', foreground: 'boolean', 'no-start': 'boolean', 'local-only': 'boolean', yes: 'boolean' };
 // CLI-only flags: consumed here, never forwarded to the runtime executable.
 const cliFlags = ['remote', 'runtime-package'];
@@ -21,7 +21,7 @@ export async function initialize(kind, { args, flags, client, session, io }) {
       options.model ||= await input({ message: 'Ollama model', defaultValue: 'qwen3:latest' });
       options['ollama-url'] ||= await input({ message: 'Ollama API URL', defaultValue: 'http://127.0.0.1:11434/v1' });
       options['stt-url'] ||= await input({ message: 'Speech recognition URL (empty to disable)', defaultValue: '' });
-      options['tts-url'] ||= await input({ message: 'Kokoro URL (empty to disable)', defaultValue: '' });
+      options['tts-url'] ||= await input({ message: 'Speech synthesis URL (empty to disable)', defaultValue: '' });
     }
     if (!flags.foreground && !noStart(flags)) options.foreground = await select('Run mode', [
       { label: 'Background (PM2)', value: false }, { label: 'Foreground', value: true },
