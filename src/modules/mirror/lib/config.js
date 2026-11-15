@@ -54,6 +54,16 @@ export function mountpointFor(root, folderName) {
     return path.join(root, folderName);
 }
 
+/**
+ * Where `workspace mount <path>` puts a workspace. canvas-fuse mounts at
+ * `<root>/<folder>`, so a path that already ends in the workspace's folder
+ * name is the mountpoint itself; anything else is the root to mount under.
+ */
+export function rootForPath(target, folderName) {
+    const abs = path.resolve(String(target).replace(/^~(?=$|\/)/, os.homedir()));
+    return path.basename(abs).toLowerCase() === String(folderName).toLowerCase() ? path.dirname(abs) : abs;
+}
+
 export function splitList(value) {
     if (Array.isArray(value)) return value.flatMap(splitList);
     return String(value ?? '').split(',').map((s) => s.trim()).filter(Boolean);

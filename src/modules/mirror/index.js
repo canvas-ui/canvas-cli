@@ -10,6 +10,8 @@ import start from './actions/start.js';
 import stop from './actions/stop.js';
 import restart from './actions/restart.js';
 import sync from './actions/sync.js';
+import pause from './actions/pause.js';
+import resume from './actions/resume.js';
 import pin from './actions/pin.js';
 import conflicts from './actions/conflicts.js';
 import deletes from './actions/deletes.js';
@@ -20,6 +22,7 @@ import service from './actions/service.js';
 import logs from './actions/logs.js';
 import edge from './actions/edge.js';
 import { edgeService } from './lib/service.js';
+import { fuseService } from './lib/fuse-release.js';
 
 /*
  * `canvas remote mirror` — workspaces kept in sync as real folders on this
@@ -37,10 +40,10 @@ export default {
     defaultAction: 'status',
     defaultPluralAction: 'list',
     needsConnection: false,
-    actions: [init, add, publish, remove, list, status, start, stop, restart, sync, pin, conflicts, deletes, direction, docker, supervisor, service, logs, edge],
+    actions: [init, add, publish, remove, list, status, start, stop, restart, sync, pause, resume, pin, conflicts, deletes, direction, docker, supervisor, service, logs, edge],
     submodules: [],
     // Also mounted at the top level: `canvas mirror x` === `canvas remote mirror x` (core/registry.js).
     topLevel: true,
     // Local services `canvas update` checks and refreshes (modules/update/lib.js).
-    services: [edgeService],
+    services: [edgeService, fuseService],
 };

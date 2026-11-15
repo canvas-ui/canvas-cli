@@ -6,12 +6,15 @@
 # Downloads the single-file binary from the latest GitHub Release,
 # verifies it against SHA256SUMS, installs it as `canvas` plus the shortcut
 # wrappers, and (optionally) wires the prompt integration into your shell rc.
+# On Linux it also offers canvas-fuse, the client behind
+# `canvas workspace <name> mount`.
 #
 # Windows: use scripts/install.ps1.
 
 set -euo pipefail
 
 REPO="canvas-ui/canvas-cli"
+FUSE_REPO="canvas-ui/canvas-fuse"
 INSTALL_DIR="${CANVAS_INSTALL_DIR:-$HOME/.local/bin}"
 CANVAS_HOME="${CANVAS_USER_HOME:-$HOME/.canvas}"
 BINARY_NAME="canvas"
@@ -31,6 +34,7 @@ error()   { echo "${RED}[fail]${NC} $1" >&2; exit 1; }
 
 VERSION=""           # v<x.y.z>, resolved from the API when empty
 PROMPT_MODE="ask"    # ask | yes | no
+FUSE_MODE="ask"      # ask | yes | no
 WITH_SHORTCUTS=true
 LOCAL_INSTALL=false
 LOCAL_DIR=""
@@ -54,6 +58,8 @@ OPTIONS
     --dir <path>        Install directory (default: \$HOME/.local/bin)
     --prompt            Install the prompt integration and wire it into ~/.bashrc / ~/.zshrc
     --no-prompt         Skip the prompt integration entirely
+    --fuse              Also install canvas-fuse (Linux; mounts workspaces as synced folders)
+    --no-fuse           Do not install canvas-fuse and do not ask
     --no-shortcuts      Install only \`canvas\`, no ws/ctx/context/dot/agent/hi wrappers
     --local [dir]       Dev install: wrappers around a source checkout instead of a binary
                         (dir defaults to the CLI package root containing this script)
@@ -71,6 +77,8 @@ while [ $# -gt 0 ]; do
         --dir)     INSTALL_DIR="${2:-}"; [ -n "$INSTALL_DIR" ] || error "--dir needs a value"; shift 2 ;;
         --prompt)  PROMPT_MODE="yes"; shift ;;
         --no-prompt) PROMPT_MODE="no"; shift ;;
+        --fuse)    FUSE_MODE="yes"; shift ;;
+        --no-fuse) FUSE_MODE="no"; shift ;;
         --no-shortcuts) WITH_SHORTCUTS=false; shift ;;
         --local)
             LOCAL_INSTALL=true
@@ -293,6 +301,51 @@ install_prompt_integration() {
     success "Wired into ${rc} — run: source ${rc}"
 }
 
+install_fuse() {
+    # canvas-fuse is Linux-only; `canvas update` keeps an installed copy current.
+    [ "$FUSE_MODE" != "no" ] || return 0
+    [ "$(uname -s)" = "Linux" ] || return 0
+    local target asset base tmp expected actual
+    case "$(uname -m)" in
+        x86_64|amd64)  target="x86_64-unknown-linux-musl" ;;
+        arm64|aarch64) target="aarch64-unknown-linux-gnu" ;;
+        *) return 0 ;;
+    esac
+    if [ -x "${INSTALL_DIR}/canvas-fuse" ]; then
+        log "canvas-fuse already installed ($("${INSTALL_DIR}/canvas-fuse" --version 2>/dev/null | head -n1)); \`canvas update fuse\` updates it"
+        return 0
+    fi
+    if [ "$FUSE_MODE" = "ask" ]; then
+        ask_yes_no "Install canvas-fuse to ${INSTALL_DIR}? It mounts workspaces as synced folders (canvas workspace <name> mount)" || {
+            log "Skipped canvas-fuse. \`canvas workspace <name> mount\` offers it again when needed."
+            return 0
+        }
+    fi
+
+    asset="canvas-fuse-${target}.tar.gz"
+    base="https://github.com/${FUSE_REPO}/releases/latest/download"
+    tmp="$(mktemp -d "${TMPDIR:-/tmp}/canvas-fuse-install.XXXXXX")"
+    # A failed canvas-fuse install never fails the CLI install that already succeeded.
+    if ! fetch "${base}/${asset}" "${tmp}/${asset}" || ! fetch "${base}/${asset}.sha256" "${tmp}/${asset}.sha256"; then
+        warning "Could not download canvas-fuse — skipping (retry with: canvas workspace <name> mount)"
+        rm -rf "$tmp"; return 0
+    fi
+    expected=$(awk '{print $1}' "${tmp}/${asset}.sha256" | head -n1)
+    actual=$(sha256_of "${tmp}/${asset}")
+    if [ -z "$actual" ] || [ "$expected" != "$actual" ]; then
+        warning "canvas-fuse checksum could not be verified (expected ${expected:-none}, got ${actual:-none}) — not installed"
+        rm -rf "$tmp"; return 0
+    fi
+    if ! tar -xzf "${tmp}/${asset}" -C "$tmp" || ! "${tmp}/canvas-fuse-${target}/canvas-fuse" --version >/dev/null 2>&1; then
+        warning "The downloaded canvas-fuse does not run on this machine — not installed"
+        rm -rf "$tmp"; return 0
+    fi
+    mv -f "${tmp}/canvas-fuse-${target}/canvas-fuse" "${INSTALL_DIR}/canvas-fuse" || { warning "Cannot install canvas-fuse to ${INSTALL_DIR}"; rm -rf "$tmp"; return 0; }
+    rm -rf "$tmp"
+    success "Installed $("${INSTALL_DIR}/canvas-fuse" --version 2>/dev/null | head -n1)"
+    have fusermount3 || warning "fusermount3 is not installed — install your distribution's fuse3 package before mounting"
+}
+
 # --- main -------------------------------------------------------------------
 
 log "Canvas CLI installer"
@@ -308,6 +361,7 @@ else
 fi
 
 install_prompt_integration
+install_fuse
 
 case ":$PATH:" in
     *":$INSTALL_DIR:"*) ;;

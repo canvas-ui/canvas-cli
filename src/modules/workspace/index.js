@@ -4,6 +4,7 @@ import create from './actions/create.js';
 import current from './actions/current.js';
 import del from './actions/delete.js';
 import list from './actions/list.js';
+import mount from './actions/mount.js';
 import show from './actions/show.js';
 import start from './actions/start.js';
 import status from './actions/status.js';
@@ -28,6 +29,6 @@ export default {
     defaultResourceAction: 'show',
     needsConnection: true,
     resourceArg: { name: 'workspace', resolve, optional: true },
-    actions: [create, current, del, list, show, start, status, stop, update],
+    actions: [create, current, del, list, mount, show, start, status, stop, update],
     submodules: [agent, hooks, backends, tree, ...documentNouns('workspace')],
 };

@@ -34,7 +34,7 @@ export default {
                 workspace: m.workspaceName,
                 client: `${m.client || 'fuse'}${m.managed === 'edge' ? '/edge' : ''}`,
                 mount: st ? (st.status || 'ok') : 'down',
-                state: mi.state || '-',
+                state: mi.state ? `${mi.state}${mi.userPaused ? ' (user)' : ''}` : '-',
                 cursor: mi.cursor != null ? `${mi.cursor}/${mi.head ?? '?'}` : '-',
                 pending: mi.pending ?? '-',
                 failed: mi.failed ?? '-',

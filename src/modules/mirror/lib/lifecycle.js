@@ -1,9 +1,12 @@
 'use strict';
 
-import { fuseAvailable, mount, unmount } from './fuse.js';
+import { CanvasError, UsageError } from '@augmentd-labs/canvas-cli-host/errors';
+import { isTTY, yesNo } from '@augmentd-labs/canvas-cli-host/prompt';
+import { fuseAvailable, mount, setPaused as setMountPaused, unmount } from './fuse.js';
+import { FUSE_INSTALL_PATH, fuseTarget, hasFusermount, installFuse } from './fuse-release.js';
 import { STARTUP_HINT, restartProcess, save, startProcess } from './pm2.js';
 import { ensureEdgeService, restartEdgeService } from './edge.js';
-import { upsertMirror } from './config.js';
+import { findMirror, listMirrors, upsertMirror } from './config.js';
 
 /*
  * Start (or restart) a set of mirrors the way each one is configured:
@@ -65,4 +68,37 @@ export async function startMirrors(mirrors, io, { restart = false } = {}) {
         }
     }
     return results;
+}
+
+/**
+ * Make sure a canvas-fuse binary is there before a mount needs it. Missing:
+ * offer the release build (`yes` skips the question; without a terminal the
+ * answer is an error that says how).
+ */
+export async function ensureFuse(io, { yes = false } = {}) {
+    if (await fuseAvailable()) return;
+    if (!fuseTarget()) throw new CanvasError(`canvas-fuse has no build for ${process.platform}/${process.arch} (Linux x64 and arm64 only) — use \`canvas mirror add --client daemon\` here`);
+    if (!yes) {
+        if (!isTTY()) throw new CanvasError('canvas-fuse is not installed. Re-run with --yes to install it, or set CANVAS_FUSE_BIN.');
+        if (!(await yesNo(`canvas-fuse is not installed. Download the latest release to ${FUSE_INSTALL_PATH}?`, true))) throw new CanvasError('canvas-fuse is required to mount a workspace');
+    }
+    const installed = await installFuse({ onStep: (m) => io.info(m) });
+    io.success(`Installed canvas-fuse ${installed.version} → ${installed.path}`);
+    if (!(await hasFusermount())) io.warn('fusermount3 is not on PATH — install your distribution\'s fuse3 package before mounting');
+}
+
+/** `mirror pause|resume [workspace]`: every mirror when none is named. */
+export async function setPaused(ref, paused, io) {
+    const targets = ref && ref !== 'all' ? [findMirror(ref)].filter(Boolean) : listMirrors();
+    if (targets.length === 0) throw new UsageError(ref ? `No mirror for '${ref}'` : 'No mirrors configured');
+    for (const mirror of targets) {
+        if (mirror.client === 'daemon') {
+            io.warn(`${mirror.workspaceName}: a canvas-edge folder has no pause — \`canvas mirror stop ${mirror.workspaceName}\` takes it out of sync`);
+            continue;
+        }
+        const res = await setMountPaused(mirror.mountpoint, paused);
+        if (res.ok) { io.success(`${mirror.workspaceName}: ${res.stdout.trim() || (paused ? 'sync paused' : 'sync resumed')}`); continue; }
+        const reason = res.stderr.trim() || 'daemon not running';
+        io.warn(`${mirror.workspaceName}: ${/unrecognized subcommand/.test(reason) ? 'this canvas-fuse cannot pause (needs 0.18.0 or newer) — `canvas update fuse`, then `canvas mirror restart`' : reason}`);
+    }
 }

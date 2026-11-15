@@ -7,6 +7,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { CanvasError } from '@augmentd-labs/canvas-cli-host/errors';
+import { FUSE_INSTALL_PATH } from './fuse-release.js';
 
 const execFileAsync = promisify(execFile);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -24,6 +25,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 export function fuseBinary() {
     const candidates = [
         process.env.CANVAS_FUSE_BIN,
+        // The copy this CLI installs and updates (lib/fuse-release.js).
+        FUSE_INSTALL_PATH,
         path.join(os.homedir(), '.cargo', 'bin', 'canvas-fuse'),
         // Dev checkout: <container>/canvas-fuse next to canvas-cli.
         path.resolve(HERE, '../../../../../canvas-fuse/target/release/canvas-fuse'),
@@ -61,7 +64,7 @@ async function run(args, { timeout = 60000 } = {}) {
         const { stdout, stderr } = await execFileAsync(fuseBinary(), args, { timeout, maxBuffer: 16 * 1024 * 1024 });
         return { ok: true, stdout: String(stdout || ''), stderr: String(stderr || '') };
     } catch (err) {
-        if (err.code === 'ENOENT') throw new CanvasError('canvas-fuse binary not found. Install it (cargo install --path canvas-fuse) or set CANVAS_FUSE_BIN.');
+        if (err.code === 'ENOENT') throw new CanvasError('canvas-fuse binary not found. `canvas workspace <name> mount` installs it; or set CANVAS_FUSE_BIN.');
         return { ok: false, stdout: String(err.stdout || ''), stderr: String(err.stderr || err.message || '') };
     }
 }
@@ -93,6 +96,8 @@ export async function statusFor(mountpoint) {
 }
 
 export async function syncNow(mountpoint) { return run(['sync', 'now', mountpoint]); }
+/** Hold or release all transfers of a running mount (canvas-fuse ≥ 0.18.0); the mount keeps the pause across restarts. */
+export async function setPaused(mountpoint, paused) { return run(['sync', paused ? 'pause' : 'resume', mountpoint]); }
 export async function pin(mountpoint, op, glob) { return run(['pin', op, mountpoint, ...(glob ? [glob] : [])]); }
 export async function conflicts(mountpoint) {
     const res = await run(['conflicts', mountpoint, '--json']);

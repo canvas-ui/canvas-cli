@@ -9,10 +9,37 @@ process.env.CANVAS_USER_HOME = home;
 
 const config = await import('../src/modules/mirror/lib/config.js');
 const fuse = await import('../src/modules/mirror/lib/fuse.js');
+const release = await import('../src/modules/mirror/lib/fuse-release.js');
 
 describe('mirror config', () => {
     before(() => { config.writeConfig({ ...config.DEFAULTS, mirrors: [] }); });
     after(() => { rmSync(home, { recursive: true, force: true }); });
+
+    test('workspace mount: a path ending in the workspace folder is the mountpoint, anything else the root', () => {
+        assert.equal(config.rootForPath('/data/Workspaces', 'Universe'), '/data/Workspaces');
+        assert.equal(config.rootForPath('/data/Workspaces/Universe', 'Universe'), '/data/Workspaces');
+        assert.equal(config.rootForPath('/data/Workspaces/universe/', 'Universe'), '/data/Workspaces');
+        assert.equal(config.rootForPath('~/Canvas', 'Universe'), path.join(os.homedir(), 'Canvas'));
+        assert.equal(config.mountpointFor(config.rootForPath('/data/Universe', 'Universe'), 'Universe'), '/data/Universe');
+    });
+
+    test('canvas-fuse release: target, version and checksum parsing', () => {
+        assert.equal(release.fuseTarget('linux', 'x64'), 'x86_64-unknown-linux-musl');
+        assert.equal(release.fuseTarget('linux', 'arm64'), 'aarch64-unknown-linux-gnu');
+        assert.equal(release.fuseTarget('darwin', 'arm64'), null);
+        assert.equal(release.fuseTarget('linux', 'riscv64'), null);
+        assert.equal(release.parseFuseVersion('canvas-fuse 0.17.1\n'), '0.17.1');
+        assert.equal(release.parseFuseVersion('v0.18.0'), '0.18.0');
+        assert.equal(release.parseFuseVersion('nonsense'), null);
+        const sum = 'a'.repeat(64);
+        assert.equal(release.parseChecksum(`${sum}  canvas-fuse-x86_64-unknown-linux-musl.tar.gz\n`), sum);
+        assert.equal(release.parseChecksum('not a checksum'), null);
+    });
+
+    test('the managed canvas-fuse copy sits next to the canvas binary', () => {
+        assert.equal(release.FUSE_INSTALL_PATH, path.join(process.env.CANVAS_INSTALL_DIR || path.join(os.homedir(), '.local', 'bin'), 'canvas-fuse'));
+        assert.equal(release.fuseService.id, 'fuse');
+    });
 
     test('parseWorkspaceSpec folds folders into globs', () => {
         assert.deepEqual(config.parseWorkspaceSpec('devel'), { name: 'devel', pins: [] });

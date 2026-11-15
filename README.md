@@ -368,7 +368,7 @@ One command keeps everything Canvas put on this device current:
 canvas update                 # check, show the plan, apply (asks first on a terminal)
 canvas update check           # report only; `canvas update --check` does the same
 canvas update cli --to 2.7.1  # pin the CLI to one release
-canvas update edge            # just the canvas-edge daemon (or: packages | services | server)
+canvas update edge            # just the canvas-edge daemon (or: fuse | packages | services | server)
 canvas update --yes --skip-restart
 ```
 
@@ -377,6 +377,7 @@ canvas update --yes --skip-restart
 | `cli` | newest GitHub Release (binary) or the npm registry | a release binary downloads the asset for this platform next to itself, verifies `SHA256SUMS`, runs it once and swaps it in (the same steps as `install.sh`); an npm install runs `npm install -g`; a source checkout is left to `git pull` |
 | `package:<name>` | `latest` on npm vs the installed version (a retired package — `mirror` — is removed) | `npm update` in `~/.canvas/packages/<name>` |
 | `service:edge` | `latest` of `@augmentd-labs/canvas-edge` on npm vs `~/.canvas/edge` (built-in mirror module) | `npm update` there, then the daemon is re-created under pm2 (or respawned) when daemon mirrors exist |
+| `service:fuse` | newest canvas-fuse GitHub Release vs the managed `~/.local/bin/canvas-fuse` (built-in mirror module) | downloads the build for this machine, verifies its `.sha256`, runs it once and swaps it in; mounts are not restarted |
 | `service:server` | remote branch HEAD vs `~/.canvas/server` (server package) | `git pull --ff-only` + `npm install`, then `pm2 restart` when it runs |
 
 Packages go first (they carry the service updaters), then services, the CLI
@@ -425,6 +426,8 @@ canvas remote mirror publish ~/Code/UI --name ui           # this folder becomes
 canvas remote mirror publish ~/Notes --attach              # sync into an existing hub workspace of the same name
 canvas remote mirror status                                # daemon state, cursor/head, pending, conflicts, lag
 canvas remote mirror sync                                  # reconcile now
+canvas remote mirror pause                                 # hold all transfers (metered connection); mounts stay up, edits queue
+canvas remote mirror resume devel                          # one mirror, or all without a name
 canvas remote mirror pin add devel Photos/2026/
 canvas remote mirror conflicts                             # what waits in the hub inbox
 canvas remote mirror conflicts devel --resolve 100042 --keep both
@@ -433,11 +436,35 @@ canvas remote mirror service install                       # pm2 processes, rest
 canvas remote mirror stop all
 ```
 
+`canvas workspace <name> mount [path]` is the short way to one synced folder:
+it writes the same mirror entry as `mirror add` (canvas-fuse client) and starts
+it, so everything above applies to it afterwards. `path` is the folder to keep
+workspaces in (the workspace lands in `<path>/<Workspace>`), or the mountpoint
+itself when it already ends in the workspace's folder name; without it the
+configured mirror root is used, or asked for the first time. A workspace that
+is already set up is simply started again. `--service` runs it under pm2.
+
+```bash
+canvas workspace universe mount ~/Workspaces               # → ~/Workspaces/Universe
+canvas workspace universe mount                            # later: path and settings are remembered
+canvas workspace me@work:devel mount /data/canvas --service
+```
+
+`mirror pause` needs canvas-fuse 0.18.0 or newer and is kept by the mount
+across restarts; canvas-edge folders have no pause (`mirror stop` instead).
+
 State: `config/mirrors.json` (this device's mirror list), the mount's own
 cache/ledger under `~/.canvas/<remote>/fuse/workspaces/<workspace>/`, and the
 device's status report on the hub (Workspace › Settings › Sync). Requires the
-`canvas-fuse` binary (`CANVAS_FUSE_BIN` overrides the lookup) and, for
-`service`, pm2.
+`canvas-fuse` binary and, for `service`, pm2. The CLI keeps its own copy of
+canvas-fuse next to `canvas` (`~/.local/bin/canvas-fuse`, or
+`CANVAS_INSTALL_DIR`): `install.sh` offers it on Linux (`--fuse` / `--no-fuse`),
+`workspace mount` offers it when it is missing, and `canvas update` (or
+`canvas update fuse`) brings it to the latest release, verified against the
+release checksum. Running mounts keep their binary until
+`canvas mirror restart all`. `CANVAS_FUSE_BIN` overrides the lookup; a copy
+from cargo or a checkout is used when there is no managed one and is never
+updated.
 
 ### Output formats
 
