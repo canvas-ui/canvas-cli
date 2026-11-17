@@ -28,6 +28,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const EDGE_PM2_NAME = 'canvas-edge';
 export const EDGE_SOCKET = process.platform === 'win32' ? null : path.join(CANVAS_HOME, 'run', 'edge.sock');
 export const EDGE_PORT = Number(process.env.CANVAS_EDGE_PORT) || 8802;
+/** Where to read what the daemon logged: its file when detached, pm2 when supervised. */
+export function edgeLogHint(managed) { return managed === 'pm2' ? `pm2 logs ${EDGE_PM2_NAME}` : path.join(CANVAS_HOME, 'var', 'log', 'canvas-edge.log'); }
 
 // canvas-edge is the npm package @augmentd-labs/canvas-edge (published from
 // canvas-ui/canvas-common). The CLI installs it into its OWN prefix,

@@ -2,7 +2,7 @@
 
 import { resolveWorkspaceHandle } from '../../lib/handle.js';
 import { UsageError } from '../../../../core/errors.js';
-import { ensureEdgeService, runEdgeForeground } from '../../../mirror/lib/edge.js';
+import { edgeLogHint, ensureEdgeService, runEdgeForeground } from '../../../mirror/lib/edge.js';
 import { listMirrors, splitList } from '../../../mirror/lib/config.js';
 import { assertShareName, ensureDeviceToken, findShare, resolveFolder, shareId, upsertShare, waitForShare } from '../lib.js';
 
@@ -60,8 +60,8 @@ export default {
         const follow = `canvas workspace ${handle.id} share list`;
         if (unit?.connected) io.success(`${name} is connected to the workspace${unit.scanning ? '; the first pass hashes every file' : ` (${unit.files ?? '?'} files)`}. Follow it with: ${follow}`);
         else if (unit?.state === 'unavailable') io.warn(`${folder} is not available to the daemon (${unit.lastError || 'folder missing'}); the share stays offline until it is.`);
-        else if (unit?.lastError) io.warn(`${name} is not connected: ${unit.lastError}`);
-        else io.warn(`${name} has not connected yet; check it with: ${follow}`);
+        else if (unit?.lastError) io.warn(`${name} is not connected: ${unit.lastError}\nDaemon log: ${edgeLogHint(managed)}`);
+        else io.warn(`${name} has not connected yet; check it with: ${follow}\nDaemon log: ${edgeLogHint(managed)}`);
         return share;
     },
 };
