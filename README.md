@@ -520,7 +520,8 @@ the same name. Unplugging a drive (or stopping the daemon) leaves the share
 offline with its catalog intact; `share remove` is what drops the catalog,
 `share remove --local` only stops serving it from this machine.
 
-`--no-watch` follows rescans only (every six hours and `share scan`),
+`--mode` takes `ro` (the default); `rw` and `worm` are refused until they
+exist. `--no-watch` follows rescans only (every six hours and `share scan`),
 `--state-dir` puts the index somewhere else than `~/.canvas/var/shares`,
 `--service` runs the daemon under pm2. Dotfiles, dependency and cache
 folders, recycle bins, temp files and logs are skipped; `--exclude` adds

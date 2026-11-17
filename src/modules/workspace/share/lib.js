@@ -10,7 +10,7 @@ import { UsageError } from '../../../core/errors.js';
 /*
  * Shares this machine serves: local folders a workspace lists and reads in
  * place. The canvas-edge daemon reads this file (its share units); the CLI
- * writes it. Entry: { id, remote, workspaceName, name, label, path, watch,
+ * writes it. Entry: { id, remote, workspaceName, name, label, mode, path, watch,
  * exclude, stateDir?, paused?, createdAt }.
  */
 export const FILE_SHARES = path.join(DIR_CONFIG, 'shares.json');
