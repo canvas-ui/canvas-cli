@@ -6,6 +6,9 @@ import path from 'node:path';
 import { DIR_CONFIG } from '../../../core/paths.js';
 import { JsonFile } from '../../../core/storage.js';
 import { UsageError } from '../../../core/errors.js';
+import { createTlsTransport } from '@augmentd-labs/canvas-api-client/tls';
+import { ensureDeviceRegistered } from '@augmentd-labs/canvas-cli-host/device-registration';
+import { edgeStatus } from '../../mirror/lib/edge.js';
 
 /*
  * Shares this machine serves: local folders a workspace lists and reads in
@@ -57,4 +60,44 @@ export function resolveFolder(folder) {
     try { real = fs.realpathSync(abs); } catch { throw new UsageError(`Folder not found: ${abs}`); }
     if (!fs.statSync(real).isDirectory()) throw new UsageError(`Not a folder: ${real}`);
     return real;
+}
+
+/**
+ * The daemon serves a share under this device's token. Make sure the remote
+ * has one the hub still accepts: a token the hub no longer knows (the device
+ * was removed there, the hub was reinstalled) is replaced by registering again.
+ */
+export async function ensureDeviceToken(client, remoteId, workspace, io) {
+    const remote = client.getRemote(remoteId);
+    if (!remote?.device?.token) { await ensureDeviceRegistered(remoteId, client, io); return; }
+    const transport = createTlsTransport(remote.url, remote.tls);
+    let status;
+    try {
+        const res = await transport.fetch(`${remote.url}${remote.apiBase || '/rest/v2'}/workspaces/${encodeURIComponent(workspace)}/backends/share`, {
+            headers: { authorization: `Bearer ${remote.device.token}` }, signal: AbortSignal.timeout(10000),
+        });
+        status = res.status;
+    } catch { return; } finally { await transport.dispose?.(); }
+    if (status !== 401) return;
+    io.warn('The hub no longer accepts this device\'s token; registering the device again.');
+    await ensureDeviceRegistered(remoteId, client, io, { force: true });
+}
+
+/** The daemon's view of one share unit once it has checked in or failed to, or null when it does not answer. */
+export async function waitForShare(id, { timeout = 15000 } = {}) {
+    let unit = null;
+    for (const end = Date.now() + timeout; Date.now() < end;) {
+        unit = await edgeStatus().then((s) => (s?.mirrors || []).find((u) => u.unit === 'share' && u.id === id) || null).catch(() => null);
+        if (unit?.connected || unit?.lastError || unit?.state === 'unavailable') return unit;
+        await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+    return unit;
+}
+
+/** `name`, or the one share this machine serves to the workspace when none is given. */
+export function pickShare(remoteId, workspaceName, name) {
+    if (name) return findShare(remoteId, workspaceName, name);
+    const mine = readShares().filter((s) => s.remote === remoteId && s.workspaceName === workspaceName);
+    if (mine.length === 1) return mine[0];
+    throw new UsageError(mine.length ? `Share name required; this machine serves ${mine.map((s) => s.name).join(', ')}` : 'This machine serves no share of this workspace');
 }

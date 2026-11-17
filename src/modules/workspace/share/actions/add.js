@@ -2,9 +2,9 @@
 
 import { resolveWorkspaceHandle } from '../../lib/handle.js';
 import { UsageError } from '../../../../core/errors.js';
-import { ensureEdgeService } from '../../../mirror/lib/edge.js';
+import { ensureEdgeService, runEdgeForeground } from '../../../mirror/lib/edge.js';
 import { listMirrors, splitList } from '../../../mirror/lib/config.js';
-import { assertShareName, findShare, resolveFolder, shareId, upsertShare } from '../lib.js';
+import { assertShareName, ensureDeviceToken, findShare, resolveFolder, shareId, upsertShare, waitForShare } from '../lib.js';
 
 // Serve a folder of THIS machine to a workspace, read-only and in place:
 //   canvas workspace universe share add /mnt/mywd --name wd1t.home --label "1TB WD" --mode ro
@@ -12,11 +12,13 @@ import { assertShareName, findShare, resolveFolder, shareId, upsertShare } from 
 // workspace's reads; nothing is copied and nothing is written into the folder.
 // The name is <share>.<site>: the backend address, the authority of the
 // files' file://wd1t.home/… URLs and the tree node /device/home/wd1t.
+// The daemon is installed when missing and started: detached by default,
+// under pm2 with --service, attached to the terminal with --foreground.
 export default {
     name: 'add',
     description: 'Serve a local folder to the workspace as a read-only share (indexed in place)',
     positional: [{ name: 'folder', required: true }],
-    flags: { workspace: 'string', name: 'string', label: 'string', mode: 'string', exclude: 'string', 'state-dir': 'string', 'no-watch': 'boolean', service: 'boolean', 'no-start': 'boolean' },
+    flags: { workspace: 'string', name: 'string', label: 'string', mode: 'string', exclude: 'string', 'state-dir': 'string', 'no-watch': 'boolean', service: 'boolean', foreground: 'boolean', 'no-start': 'boolean' },
     async run(ctx) {
         const { args, flags, io } = ctx;
         const handle = resolveWorkspaceHandle(ctx);
@@ -43,9 +45,23 @@ export default {
         });
         io.success(`Share ${name} → ${folder}${backend?.treePath ? ` (tree: ${backend.treePath})` : ''}`);
         if (flags['no-start'] || flags.start === false) return;
+        await ensureDeviceToken(ctx.client, handle.remoteId, handle.id, io);
+        if (flags.foreground) {
+            if (flags.service) throw new UsageError('--foreground and --service exclude each other');
+            io.info('canvas-edge runs in this terminal; Ctrl+C stops serving (the workspace keeps the catalog).');
+            const code = await runEdgeForeground(io);
+            if (code) process.exitCode = code;
+            return share;
+        }
         const managed = flags.service || listMirrors().some((m) => m.client === 'daemon' && m.managed === 'pm2') ? 'pm2' : 'manual';
         const res = await ensureEdgeService(io, { managed });
-        io.info(`canvas-edge ${res.started ? 'started' : 'reloaded'}${managed === 'manual' ? ' (unsupervised; --service keeps it running under pm2)' : ''}. The first pass hashes every file; follow it with: canvas workspace ${handle.id} share list`);
+        io.info(`canvas-edge ${res.started ? 'started' : 'reloaded'}${managed === 'manual' ? ' (unsupervised; --service keeps it running under pm2)' : ''}.`);
+        const unit = await waitForShare(share.id);
+        const follow = `canvas workspace ${handle.id} share list`;
+        if (unit?.connected) io.success(`${name} is connected to the workspace${unit.scanning ? '; the first pass hashes every file' : ` (${unit.files ?? '?'} files)`}. Follow it with: ${follow}`);
+        else if (unit?.state === 'unavailable') io.warn(`${folder} is not available to the daemon (${unit.lastError || 'folder missing'}); the share stays offline until it is.`);
+        else if (unit?.lastError) io.warn(`${name} is not connected: ${unit.lastError}`);
+        else io.warn(`${name} has not connected yet; check it with: ${follow}`);
         return share;
     },
 };

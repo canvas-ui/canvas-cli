@@ -31,7 +31,7 @@ export default {
                 tree: b.treePath || '',
                 folder: here?.path || '',
                 // What this machine's daemon says: serving, scanning, unavailable (folder gone), offline (hub unreachable).
-                here: !here ? '' : here.paused ? 'paused' : units ? (unit?.state || 'not loaded') : 'daemon not running',
+                here: !here ? '' : here.paused ? 'paused' : !units ? 'daemon not running' : !unit ? 'not loaded' : unit.state === 'serving' || unit.state === 'scanning' || !unit.lastError ? unit.state : `${unit.state}: ${unit.lastError}`,
             };
         }), { columns: ['name', 'label', 'status', 'files', 'device', 'tree', 'folder', 'here'] });
     },

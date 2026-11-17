@@ -201,13 +201,47 @@ function spawnDetached() {
     });
 }
 
+/** Fetch canvas-edge into its prefix when this device has none. */
+export async function ensureEdgeInstalled(io) {
+    if (await edgeAvailable()) return;
+    io?.info?.(`Installing canvas-edge (${EDGE_PACKAGE}) into ${EDGE_PREFIX}…`);
+    try { await installEdge(); }
+    catch (err) { throw new CanvasError(`canvas-edge could not be installed: ${err.message}\nRetry with \`${EDGE_INSTALL}\`, or point CANVAS_EDGE_BIN at a checkout (runtimes/edge/bin/canvas-edge).`); }
+    npmGlobalRoot = undefined;
+    if (!(await edgeAvailable())) throw new CanvasError(EDGE_INSTALL_HINT);
+}
+
+/**
+ * Run canvas-edge attached to this terminal, logging to it, until it exits
+ * or is interrupted. Resolves with its exit code. One daemon runs per device,
+ * so this refuses while another one answers on the control socket.
+ */
+export async function runEdgeForeground(io) {
+    await ensureEdgeInstalled(io);
+    if (await edgeRunning()) throw new CanvasError('canvas-edge already runs in the background on this device. Stop it first (`canvas remote mirror stop all`), then run with --foreground again.');
+    const bin = edgeBinary();
+    const runtime = process.versions?.bun ? 'node' : process.execPath;
+    const child = path.isAbsolute(bin)
+        ? spawn(runtime, [bin, '--foreground'], { stdio: 'inherit', env: { ...process.env } })
+        : spawn(bin, ['--foreground'], { stdio: 'inherit', env: { ...process.env }, shell: process.platform === 'win32' });
+    // Ctrl+C reaches the child through the terminal; this process waits for it to finish its shutdown.
+    const ignore = () => {};
+    process.on('SIGINT', ignore);
+    try {
+        return await new Promise((resolve, reject) => {
+            child.once('error', (err) => reject(new CanvasError(spawnError(err, bin))));
+            child.once('exit', (code) => resolve(code ?? 0));
+        });
+    } finally { process.off('SIGINT', ignore); }
+}
+
 /**
  * Make sure one canvas-edge runs for this device and picks up mirrors.json.
  * `managed: 'pm2'` supervises it (login start, crash restart); `'manual'`
  * starts it detached when it is not already answering on the control socket.
  */
 export async function ensureEdgeService(io, { managed = 'pm2' } = {}) {
-    if (!(await edgeAvailable())) throw new CanvasError(EDGE_INSTALL_HINT);
+    await ensureEdgeInstalled(io);
     if (managed === 'pm2') {
         if (!(await hasPM2())) throw new CanvasError(`PM2 not installed. \`${PM2_INSTALL}\` (or start unsupervised with --no-service)`);
         const existing = await getProcessInfo(EDGE_PM2_NAME);
