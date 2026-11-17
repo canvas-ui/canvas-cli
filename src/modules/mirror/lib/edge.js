@@ -216,11 +216,18 @@ export async function ensureEdgeInstalled(io) {
 /**
  * Run canvas-edge attached to this terminal, logging to it, until it exits
  * or is interrupted. Resolves with its exit code. One daemon runs per device,
- * so this refuses while another one answers on the control socket.
+ * so a background one (detached or under pm2) is stopped first and this
+ * process serves its mirrors and shares instead.
  */
 export async function runEdgeForeground(io) {
     await ensureEdgeInstalled(io);
-    if (await edgeRunning()) throw new CanvasError('canvas-edge already runs in the background on this device. Stop it first (`canvas remote mirror stop all`), then run with --foreground again.');
+    if (await edgeRunning()) {
+        const supervised = (await hasPM2()) && Boolean(await getProcessInfo(EDGE_PM2_NAME));
+        await stopEdgeService();
+        if (await edgeRunning()) throw new CanvasError('The background canvas-edge did not stop; end its process and run with --foreground again.');
+        io?.info?.(`Stopped the background canvas-edge${supervised ? ' and removed it from pm2 (--service puts it back)' : ''}; it runs here now.`);
+    }
+    io?.info?.('canvas-edge runs in this terminal; Ctrl+C stops it (workspaces keep the catalogs of its shares).');
     const bin = edgeBinary();
     const runtime = process.versions?.bun ? 'node' : process.execPath;
     const child = path.isAbsolute(bin)

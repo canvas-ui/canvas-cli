@@ -48,7 +48,6 @@ export default {
         await ensureDeviceToken(ctx.client, handle.remoteId, handle.id, io);
         if (flags.foreground) {
             if (flags.service) throw new UsageError('--foreground and --service exclude each other');
-            io.info('canvas-edge runs in this terminal; Ctrl+C stops serving (the workspace keeps the catalog).');
             const code = await runEdgeForeground(io);
             if (code) process.exitCode = code;
             return share;
