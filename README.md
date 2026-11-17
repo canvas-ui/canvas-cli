@@ -342,7 +342,9 @@ canvas remote bind admin@dev
 ### Packages (lazy modules)
 
 The core CLI is auth, remotes (including workspace mirrors — `canvas remote
-mirror …`, built in since 2.11.0), workspaces, contexts, agents and config.
+mirror …`, built in since 2.11.0), workspaces (including the folders this
+machine serves to one, `canvas workspace <ws> share …`), contexts, agents and
+config.
 A local server or the desktop app lives in a separate package that is fetched
 on first use into `~/.canvas/packages/<name>` (no global npm, no sudo) and
 loaded from there:
@@ -494,6 +496,35 @@ release checksum. Running mounts keep their binary until
 `canvas mirror restart all`. `CANVAS_FUSE_BIN` overrides the lookup; a copy
 from cargo or a checkout is used when there is no managed one and is never
 updated.
+
+### Shares (NAS volumes, external drives)
+
+`canvas workspace <ws> share` serves a folder of this machine to a workspace
+in place. Unlike a mirror, nothing is copied: the canvas-edge daemon hashes
+and watches the folder where it is, the workspace lists every file and reads
+bytes from this machine on demand. The share is read-only and nothing is
+written into the folder.
+
+```bash
+canvas workspace universe share add /mnt/mywd --name wd1t.home --label "1TB WD"
+canvas workspace universe share add /volume1/pub --name nas-pub.home --exclude 'Incoming/**' --service
+canvas workspace universe share list            # status in the workspace and on this machine
+canvas workspace universe share scan wd1t.home  # walk and hash the folder again now
+canvas workspace universe share remove wd1t.home
+```
+
+The name is `<share>.<site>`: `wd1t.home` shows as `/device/home/wd1t` in the
+backends tree and its files as `file://wd1t.home/<path>`. It names the share,
+not the machine, so a drive moved to another computer is added there under
+the same name. Unplugging a drive (or stopping the daemon) leaves the share
+offline with its catalog intact; `share remove` is what drops the catalog,
+`share remove --local` only stops serving it from this machine.
+
+`--no-watch` follows rescans only (every six hours and `share scan`),
+`--state-dir` puts the index somewhere else than `~/.canvas/var/shares`,
+`--service` runs the daemon under pm2. Dotfiles, dependency and cache
+folders, recycle bins, temp files and logs are skipped; `--exclude` adds
+globs. The entries live in `~/.canvas/config/shares.json`.
 
 ### Output formats
 

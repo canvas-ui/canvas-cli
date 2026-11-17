@@ -14,6 +14,7 @@ import update from './actions/update.js';
 import hooks from './hooks/index.js';
 import agent from './agent/index.js';
 import backends from './backends/index.js';
+import share from './share/index.js';
 import tree from './tree/index.js';
 import resolve from './resolve.js';
 import { documentNouns } from '../../core/nouns.js';
@@ -30,5 +31,5 @@ export default {
     needsConnection: true,
     resourceArg: { name: 'workspace', resolve, optional: true },
     actions: [create, current, del, list, mount, show, start, status, stop, update],
-    submodules: [agent, hooks, backends, tree, ...documentNouns('workspace')],
+    submodules: [agent, hooks, backends, share, tree, ...documentNouns('workspace')],
 };
