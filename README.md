@@ -508,7 +508,7 @@ written into the folder.
 ```bash
 canvas workspace universe share add /mnt/mywd --name wd1t.home --label "1TB WD"
 canvas workspace universe share add /volume1/pub --name nas-pub.home --exclude 'Incoming/**' --service
-canvas workspace universe share list            # status in the workspace and on this machine
+canvas workspace universe share list            # status in the workspace, and what this machine's daemon is doing
 canvas workspace universe share scan wd1t.home  # walk and hash the folder again now (the name is optional with one share)
 canvas workspace universe share remove wd1t.home
 ```
@@ -524,7 +524,8 @@ offline with its catalog intact; `share remove` is what drops the catalog,
 exist. `--no-watch` follows rescans only (every six hours and `share scan`),
 `--state-dir` puts the index somewhere else than `~/.canvas/var/shares`,
 `--service` runs the daemon under pm2, `--foreground` runs it in the terminal
-until Ctrl+C, `--no-start` only writes the entry. `share add` installs
+until Ctrl+C (it logs scan and listing progress; `--debug` or `--log-level
+debug` adds every file and request), `--no-start` only writes the entry. `share add` installs
 canvas-edge when the machine has none, registers the device again when the
 hub no longer accepts its token, starts the daemon and reports whether the
 share connected. Dotfiles, dependency and cache

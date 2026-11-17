@@ -217,9 +217,10 @@ export async function ensureEdgeInstalled(io) {
  * Run canvas-edge attached to this terminal, logging to it, until it exits
  * or is interrupted. Resolves with its exit code. One daemon runs per device,
  * so a background one (detached or under pm2) is stopped first and this
- * process serves its mirrors and shares instead.
+ * process serves its mirrors and shares instead. `logLevel` is the daemon's
+ * (info: scan and listing progress; debug: every file and request).
  */
-export async function runEdgeForeground(io) {
+export async function runEdgeForeground(io, { logLevel = 'info' } = {}) {
     await ensureEdgeInstalled(io);
     if (await edgeRunning()) {
         const supervised = (await hasPM2()) && Boolean(await getProcessInfo(EDGE_PM2_NAME));
@@ -231,8 +232,8 @@ export async function runEdgeForeground(io) {
     const bin = edgeBinary();
     const runtime = process.versions?.bun ? 'node' : process.execPath;
     const child = path.isAbsolute(bin)
-        ? spawn(runtime, [bin, '--foreground'], { stdio: 'inherit', env: { ...process.env } })
-        : spawn(bin, ['--foreground'], { stdio: 'inherit', env: { ...process.env }, shell: process.platform === 'win32' });
+        ? spawn(runtime, [bin, '--foreground', '--log-level', logLevel], { stdio: 'inherit', env: { ...process.env } })
+        : spawn(bin, ['--foreground', '--log-level', logLevel], { stdio: 'inherit', env: { ...process.env }, shell: process.platform === 'win32' });
     // Ctrl+C reaches the child through the terminal; this process waits for it to finish its shutdown.
     const ignore = () => {};
     process.on('SIGINT', ignore);

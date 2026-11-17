@@ -13,12 +13,13 @@ import { assertShareName, ensureDeviceToken, findShare, resolveFolder, shareId, 
 // The name is <share>.<site>: the backend address, the authority of the
 // files' file://wd1t.home/… URLs and the tree node /device/home/wd1t.
 // The daemon is installed when missing and started: detached by default,
-// under pm2 with --service, attached to the terminal with --foreground.
+// under pm2 with --service, attached to the terminal with --foreground
+// (--debug or --log-level debug there logs every file and request).
 export default {
     name: 'add',
     description: 'Serve a local folder to the workspace as a read-only share (indexed in place)',
     positional: [{ name: 'folder', required: true }],
-    flags: { workspace: 'string', name: 'string', label: 'string', mode: 'string', exclude: 'string', 'state-dir': 'string', 'no-watch': 'boolean', service: 'boolean', foreground: 'boolean', 'no-start': 'boolean' },
+    flags: { workspace: 'string', name: 'string', label: 'string', mode: 'string', exclude: 'string', 'state-dir': 'string', 'no-watch': 'boolean', service: 'boolean', foreground: 'boolean', 'log-level': 'string', 'no-start': 'boolean' },
     async run(ctx) {
         const { args, flags, io } = ctx;
         const handle = resolveWorkspaceHandle(ctx);
@@ -48,7 +49,9 @@ export default {
         await ensureDeviceToken(ctx.client, handle.remoteId, handle.id, io);
         if (flags.foreground) {
             if (flags.service) throw new UsageError('--foreground and --service exclude each other');
-            const code = await runEdgeForeground(io);
+            const logLevel = String(flags['log-level'] || (flags.debug ? 'debug' : 'info')).toLowerCase();
+            if (!['trace', 'debug', 'info', 'warn', 'error'].includes(logLevel)) throw new UsageError(`--log-level takes trace, debug, info, warn or error (got "${flags['log-level']}")`);
+            const code = await runEdgeForeground(io, { logLevel });
             if (code) process.exitCode = code;
             return share;
         }

@@ -25,14 +25,20 @@ export default {
                 name: b.address,
                 label: b.config?.label || '',
                 // offline: the machine holding the folder is not connected; the catalog stays.
-                status: b.status,
+                // syncing: the workspace is indexing what the machine listed (done/total when known).
+                status: b.resyncing && b.progress?.scanned != null ? `${b.status} ${b.progress.scanned}${b.progress.total != null ? `/${b.progress.total}` : ''}` : b.status,
                 files: b.config?.source?.files ?? '',
                 device: b.config?.source?.device?.name || '',
                 tree: b.treePath || '',
                 folder: here?.path || '',
-                // What this machine's daemon says: serving, scanning, unavailable (folder gone), offline (hub unreachable).
-                here: !here ? '' : here.paused ? 'paused' : !units ? 'daemon not running' : !unit ? 'not loaded' : unit.state === 'serving' || unit.state === 'scanning' || !unit.lastError ? unit.state : `${unit.state}: ${unit.lastError}`,
+                // What this machine's daemon says about a share it serves: scanning (files
+                // visited), listing (files handed to the workspace), serving, unavailable
+                // (folder gone), offline (hub unreachable, with the reason).
+                daemon: !here ? '' : here.paused ? 'paused' : !units ? 'not running' : !unit ? 'not loaded'
+                    : unit.scanning ? `scanning ${unit.scanned ?? ''}`.trim()
+                        : unit.listing != null ? `listing ${unit.listing}/${unit.files ?? '?'}`
+                            : unit.lastError && unit.state !== 'serving' ? `${unit.state}: ${unit.lastError}` : unit.state,
             };
-        }), { columns: ['name', 'label', 'status', 'files', 'device', 'tree', 'folder', 'here'] });
+        }), { columns: ['name', 'label', 'status', 'files', 'device', 'tree', 'folder', 'daemon'] });
     },
 };
