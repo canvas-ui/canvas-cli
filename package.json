@@ -1,6 +1,6 @@
 {
   "name": "@augmentd-labs/canvas-cli",
-  "version": "2.19.2",
+  "version": "2.20.0",
   "description": "Canvas CLI",
   "author": "Jozef Melich <me@idnc.sk>",
   "license": "AGPL-3.0-or-later",
@@ -61,10 +61,10 @@
     "shell"
   ],
   "dependencies": {
-    "@augmentd-labs/canvas-api-client": "^0.4.0",
+    "@augmentd-labs/canvas-api-client": "^0.4.3",
     "@augmentd-labs/canvas-cli-host": "workspace:*",
     "@augmentd-labs/canvas-protocol": "^0.4.0",
-    "@augmentd-labs/canvas-schemas": "^0.2.0",
+    "@augmentd-labs/canvas-schemas": "^0.2.1",
     "chalk": "^5.6.2",
     "cli-table3": "^0.6.5",
     "date-fns": "^4.1.0",
@@ -75,13 +75,13 @@
     "@eslint/js": "^9.39.4",
     "@types/node": "^24.12.0",
     "bun": "^1.3.11",
+    "esbuild": "^0.28.2",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^16.5.0",
     "prettier": "^3.8.1",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.57.1",
-    "esbuild": "^0.28.2"
+    "typescript-eslint": "^8.57.1"
   },
   "packageManager": "pnpm@10.32.1"
 }

@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { DIR_CONFIG } from '../../../core/paths.js';
+import { CANVAS_HOME, DIR_CONFIG } from '../../../core/paths.js';
 import { JsonFile } from '../../../core/storage.js';
 import { UsageError } from '../../../core/errors.js';
 import { createTlsTransport } from '@augmentd-labs/canvas-api-client/tls';
@@ -44,6 +44,11 @@ export function removeShare(id) {
     const shares = readShares();
     writeShares(shares.filter((s) => s.id !== id));
     return shares.some((s) => s.id === id);
+}
+
+/** Where the daemon keeps a share's index: the entry's own `stateDir`, else its default under ~/.canvas/var/shares. */
+export function shareStateDir(share) {
+    return share.stateDir ? path.resolve(String(share.stateDir)) : path.join(CANVAS_HOME, 'var', 'shares', String(share.id).replace(/[^a-zA-Z0-9._@-]+/g, '_'));
 }
 
 export function assertShareName(name) {

@@ -510,7 +510,7 @@ canvas workspace universe share add /mnt/mywd --name wd1t.home --label "1TB WD"
 canvas workspace universe share add /volume1/pub --name nas-pub.home --exclude 'Incoming/**' --service
 canvas workspace universe share list            # status in the workspace, and what this machine's daemon is doing
 canvas workspace universe share scan wd1t.home  # walk and hash the folder again now (the name is optional with one share)
-canvas workspace universe share remove wd1t.home
+canvas workspace universe share remove wd1t.home --purge   # or --keep
 ```
 
 The name is `<share>.<site>`: `wd1t.home` shows as `/device/home/wd1t` in the
@@ -519,6 +519,13 @@ not the machine, so a drive moved to another computer is added there under
 the same name. Unplugging a drive (or stopping the daemon) leaves the share
 offline with its catalog intact; `share remove` is what drops the catalog,
 `share remove --local` only stops serving it from this machine.
+
+`share remove` first reports how many of the share's documents also live
+elsewhere in the workspace (they stay, minus the share location) and how many
+live only on the share. For the second group it wants `--purge` (delete the
+documents with their tags and tree placements) or `--keep` (leave them in
+the workspace Trash). The folder is untouched either way, and the share's
+local index under `~/.canvas/var/shares` is removed.
 
 `--mode` takes `ro` (the default); `rw` and `worm` are refused until they
 exist. `--no-watch` follows rescans only (every six hours and `share scan`),
