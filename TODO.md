@@ -36,3 +36,9 @@ Do:
 - [ ] Progress per file from the session offset.
 - [ ] Limit: the server answers 413 `UPLOAD_TOO_LARGE` with `limit` above
       `CANVAS_MAX_UPLOAD_SIZE` (default 50G); report it before sending.
+
+## Backends
+
+- [ ] `backends show|sync|remove|update` assume `--driver file` when the flag is
+      missing, so an S3 or IMAP address answers "not found". Resolve the driver
+      from `backends list` by address, as `backends usage` does.
